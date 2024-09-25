@@ -9,27 +9,17 @@ class GameService {
 
   GameService({required this.player, required this.contentService});
 
-  static const Map<int, int> levelTargets = {
+  static const Map<int, int> baseLevelTargets = {
     1: 30,  // 30 parole
     2: 20,  // 20 frasi
     3: 20,  // 20 paragrafi
     4: 10,  // 10 pagine
   };
 
-  static const Map<int, int> levelCrystalTargets = {
-    1: 300,
-    2: 1500,
-    3: 5000,
-    4: 0,  // Il livello 4 non ha un target di cristalli
-  };
+  int get currentLevelTarget => (baseLevelTargets[player.currentLevel] ?? 0) + (player.newGamePlusCount * 5);
 
   double get levelProgress {
-    return player.currentStep / levelTargets[player.currentLevel]!;
-  }
-
-  Future<void> startLevel() async {
-    player.currentStep = 0;
-    player.saveProgress();
+    return player.currentStep / currentLevelTarget;
   }
 
   Future<bool> completeStep() async {
@@ -37,30 +27,72 @@ class GameService {
     int crystalsEarned = await calculateCrystalsForStep();
     player.addCrystals(crystalsEarned);
 
-    if (player.currentStep >= levelTargets[player.currentLevel]! ||
-        (player.isAdmin && player.currentStep > 0)) {
+    // Controlla se il livello è completato
+    if (isLevelCompleted()) {
       return true;  // Livello completato
-    }
-
-    if (player.totalCrystals >= levelCrystalTargets[player.currentLevel]! && player.currentLevel < 4) {
-      return true;  // Livello completato per cristalli (solo per livelli 1-3)
     }
 
     return false;  // Livello non ancora completato
   }
 
+  bool isLevelCompleted() {
+    return player.currentStep >= currentLevelTarget || player.isAdmin;
+  }
+
+  bool canBuyLevel() {
+    return player.totalCrystals >= player.levelCrystalCost;
+  }
+
+  void buyLevel() {
+    if (canBuyLevel()) {
+      player.totalCrystals -= player.levelCrystalCost;
+      player.levelUp();
+    }
+  }
+
   Future<int> calculateCrystalsForStep() async {
+    int baseCrystals;
     switch (player.currentLevel) {
       case 1:
-        return contentService.getRandomWordForLevel1().crystalValue;
+        Word word = await getUniqueWord();
+        player.addUsedWord(word.text);
+        baseCrystals = word.crystalValue;
+        break;
       case 2:
-        return contentService.getRandomSentenceForLevel2().crystalValue;
+        Sentence sentence = await getUniqueSentence();
+        player.addUsedSentence(sentence.words.map((w) => w.text).join(' '));
+        baseCrystals = sentence.crystalValue;
+        break;
       case 3:
-        return contentService.getRandomParagraphForLevel3().crystalValue;
+        baseCrystals = contentService.getRandomParagraphForLevel3().crystalValue;
+        break;
       case 4:
-        return contentService.getRandomPageForLevel4().crystalValue;
+        baseCrystals = contentService.getRandomPageForLevel4().crystalValue;
+        break;
       default:
-        return 0;
+        baseCrystals = 0;
     }
+    return baseCrystals * (player.newGamePlusCount + 1);
+  }
+
+  Future<Word> getUniqueWord() async {
+    Word word;
+    do {
+      word = contentService.getRandomWordForLevel1();
+    } while (player.usedWords.contains(word.text));
+    return word;
+  }
+
+  Future<Sentence> getUniqueSentence() async {
+    Sentence sentence;
+    do {
+      sentence = contentService.getRandomSentenceForLevel2();
+    } while (player.usedSentences.contains(sentence.words.map((w) => w.text).join(' ')));
+    return sentence;
+  }
+
+  void resetUsedContent() {
+    player.usedWords.clear();
+    player.usedSentences.clear();
   }
 }

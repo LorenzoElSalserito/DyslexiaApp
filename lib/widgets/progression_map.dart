@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/game_service.dart';
+import '../models/player.dart';
 
 class ProgressionMap extends StatelessWidget {
-  final int currentLevel;
-  final int currentStep;
-
-  ProgressionMap({required this.currentLevel, required this.currentStep});
-
   @override
   Widget build(BuildContext context) {
+    final player = Provider.of<Player>(context);
+    final gameService = Provider.of<GameService>(context);
+
     return Column(
       children: [
         Text(
-          'Livello $currentLevel',
+          'Livello ${player.currentLevel}',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
         ),
         SizedBox(height: 10),
@@ -26,7 +26,7 @@ class ProgressionMap extends StatelessWidget {
           child: Stack(
             children: [
               FractionallySizedBox(
-                widthFactor: currentStep / GameService.levelTargets[currentLevel]!,
+                widthFactor: gameService.levelProgress,
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.green,
@@ -36,7 +36,7 @@ class ProgressionMap extends StatelessWidget {
               ),
               Center(
                 child: Text(
-                  'Step $currentStep / ${GameService.levelTargets[currentLevel]}',
+                  'Step ${player.currentStep} / ${gameService.currentLevelTarget}',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),

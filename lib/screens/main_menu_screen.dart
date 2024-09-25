@@ -27,6 +27,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     });
   }
 
+  void _continueSavedGame() async {
+    final player = Provider.of<Player>(context, listen: false);
+    await player.loadProgress();
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,14 +72,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   foregroundColor: Colors.black,
                   minimumSize: Size(200, 50),
                 ),
-                onPressed: _hasSavedGame
-                    ? () {
-                  final player = Provider.of<Player>(context, listen: false);
-                  player.loadProgress().then((_) {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
-                  });
-                }
-                    : null,
+                onPressed: _hasSavedGame ? _continueSavedGame : null,
               ),
               SizedBox(height: 20),
               ElevatedButton(

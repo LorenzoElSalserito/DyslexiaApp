@@ -30,7 +30,7 @@ class FileStorageService {
   Future<void> writeProfile(Map<String, dynamic> profileData) async {
     await createSavesDirectory();
     final file = await _localFile;
-    final content = profileData.entries.map((e) => '${e.key}:${e.value}').join('\n');
+    final content = profileData.entries.map((e) => '${e.key}:${e.value.toString()}').join('\n');
     await file.writeAsString(content);
   }
 
@@ -41,10 +41,11 @@ class FileStorageService {
       return Map.fromEntries(
         contents.split('\n').map((line) {
           final parts = line.split(':');
-          return MapEntry(parts[0], parts[1]);
+          return MapEntry(parts[0], parts.length > 1 ? parts[1] : '');
         }),
       );
     } catch (e) {
+      print('Error reading profile: $e');
       return {};
     }
   }

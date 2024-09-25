@@ -16,12 +16,14 @@ class Player with ChangeNotifier {
   Set<String> usedWords = {};
   Set<String> usedSentences = {};
 
-  static const Map<int, int> levelCrystalCosts = {
+  static const Map<int, int> baseLevelCrystalCosts = {
     1: 300,
     2: 1500,
     3: 5000,
     4: 10000,
   };
+
+  int get levelCrystalCost => (baseLevelCrystalCosts[currentLevel] ?? 0) * (newGamePlusCount + 1);
 
   Player() {
     loadProgress();
@@ -36,6 +38,9 @@ class Player with ChangeNotifier {
     currentLevel = 1;
     currentStep = 0;
     isAdmin = (name.toLowerCase() == 'admin');
+    newGamePlusCount = 0;
+    usedWords.clear();
+    usedSentences.clear();
     await saveProgress();
     notifyListeners();
   }
@@ -47,13 +52,13 @@ class Player with ChangeNotifier {
   }
 
   bool canLevelUp() {
-    return totalCrystals >= levelCrystalCosts[currentLevel]!;
+    return totalCrystals >= levelCrystalCost;
   }
 
   void levelUp() {
     if (canLevelUp() || isAdmin) {
       if (!isAdmin) {
-        totalCrystals -= levelCrystalCosts[currentLevel]!;
+        totalCrystals -= levelCrystalCost;
       }
       currentLevel++;
       currentStep = 0;
@@ -105,20 +110,30 @@ class Player with ChangeNotifier {
   }
 
   Future<void> loadProgress() async {
-    final profileData = await _storageService.readProfile();
-    if (profileData.isNotEmpty) {
-      name = profileData['name'] ?? '';
-      surname = profileData['surname'] ?? '';
-      matricola = profileData['matricola'] ?? '';
-      corso = profileData['corso'] ?? '';
-      totalCrystals = int.parse(profileData['totalCrystals'] ?? '0');
-      currentLevel = int.parse(profileData['currentLevel'] ?? '1');
-      currentStep = int.parse(profileData['currentStep'] ?? '0');
-      isAdmin = profileData['isAdmin'] == 'true';
-      newGamePlusCount = int.parse(profileData['newGamePlusCount'] ?? '0');
-      usedWords = Set<String>.from((profileData['usedWords'] ?? '').split(',').where((w) => w.isNotEmpty));
-      usedSentences = Set<String>.from((profileData['usedSentences'] ?? '').split('|').where((s) => s.isNotEmpty));
-      notifyListeners();
+    try {
+      final profileData = await _storageService.readProfile();
+      if (profileData.isNotEmpty) {
+        name = profileData['name'] as String? ?? '';
+        surname = profileData['surname'] as String? ?? '';
+        matricola = profileData['matricola'] as String? ?? '';
+        corso = profileData['corso'] as String? ?? '';
+        totalCrystals = int.tryParse(profileData['totalCrystals'] as String? ?? '0') ?? 0;
+        currentLevel = int.tryParse(profileData['currentLevel'] as String? ?? '1') ?? 1;
+        currentStep = int.tryParse(profileData['currentStep'] as String? ?? '0') ?? 0;
+        isAdmin = (profileData['isAdmin'] as String? ?? 'false') == 'true';
+        newGamePlusCount = int.tryParse(profileData['newGamePlusCount'] as String? ?? '0') ?? 0;
+
+        final usedWordsString = profileData['usedWords'] as String? ?? '';
+        usedWords = usedWordsString.split(',').where((w) => w.isNotEmpty).toSet();
+
+        final usedSentencesString = profileData['usedSentences'] as String? ?? '';
+        usedSentences = usedSentencesString.split('|').where((s) => s.isNotEmpty).toSet();
+
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error loading progress: $e');
+      // Gestisci l'errore come preferisci, ad esempio resettando i dati o mostrando un messaggio all'utente
     }
   }
 
