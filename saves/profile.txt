@@ -1,0 +1,7 @@
+name:Lorenzo
+surname:De Marco
+matricola:920033
+corso:Informatica
+totalCrystals:54
+currentLevel:1
+currentStep:6
