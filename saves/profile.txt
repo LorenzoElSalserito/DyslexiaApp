@@ -1,11 +1,11 @@
-name:a
-surname:s
-matricola:d
-corso:f
-totalCrystals:363
-currentLevel:2
-currentStep:8
-isAdmin:false
-newGamePlusCount:0
-usedWords:parola358,parola593,parola944,parola913,parola557,parola962,parola858,parola53,parola24,parola300,parola840,parola951,parola513,parola88,parola718,parola734,parola263,parola586,parola438,parola715,parola12,parola277,parola376,parola981,parola73,parola251,parola495,parola161,parola166,parola491,parola572,parola8,parola900,parola740,parola710
-usedSentences:parola270 parola271 parola272 parola273 parola274|parola305 parola306 parola307 parola308 parola309|parola325 parola326 parola327 parola328 parola329|parola265 parola266 parola267 parola268 parola269|parola385 parola386 parola387 parola388 parola389|parola20 parola21 parola22 parola23 parola24|parola300 parola301 parola302 parola303 parola304|parola130 parola131 parola132 parola133 parola134
+name:admin
+surname:admin
+matricola:admin
+corso:admin
+totalCrystals:270
+currentLevel:1
+currentStep:2
+isAdmin:true
+newGamePlusCount:2
+usedWords:parola263,parola106
+usedSentences:

@@ -1,5 +1,5 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 class CrystalPopup extends StatefulWidget {
   final int crystals;
@@ -36,12 +36,15 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
   }
 
   Color getCrystalColor() {
+    double opacity = 0.5 + (widget.progress * 0.5);
+    opacity = opacity.clamp(0.0, 1.0); // Assicuriamoci che l'opacità sia tra 0.0 e 1.0
+
     switch (widget.level) {
-      case 1: return CupertinoColors.destructiveRed.withOpacity(0.5 + (widget.progress * 0.5));
-      case 2: return CupertinoColors.activeOrange.withOpacity(0.5 + (widget.progress * 0.5));
-      case 3: return CupertinoColors.systemYellow.withOpacity(0.5 + (widget.progress * 0.5));
-      case 4: return CupertinoColors.activeGreen.withOpacity(0.5 + (widget.progress * 0.5));
-      default: return Colors.blue;
+      case 1: return CupertinoColors.systemRed.withOpacity(opacity);
+      case 2: return CupertinoColors.systemOrange.withOpacity(opacity);
+      case 3: return CupertinoColors.systemYellow.withOpacity(opacity);
+      case 4: return CupertinoColors.systemGreen.withOpacity(opacity);
+      default: return Colors.blue.withOpacity(opacity);
     }
   }
 
@@ -55,7 +58,7 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
             decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
-                  color: CupertinoColors.darkBackgroundGray.withOpacity(0.05),
+                  color: Colors.grey.withOpacity(0.5),
                   blurRadius: 7,
                   spreadRadius: 3,
                 ),

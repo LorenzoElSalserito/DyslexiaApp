@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
-import 'home_screen.dart';
+import 'game_screen.dart';
 
 class ProfileCreationScreen extends StatefulWidget {
   @override
@@ -24,7 +24,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
           _matricolaController.text,
           _corsoController.text
       );
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => GameScreen()));
     }
   }
 

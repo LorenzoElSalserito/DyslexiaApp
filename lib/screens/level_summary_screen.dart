@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
 import '../services/game_service.dart';
-import 'home_screen.dart';
+import 'game_screen.dart';
 
 class LevelSummaryScreen extends StatelessWidget {
   final int completedLevel;
   final int earnedCrystals;
+  final bool isPurchased;
 
-  LevelSummaryScreen({required this.completedLevel, required this.earnedCrystals});
+  LevelSummaryScreen({
+    required this.completedLevel,
+    required this.earnedCrystals,
+    this.isPurchased = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -30,14 +35,17 @@ class LevelSummaryScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Livello $completedLevel Completato!',
+                  isPurchased
+                      ? 'Livello ${completedLevel + 1} Acquistato!'
+                      : 'Livello $completedLevel Completato!',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 SizedBox(height: 20),
-                Text(
-                  'Cristalli guadagnati: $earnedCrystals',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
-                ),
+                if (!isPurchased)
+                  Text(
+                    'Cristalli guadagnati: $earnedCrystals',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
                 SizedBox(height: 20),
                 Text(
                   'Totale cristalli: ${player.totalCrystals}',
@@ -53,8 +61,10 @@ class LevelSummaryScreen extends StatelessWidget {
                   ),
                   onPressed: () {
                     if (completedLevel < 4) {
-                      player.levelUp();
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+                      if (!isPurchased) {
+                        player.levelUp();
+                      }
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => GameScreen()));
                     } else {
                       // Game completed, offer New Game+
                       showDialog(
@@ -68,14 +78,14 @@ class LevelSummaryScreen extends StatelessWidget {
                               onPressed: () {
                                 player.startNewGamePlus();
                                 Navigator.of(context).pop();
-                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => GameScreen()));
                               },
                             ),
                             TextButton(
                               child: Text('No'),
                               onPressed: () {
                                 Navigator.of(context).pop();
-                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => GameScreen()));
                               },
                             ),
                           ],

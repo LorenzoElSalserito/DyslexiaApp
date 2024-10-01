@@ -16,6 +16,9 @@ class GameService {
     4: 10,  // 10 pagine
   };
 
+  static const int crystalsPerLetter = 5;
+  static const int defaultCrystals = 5;
+
   int get currentLevelTarget => (baseLevelTargets[player.currentLevel] ?? 0) + (player.newGamePlusCount * 5);
 
   double get levelProgress {
@@ -27,27 +30,25 @@ class GameService {
     int crystalsEarned = await calculateCrystalsForStep();
     player.addCrystals(crystalsEarned);
 
-    // Controlla se il livello è completato
-    if (isLevelCompleted()) {
+    if (player.currentStep >= currentLevelTarget || player.isAdmin) {
       return true;  // Livello completato
     }
 
     return false;  // Livello non ancora completato
   }
 
-  bool isLevelCompleted() {
-    return player.currentStep >= currentLevelTarget || player.isAdmin;
-  }
-
   bool canBuyLevel() {
     return player.totalCrystals >= player.levelCrystalCost;
   }
 
-  void buyLevel() {
+  Future<bool> buyLevel() async {
     if (canBuyLevel()) {
       player.totalCrystals -= player.levelCrystalCost;
       player.levelUp();
+      await player.saveProgress();
+      return true;
     }
+    return false;
   }
 
   Future<int> calculateCrystalsForStep() async {
@@ -55,24 +56,27 @@ class GameService {
     switch (player.currentLevel) {
       case 1:
         Word word = await getUniqueWord();
-        player.addUsedWord(word.text);
-        baseCrystals = word.crystalValue;
+        baseCrystals = calculateCrystalsForContent(word.text);
         break;
       case 2:
         Sentence sentence = await getUniqueSentence();
-        player.addUsedSentence(sentence.words.map((w) => w.text).join(' '));
-        baseCrystals = sentence.crystalValue;
+        baseCrystals = calculateCrystalsForContent(sentence.words.map((w) => w.text).join());
         break;
       case 3:
-        baseCrystals = contentService.getRandomParagraphForLevel3().crystalValue;
+        baseCrystals = calculateCrystalsForContent(contentService.getRandomParagraphForLevel3().sentences.map((s) => s.words.map((w) => w.text).join()).join());
         break;
       case 4:
-        baseCrystals = contentService.getRandomPageForLevel4().crystalValue;
+        baseCrystals = calculateCrystalsForContent(contentService.getRandomPageForLevel4().paragraphs.map((p) => p.sentences.map((s) => s.words.map((w) => w.text).join()).join()).join());
         break;
       default:
-        baseCrystals = 0;
+        baseCrystals = defaultCrystals;
     }
     return baseCrystals * (player.newGamePlusCount + 1);
+  }
+
+  int calculateCrystalsForContent(String content) {
+    int letterCount = content.replaceAll(' ', '').length;
+    return letterCount * crystalsPerLetter;
   }
 
   Future<Word> getUniqueWord() async {
@@ -80,6 +84,7 @@ class GameService {
     do {
       word = contentService.getRandomWordForLevel1();
     } while (player.usedWords.contains(word.text));
+    player.addUsedWord(word.text);
     return word;
   }
 
@@ -88,11 +93,27 @@ class GameService {
     do {
       sentence = contentService.getRandomSentenceForLevel2();
     } while (player.usedSentences.contains(sentence.words.map((w) => w.text).join(' ')));
+    player.addUsedSentence(sentence.words.map((w) => w.text).join(' '));
     return sentence;
   }
 
   void resetUsedContent() {
     player.usedWords.clear();
     player.usedSentences.clear();
+  }
+
+  String getTextForCurrentLevel() {
+    switch (player.currentLevel) {
+      case 1:
+        return contentService.getRandomWordForLevel1().text;
+      case 2:
+        return contentService.getRandomSentenceForLevel2().words.map((w) => w.text).join(' ');
+      case 3:
+        return contentService.getRandomParagraphForLevel3().sentences.map((s) => s.words.map((w) => w.text).join(' ')).join(' ');
+      case 4:
+        return contentService.getRandomPageForLevel4().paragraphs.map((p) => p.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join(' ')).join('\n\n');
+      default:
+        return "Testo non disponibile per questo livello.";
+    }
   }
 }

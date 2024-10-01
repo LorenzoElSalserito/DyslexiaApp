@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
-import 'home_screen.dart';
+import 'game_screen.dart';
 import 'profile_creation_screen.dart';
 import 'options_screen.dart';
 
@@ -30,7 +30,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void _continueSavedGame() async {
     final player = Provider.of<Player>(context, listen: false);
     await player.loadProgress();
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => GameScreen()));
   }
 
   @override
@@ -41,7 +41,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.blue[300]!, Colors.grey[300]!],
+            colors: [Colors.blue[800]!, Colors.grey[400]!],
           ),
         ),
         child: Center(

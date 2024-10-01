@@ -4,10 +4,9 @@ import '../models/player.dart';
 import '../services/game_service.dart';
 import '../widgets/crystal_popup.dart';
 import '../widgets/progression_map.dart';
-import 'main_menu_screen.dart';
 import 'level_summary_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class GameScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = Provider.of<Player>(context);
@@ -49,7 +48,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildProfileCard(Player player) {
     return Container(
-      width: 300, // Larghezza fissa per il riquadro del profilo
+      width: 300,
       margin: EdgeInsets.symmetric(vertical: 10),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -88,18 +87,66 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildButtonsColumn(BuildContext context, Player player, GameService gameService) {
     return Container(
-      width: 300, // Larghezza fissa per la colonna dei bottoni
+      width: 300,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildButton('Completa Step', Colors.green, () async {
-            // ... (codice per completare lo step)
+          _buildButton('Esercizio di Lettura', Colors.green, () {
+            Navigator.pushNamed(context, '/reading_exercise');
+          }),
+          SizedBox(height: 10),
+          _buildButton('Completa Step', Colors.blue, () async {
+            int initialCrystals = player.totalCrystals;
+            bool levelCompleted = await gameService.completeStep();
+            int earnedCrystals = player.totalCrystals - initialCrystals;
+
+            showDialog(
+              context: context,
+              builder: (context) => CrystalPopup(
+                crystals: earnedCrystals,
+                level: player.currentLevel,
+                progress: gameService.levelProgress,
+              ),
+            );
+
+            if (levelCompleted) {
+              int completedLevel = player.currentLevel;
+              player.levelUp(); // Avanziamo al livello successivo
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LevelSummaryScreen(
+                    completedLevel: completedLevel,
+                    earnedCrystals: earnedCrystals,
+                  ),
+                ),
+              );
+            }
           }),
           SizedBox(height: 10),
           _buildButton('Compra Livello (${player.levelCrystalCost} Cristalli)',
               Colors.amber,
-              gameService.canBuyLevel() ? () {
-                // ... (codice per comprare il livello)
+              gameService.canBuyLevel() ? () async {
+                bool success = await gameService.buyLevel();
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Livello ${player.currentLevel} acquistato con successo!')),
+                  );
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LevelSummaryScreen(
+                        completedLevel: player.currentLevel - 1,
+                        earnedCrystals: 0,
+                        isPurchased: true,
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Impossibile acquistare il livello. Cristalli insufficienti.')),
+                  );
+                }
               } : null),
           if (player.isAdmin) ...[
             SizedBox(height: 10),
@@ -108,12 +155,23 @@ class HomeScreen extends StatelessWidget {
             }),
             SizedBox(height: 10),
             _buildButton('Prossimo Livello', Colors.red, () {
+              int currentLevel = player.currentLevel;
               player.levelUp();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LevelSummaryScreen(
+                    completedLevel: currentLevel,
+                    earnedCrystals: 0,
+                    isPurchased: true,
+                  ),
+                ),
+              );
             }),
           ],
           SizedBox(height: 10),
           _buildButton('Torna al Menu', Colors.white, () {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MainMenuScreen()));
+            Navigator.pushReplacementNamed(context, '/');
           }, textColor: Colors.black),
         ],
       ),

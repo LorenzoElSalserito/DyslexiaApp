@@ -109,7 +109,7 @@ class Player with ChangeNotifier {
     });
   }
 
-  Future<void> loadProgress() async {
+  Future<bool> loadProgress() async {
     try {
       final profileData = await _storageService.readProfile();
       if (profileData.isNotEmpty) {
@@ -130,10 +130,12 @@ class Player with ChangeNotifier {
         usedSentences = usedSentencesString.split('|').where((s) => s.isNotEmpty).toSet();
 
         notifyListeners();
+        return true;
       }
+      return false;
     } catch (e) {
       print('Error loading progress: $e');
-      // Gestisci l'errore come preferisci, ad esempio resettando i dati o mostrando un messaggio all'utente
+      return false;
     }
   }
 
