@@ -1,20 +1,32 @@
+// reading_exercise_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import '../models/player.dart';
 import '../services/game_service.dart';
+import '../services/vosk_service.dart';
+import '../services/audio_service.dart';
+import '../services/game_notification_manager.dart';
+import '../models/recognition_result.dart';
+import '../utils/text_similarity.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ReadingExerciseScreen extends StatefulWidget {
   @override
   _ReadingExerciseScreenState createState() => _ReadingExerciseScreenState();
 }
 
-class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> with SingleTickerProviderStateMixin {
+class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
+    with SingleTickerProviderStateMixin {
   late String text;
-  int currentWordIndex = 0;
+  bool isRecording = false;
   bool exerciseCompleted = false;
-  FlutterTts flutterTts = FlutterTts();
-  bool isSpeaking = false;
+  String recognizedText = '';
+  double similarity = 0.0;
+  DateTime? exerciseStartTime;
+
+  late VoskService voskService;
+  late AudioService audioService;
+  late GameNotificationManager notificationManager;
   late AnimationController _controller;
   late Animation<Offset> _offsetAnimation;
 
@@ -23,152 +35,103 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> with Sing
     super.initState();
     final gameService = Provider.of<GameService>(context, listen: false);
     text = gameService.getTextForCurrentLevel();
-    initTts();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    _offsetAnimation = Tween<Offset>(
-      begin: Offset(-1.0, 0.0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+
+    // Inizializzazione dei servizi
+    voskService = VoskService.instance;
+    audioService = AudioService();
+    notificationManager = GameNotificationManager();
+
+    _setupAnimation();
+    _initializeServices();
   }
 
-  void initTts() {
-    flutterTts.setLanguage("it-IT");
-    flutterTts.setSpeechRate(0.5);
-    flutterTts.setVolume(1.0);
-    flutterTts.setPitch(1.0);
-  }
+  // ... [Mantieni il resto dei metodi esistenti fino a _handleCorrectRecognition]
 
-  List<String> get words => text.split(' ');
-
-  void highlightNextWord() {
-    if (currentWordIndex < words.length - 1) {
-      setState(() {
-        currentWordIndex++;
-      });
-      _controller.forward(from: 0.0);
-    } else {
-      setState(() {
-        exerciseCompleted = true;
-      });
-      _completeExercise();
-    }
-  }
-
-  Future<void> speakText() async {
-    if (isSpeaking) {
-      await flutterTts.stop();
-    }
-    setState(() {
-      isSpeaking = true;
-    });
-
-    final player = Provider.of<Player>(context, listen: false);
-    if (player.isAdmin) {
-      // Simula il completamento dell'esercizio per l'admin
-      await Future.delayed(Duration(seconds: 2));
-      setState(() {
-        isSpeaking = false;
-        exerciseCompleted = true;
-      });
-      _completeExercise();
-    } else {
-      if (player.currentLevel == 1) {
-        await flutterTts.speak(words[currentWordIndex]);
-      } else {
-        await flutterTts.speak(text);
-      }
-      setState(() {
-        isSpeaking = false;
-      });
-    }
-  }
-
-  void _completeExercise() async {
-    final player = Provider.of<Player>(context, listen: false);
+  void _handleCorrectRecognition(RecognitionResult result) async {
     final gameService = Provider.of<GameService>(context, listen: false);
 
-    bool levelCompleted = await gameService.completeStep();
-    if (levelCompleted) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Congratulazioni!'),
-            content: Text('Hai completato il livello ${player.currentLevel}!'),
-            actions: <Widget>[
-              TextButton(
-                child: Text('Continua'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pushReplacementNamed('/home');
-                },
-              ),
-            ],
-          );
-        },
+    bool levelCompleted = await gameService.processRecognitionResult(result);
+
+    // Mostra notifica streak se applicabile
+    if (gameService.currentStreak >= 2) {
+      notificationManager.showStreakNotification(
+        context,
+        gameService.currentStreak,
+        gameService.getCurrentStreakMultiplier(),
       );
     }
+
+    if (levelCompleted) {
+      notificationManager.showLevelUp(
+        context,
+        gameService.player.currentLevel + 1,
+      );
+    }
+
+    // Mostra feedback positivo
+    _showSuccessDialog();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final player = Provider.of<Player>(context);
-    return Scaffold(
-      backgroundColor: Colors.grey[300], // Sfondo argento
-      appBar: AppBar(
-        title: Text('Esercizio di Lettura'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  void _showSuccessDialog() {
+    final gameService = Provider.of<GameService>(context, listen: false);
+    final currentSubLevel = gameService.getCurrentSubLevel();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Ottimo Lavoro!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Center(
-                child: SlideTransition(
-                  position: _offsetAnimation,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    color: Colors.yellow,
-                    child: Text(
-                      player.currentLevel == 1 ? words[currentWordIndex] : text,
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
+            Text('Hai completato l\'esercizio con successo!'),
+            SizedBox(height: 8),
+            Text(
+              'Livello: ${currentSubLevel.name}',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
               ),
             ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  child: Text(exerciseCompleted ? 'Completato' : 'Parola Successiva'),
-                  onPressed: exerciseCompleted ? null : highlightNextWord,
+            if (gameService.currentStreak > 0)
+              Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.local_fire_department, color: Colors.orange),
+                    SizedBox(width: 4),
+                    Text(
+                      'Streak: ${gameService.currentStreak}',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  child: Text(player.isAdmin ? 'Simula Lettura' : 'Leggi Testo'),
-                  onPressed: isSpeaking ? null : speakText,
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
+              ),
           ],
         ),
+        actions: [
+          TextButton(
+            child: Text('Continua'),
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+          ),
+        ],
       ),
     );
   }
+
+  // ... [Mantieni il resto dei metodi esistenti]
 
   @override
   void dispose() {
-    flutterTts.stop();
+    audioService.dispose();
     _controller.dispose();
+    notificationManager.dispose();
     super.dispose();
   }
 }

@@ -1,3 +1,4 @@
+// main_menu_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
@@ -41,7 +42,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.blue[800]!, Colors.grey[400]!],
+            colors: [Colors.lightBlue.shade200, Colors.lightBlue.shade100],
           ),
         ),
         child: Center(
@@ -49,39 +50,41 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Dislessia App',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+                'Dyslexia App',
+                style: TextStyle(
+                  fontFamily: 'OpenDyslexic',
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               SizedBox(height: 50),
-              ElevatedButton(
-                child: Text('Nuovo Gioco'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  minimumSize: Size(200, 50),
-                ),
+              _buildMenuButton(
+                icon: Icons.play_arrow,
+                label: 'Nuovo Gioco',
                 onPressed: () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileCreationScreen()));
                 },
               ),
               SizedBox(height: 20),
-              ElevatedButton(
-                child: Text('Continua'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _hasSavedGame ? Colors.white : Colors.grey,
-                  foregroundColor: Colors.black,
-                  minimumSize: Size(200, 50),
-                ),
+              _buildMenuButton(
+                icon: Icons.refresh,
+                label: 'Continua',
                 onPressed: _hasSavedGame ? _continueSavedGame : null,
+                color: _hasSavedGame ? Colors.white : Colors.grey,
               ),
               SizedBox(height: 20),
-              ElevatedButton(
-                child: Text('Opzioni'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  minimumSize: Size(200, 50),
-                ),
+              _buildMenuButton(
+                icon: Icons.emoji_events,
+                label: 'Sfide',
+                onPressed: () {
+                  Navigator.pushNamed(context, '/challenges');
+                },
+              ),
+              SizedBox(height: 20),
+              _buildMenuButton(
+                icon: Icons.settings,
+                label: 'Opzioni',
                 onPressed: () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => OptionsScreen()));
                 },
@@ -89,6 +92,37 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMenuButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    Color? color,
+  }) {
+    return SizedBox(
+      width: 200,
+      height: 50,
+      child: ElevatedButton.icon(
+        icon: Icon(icon),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'OpenDyslexic',
+            fontSize: 18,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color ?? Colors.white,
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(25),
+          ),
+          elevation: 5,
+        ),
+        onPressed: onPressed,
       ),
     );
   }

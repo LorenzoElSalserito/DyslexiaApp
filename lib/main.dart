@@ -1,71 +1,203 @@
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
+
+// Servizi
+import 'services/vosk_service.dart';
+import 'services/audio_service.dart';
+import 'services/game_service.dart';
+import 'services/content_service.dart';
+import 'services/speech_recognition_service.dart';
+import 'services/learning_analytics_service.dart';
+import 'services/training_session_service.dart';
+import 'services/feedback_service.dart';
+import 'services/model_cache_service.dart';
+import 'services/recognition_manager.dart';
+import 'services/exercise_manager.dart';
+import 'services/achievement_manager.dart';
+import 'services/challenge_service.dart';
+
+// Models
+import 'models/player.dart';
+
+// Config
+import 'config/app_config.dart';
+import 'config/theme_config.dart';
+
+// Screens
 import 'screens/main_menu_screen.dart';
 import 'screens/game_screen.dart';
+import 'screens/reading_exercise_screen.dart';
 import 'screens/profile_creation_screen.dart';
 import 'screens/options_screen.dart';
-import 'screens/reading_exercise_screen.dart';
-import 'models/player.dart';
-import 'services/content_service.dart';
-import 'services/game_service.dart';
-import 'services/error_reporting_service.dart';
+import 'screens/challenges_screen.dart';
+
+// Widgets
+import 'widgets/game_notification_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    ErrorReportingService.reportError(details.exception, details.stack);
-  };
+  // Forza l'orientamento verticale
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // Inizializza SharedPreferences
+  final prefs = await SharedPreferences.getInstance();
+
+  // Inizializza i servizi core
+  final modelCacheService = ModelCacheService.instance;
+  await modelCacheService.initialize();
 
   final contentService = ContentService();
   await contentService.initialize();
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => Player()),
-        ProxyProvider<Player, GameService>(
-          update: (_, player, __) => GameService(player: player, contentService: contentService),
-        ),
-      ],
-      child: MyApp(),
-    ),
-  );
+  // Inizializza il feedback service con le opzioni di default
+  final feedbackService = FeedbackService();
+  feedbackService.initialize(FeedbackOptions(
+    useVibration: AppConfig.defaultVibrationEnabled,
+    useSound: AppConfig.defaultSoundEnabled,
+    useVisual: AppConfig.defaultVisualEnabled,
+  ));
+
+  runApp(MyApp(
+    prefs: prefs,
+    contentService: contentService,
+  ));
 }
 
 class MyApp extends StatelessWidget {
+  final SharedPreferences prefs;
+  final ContentService contentService;
+
+  const MyApp({
+    Key? key,
+    required this.prefs,
+    required this.contentService,
+  }) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dislessia App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        textTheme: TextTheme(
-          bodyLarge: TextStyle(fontSize: 18.0, fontFamily: 'OpenDyslexic'),
-          bodyMedium: TextStyle(fontSize: 16.0, fontFamily: 'OpenDyslexic'),
+    return MultiProvider(
+      providers: [
+        // Player Provider
+        ChangeNotifierProvider(
+          create: (context) => Player(),
+        ),
+
+        // Learning Analytics Provider
+        Provider(
+          create: (context) => LearningAnalyticsService(prefs),
+        ),
+
+        // Exercise Manager Provider
+        Provider(
+          create: (context) => ExerciseManager(
+            player: context.read<Player>(),
+            contentService: contentService,
+            analyticsService: context.read<LearningAnalyticsService>(),
+          ),
+        ),
+
+        // Achievement Manager Provider
+        Provider(
+          create: (context) => AchievementManager(
+            player: context.read<Player>(),
+            analytics: context.read<LearningAnalyticsService>(),
+          ),
+        ),
+
+        // Challenge Service Provider
+        ChangeNotifierProvider(
+          create: (context) => ChallengeService(
+            prefs,
+            context.read<Player>(),
+          ),
+        ),
+
+        // Game Service Provider
+        ProxyProvider3<Player, ContentService, ExerciseManager, GameService>(
+          update: (context, player, contentService, exerciseManager, previous) =>
+              GameService(
+                player: player,
+                contentService: contentService,
+                exerciseManager: exerciseManager,
+              ),
+        ),
+
+        // Recognition Manager Provider
+        ChangeNotifierProvider(
+          create: (context) => RecognitionManager(
+            speechService: SpeechRecognitionService(),
+            gameService: context.read<GameService>(),
+          ),
+        ),
+
+        // Training Session Provider
+        Provider(
+          create: (context) => TrainingSessionService(
+            prefs: prefs,
+            analyticsService: context.read<LearningAnalyticsService>(),
+            gameService: context.read<GameService>(),
+            recognitionManager: context.read<RecognitionManager>(),
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        title: AppConfig.appName,
+        theme: ThemeConfig.lightTheme,
+        builder: (context, child) => GameNotificationWrapper(
+          child: child ?? Container(),
+        ),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => MainMenuScreen(),
+          '/game': (context) => GameScreen(),
+          '/reading_exercise': (context) => ReadingExerciseScreen(),
+          '/profile_creation': (context) => ProfileCreationScreen(),
+          '/options': (context) => OptionsScreen(),
+          '/challenges': (context) => ChallengesScreen(),
+        },
+      ),
+    );
+  }
+
+  // ErrorWidget personalizzato per il debug
+  static Widget errorScreen(FlutterErrorDetails errorDetails) {
+    return Material(
+      child: Container(
+        padding: EdgeInsets.all(16),
+        color: Colors.red[100],
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: Colors.red, size: 60),
+            SizedBox(height: 16),
+            Text(
+              'Si è verificato un errore',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (AppConfig.appVersion.endsWith('dev'))
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  errorDetails.toString(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'Monospace',
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
-      localizationsDelegates: [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: [
-        const Locale('it', ''),
-        const Locale('en', ''),
-      ],
-      debugShowCheckedModeBanner: false,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => MainMenuScreen(),
-        '/game': (context) => GameScreen(),
-        '/profile': (context) => ProfileCreationScreen(),
-        '/options': (context) => OptionsScreen(),
-        '/reading_exercise': (context) => ReadingExerciseScreen(),
-      },
     );
   }
 }

@@ -4,6 +4,7 @@ import '../models/player.dart';
 import '../services/game_service.dart';
 import 'game_screen.dart';
 
+
 class LevelSummaryScreen extends StatelessWidget {
   final int completedLevel;
   final int earnedCrystals;
@@ -26,7 +27,7 @@ class LevelSummaryScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.purple, Colors.blue],
+            colors: [Colors.lightBlue.shade100, Colors.lightGreen.shade200],
           ),
         ),
         child: SafeArea(
@@ -38,22 +39,43 @@ class LevelSummaryScreen extends StatelessWidget {
                   isPurchased
                       ? 'Livello ${completedLevel + 1} Acquistato!'
                       : 'Livello $completedLevel Completato!',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                    fontFamily: 'OpenDyslexic',
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
                 SizedBox(height: 20),
                 if (!isPurchased)
                   Text(
                     'Cristalli guadagnati: $earnedCrystals',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
+                    style: TextStyle(
+                      fontFamily: 'OpenDyslexic',
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
                 SizedBox(height: 20),
                 Text(
                   'Totale cristalli: ${player.totalCrystals}',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
+                  style: TextStyle(
+                    fontFamily: 'OpenDyslexic',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  child: Text('Continua'),
+                  child: Text(
+                    'Continua',
+                    style: TextStyle(
+                      fontFamily: 'OpenDyslexic',
+                      fontSize: 18,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,

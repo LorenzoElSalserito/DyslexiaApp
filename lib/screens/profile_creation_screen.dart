@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/player.dart';
 import 'game_screen.dart';
 
+
 class ProfileCreationScreen extends StatefulWidget {
   @override
   _ProfileCreationScreenState createState() => _ProfileCreationScreenState();
@@ -16,14 +17,20 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   final _corsoController = TextEditingController();
 
   void _saveProfile() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
     if (_formKey.currentState!.validate()) {
       final player = Provider.of<Player>(context, listen: false);
       await player.setPlayerInfo(
-          _nameController.text,
-          _surnameController.text,
-          _matricolaController.text,
-          _corsoController.text
+        _nameController.text,
+        _surnameController.text,
+        _matricolaController.text,
+        _corsoController.text,
       );
+      Navigator.pop(context); // Chiude il dialog
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => GameScreen()));
     }
   }

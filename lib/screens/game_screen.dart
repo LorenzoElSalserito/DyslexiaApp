@@ -18,7 +18,7 @@ class GameScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.purple, Colors.blue],
+            colors: [Colors.lightBlue.shade100, Colors.lightBlue.shade300],
           ),
         ),
         child: SafeArea(
@@ -60,12 +60,21 @@ class GameScreen extends StatelessWidget {
         children: [
           Text(
             '${player.name} ${player.surname}',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'OpenDyslexic',
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           Text(
             'Matricola: ${player.matricola}',
-            style: TextStyle(color: Colors.white),
+            style: // Modifica TextStyle
+            TextStyle(
+              color: Colors.black87,
+              fontSize: 16,
+              fontFamily: 'OpenDyslexic',
+            ),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 10),
@@ -76,7 +85,13 @@ class GameScreen extends StatelessWidget {
               SizedBox(width: 5),
               Text(
                 '${player.totalCrystals}',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: // Modifica TextStyle
+                TextStyle(
+                  color: Colors.black87,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'OpenDyslexic',
+                ),
               ),
             ],
           ),
@@ -186,7 +201,8 @@ class GameScreen extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: textColor,
-          padding: EdgeInsets.symmetric(vertical: 15),
+          padding: EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+          textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         onPressed: onPressed,
       ),

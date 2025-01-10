@@ -12,13 +12,26 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+
+  # Core dependencies
   provider: ^6.0.0
   path: ^1.8.0
   shared_preferences: ^2.0.8
+
+  # UI dependencies
   cupertino_icons: ^1.0.8
-  http: ^1.2.0
-  flutter_tts: ^4.0.2
-  flutter_svg: ^2.0.10+1
+  flutter_svg: ^1.1.6
+
+  # VOSK and Audio related
+  vosk_flutter: ^0.3.48
+  flutter_sound: ^9.2.13
+  permission_handler: ^10.2.0
+  path_provider: ^2.1.2
+
+  # Utilities
+  archive: ^3.4.10
+  http: ^0.13.5
+  string_similarity: ^2.0.0
 
 dev_dependencies:
   flutter_test:
@@ -27,19 +40,18 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - lib/assets/words.txt
     - lib/assets/sentences.txt
     - lib/assets/paragraphs.txt
     - lib/assets/pages.txt
+    - lib/assets/fonts/
 
-  # Uncomment these lines when you have actually added these fonts to your project
-  # fonts:
-  #   - family: OpenDyslexic
-  #     fonts:
-  #       - asset: lib/assets/fonts/OpenDyslexic-Regular.otf
-  #       - asset: lib/assets/fonts/OpenDyslexic-Italic.otf
-  #         style: italic
-  #       - asset: lib/assets/fonts/OpenDyslexic-Bold.otf
-  #         weight: 700
+  fonts:
+    - family: OpenDyslexic
+      fonts:
+        - asset: lib/assets/fonts/OpenDyslexic-Regular.otf
+        - asset: lib/assets/fonts/OpenDyslexic-Italic.otf
+          style: italic
+        - asset: lib/assets/fonts/OpenDyslexic-Bold.otf
+          weight: 700
