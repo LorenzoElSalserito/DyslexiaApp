@@ -1,67 +1,16 @@
-// lib/services/exercise_manager.dart
-
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import '../models/player.dart';
 import '../models/recognition_result.dart';
 import '../services/content_service.dart';
 import '../services/learning_analytics_service.dart';
-
-enum ExerciseType {
-  word,
-  sentence,
-  paragraph,
-  page
-}
-
-class ExercisePool {
-  final List<String> easyWords;
-  final List<String> mediumWords;
-  final List<String> hardWords;
-  final List<String> sentenceTemplates;
-  final List<String> paragraphTemplates;
-  final List<String> pageTemplates;
-  final Random random = Random();
-
-  ExercisePool({
-    required this.easyWords,
-    required this.mediumWords,
-    required this.hardWords,
-    required this.sentenceTemplates,
-    required this.paragraphTemplates,
-    required this.pageTemplates,
-  });
-
-  String getRandomWord(Difficulty difficulty) {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return easyWords[random.nextInt(easyWords.length)];
-      case Difficulty.medium:
-        return mediumWords[random.nextInt(mediumWords.length)];
-      case Difficulty.hard:
-        return hardWords[random.nextInt(hardWords.length)];
-    }
-  }
-
-  String getRandomTemplate(ExerciseType type) {
-    switch (type) {
-      case ExerciseType.sentence:
-        return sentenceTemplates[random.nextInt(sentenceTemplates.length)];
-      case ExerciseType.paragraph:
-        return paragraphTemplates[random.nextInt(paragraphTemplates.length)];
-      case ExerciseType.page:
-        return pageTemplates[random.nextInt(pageTemplates.length)];
-      default:
-        throw Exception('Invalid exercise type for template');
-    }
-  }
-}
+import '../models/enums.dart';
 
 class Exercise {
   final String content;
   final ExerciseType type;
-  final int difficulty;
+  final Difficulty difficulty;
   final int crystalValue;
   final bool isBonus;
   final Map<String, dynamic>? metadata;
@@ -83,8 +32,7 @@ class ExerciseManager extends ChangeNotifier {
   final Random _random = Random();
 
   Exercise? _currentExercise;
-  late ExercisePool _exercisePool;
-  final List<String> _usedContent = [];
+  List<String> _usedContent = [];
   int _consecutiveSuccesses = 0;
   int _consecutiveFailures = 0;
   Difficulty _currentDifficulty = Difficulty.medium;
@@ -98,56 +46,21 @@ class ExerciseManager extends ChangeNotifier {
     required LearningAnalyticsService analyticsService,
   }) : _player = player,
         _contentService = contentService,
-        _analyticsService = analyticsService {
-    _initializeExercisePool();
-  }
+        _analyticsService = analyticsService;
 
   Exercise? get currentExercise => _currentExercise;
   Difficulty get currentDifficulty => _currentDifficulty;
-
-  Future<void> _initializeExercisePool() async {
-    // In un'app reale, questi verrebbero caricati da file o database
-    _exercisePool = ExercisePool(
-      easyWords: await _loadWords('assets/easy_words.txt'),
-      mediumWords: await _loadWords('assets/medium_words.txt'),
-      hardWords: await _loadWords('assets/hard_words.txt'),
-      sentenceTemplates: await _loadTemplates('assets/sentences.txt'),
-      paragraphTemplates: await _loadTemplates('assets/paragraphs.txt'),
-      pageTemplates: await _loadTemplates('assets/pages.txt'),
-    );
-  }
-
-  Future<List<String>> _loadWords(String path) async {
-    try {
-      final content = await _contentService.loadAsset(path);
-      return content.split('\n').where((word) => word.isNotEmpty).toList();
-    } catch (e) {
-      print('Error loading words from $path: $e');
-      return [];
-    }
-  }
-
-  Future<List<String>> _loadTemplates(String path) async {
-    try {
-      final content = await _contentService.loadAsset(path);
-      return content.split('\n\n').where((template) => template.isNotEmpty).toList();
-    } catch (e) {
-      print('Error loading templates from $path: $e');
-      return [];
-    }
-  }
 
   Future<Exercise> generateExercise() async {
     ExerciseType type = _getExerciseTypeForLevel(_player.currentLevel);
     String content = await _generateContent(type);
     int baseValue = _calculateBaseValue(content, type);
-    int difficulty = _calculateDifficulty();
 
     _currentExercise = Exercise(
       content: content,
       type: type,
-      difficulty: difficulty,
-      crystalValue: _calculateCrystalValue(baseValue, difficulty),
+      difficulty: _currentDifficulty,
+      crystalValue: _calculateCrystalValue(baseValue),
       isBonus: _consecutiveSuccesses >= 3,
       metadata: {
         'difficulty': _currentDifficulty,
@@ -178,28 +91,11 @@ class ExerciseManager extends ChangeNotifier {
   }
 
   Future<String> _generateRawContent(ExerciseType type) async {
-    switch (type) {
-      case ExerciseType.word:
-        return _exercisePool.getRandomWord(_currentDifficulty);
-      case ExerciseType.sentence:
-        String template = _exercisePool.getRandomTemplate(type);
-        return _fillTemplate(template);
-      case ExerciseType.paragraph:
-        String template = _exercisePool.getRandomTemplate(type);
-        return _fillTemplate(template);
-      case ExerciseType.page:
-        String template = _exercisePool.getRandomTemplate(type);
-        return _fillTemplate(template);
-    }
-  }
-
-  String _fillTemplate(String template) {
-    // Sostituisci i placeholder con parole appropriate
-    RegExp placeholderRegex = RegExp(r'\{(\w+)\}');
-    return template.replaceAllMapped(placeholderRegex, (match) {
-      String type = match.group(1)?.toLowerCase() ?? '';
-      return _exercisePool.getRandomWord(_currentDifficulty);
-    });
+    final word = _contentService.getRandomWordForLevel(
+      _player.currentLevel,
+      _currentDifficulty,
+    );
+    return word.text;
   }
 
   ExerciseType _getExerciseTypeForLevel(int level) {
@@ -228,15 +124,21 @@ class ExerciseManager extends ChangeNotifier {
     return (content.length * multiplier).round();
   }
 
-  int _calculateDifficulty() {
-    return _player.currentLevel + _player.newGamePlusCount;
-  }
-
-  int _calculateCrystalValue(int baseValue, int difficulty) {
+  int _calculateCrystalValue(int baseValue) {
     double multiplier = 1.0;
 
     // Bonus per difficoltà
-    multiplier *= 1.0 + (difficulty * 0.1);
+    switch (_currentDifficulty) {
+      case Difficulty.easy:
+        multiplier *= 1.0;
+        break;
+      case Difficulty.medium:
+        multiplier *= 1.5;
+        break;
+      case Difficulty.hard:
+        multiplier *= 2.0;
+        break;
+    }
 
     // Bonus per New Game+
     multiplier *= (1.0 + (_player.newGamePlusCount * 0.5));
@@ -251,26 +153,26 @@ class ExerciseManager extends ChangeNotifier {
 
   Future<void> processExerciseResult(RecognitionResult result) async {
     if (result.isCorrect) {
-      _handleSuccess(result);
+      _handleSuccess();
     } else {
-      _handleFailure(result);
+      _handleFailure();
     }
 
     // Aggiorna la difficoltà se necessario
     _updateDifficulty(result.similarity);
 
     // Aggiorna le analytics
-    await _analyticsService.addResult(result);
+    _analyticsService.addResult(result);
 
     notifyListeners();
   }
 
-  void _handleSuccess(RecognitionResult result) {
+  void _handleSuccess() {
     _consecutiveSuccesses++;
     _consecutiveFailures = 0;
   }
 
-  void _handleFailure(RecognitionResult result) {
+  void _handleFailure() {
     _consecutiveFailures++;
     _consecutiveSuccesses = 0;
   }
@@ -298,6 +200,7 @@ class ExerciseManager extends ChangeNotifier {
       // Già al massimo
         break;
     }
+    notifyListeners();
   }
 
   void _decreaseDifficulty() {
@@ -312,6 +215,7 @@ class ExerciseManager extends ChangeNotifier {
       // Già al minimo
         break;
     }
+    notifyListeners();
   }
 
   void resetProgress() {

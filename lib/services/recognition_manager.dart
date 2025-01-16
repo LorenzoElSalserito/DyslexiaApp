@@ -1,18 +1,17 @@
-// recognition_manager.dart
-
+// lib/services/recognition_manager.dart
 import 'package:flutter/foundation.dart';
 import '../models/recognition_result.dart';
 import '../services/speech_recognition_service.dart';
-import '../services/game_service.dart';
+import '../models/enums.dart';
 import '../utils/text_similarity.dart';
 
 class RecognitionManager extends ChangeNotifier {
   final SpeechRecognitionService _speechService;
-  final GameService _gameService;
 
-  RecognitionState _currentState = RecognitionState.idle;
+  bool _isRecording = false;
   RecognitionResult? _lastResult;
   String? _currentText;
+  String? _targetText;
   String? _lastError;
   double _volumeLevel = 0.0;
 
@@ -22,19 +21,11 @@ class RecognitionManager extends ChangeNotifier {
 
   RecognitionManager({
     required SpeechRecognitionService speechService,
-    required GameService gameService,
-  }) : _speechService = speechService,
-        _gameService = gameService {
+  }) : _speechService = speechService {
     _initializeListeners();
   }
 
   void _initializeListeners() {
-    // Ascolta i cambiamenti di stato
-    _speechService.stateStream.listen((state) {
-      _currentState = state;
-      notifyListeners();
-    });
-
     // Ascolta il livello del volume
     _speechService.volumeStream.listen((volume) {
       _volumeLevel = volume;
@@ -53,19 +44,20 @@ class RecognitionManager extends ChangeNotifier {
     });
   }
 
-  Future<void> startNewRecognition() async {
-    if (_currentState != RecognitionState.idle) return;
+  Future<void> startNewRecognition(String text) async {
+    if (_isRecording) return;
 
-    _currentText = _gameService.getCurrentText();
-    if (_currentText == null) {
+    _targetText = text;
+    if (_targetText == null) {
       _lastError = 'Nessun testo disponibile per il riconoscimento';
       notifyListeners();
       return;
     }
 
     try {
-      await _speechService.startRecognition(_currentText!);
+      await _speechService.startRecognition(_targetText!);
       _totalAttempts++;
+      _isRecording = true;
       _lastError = null;
       notifyListeners();
     } catch (e) {
@@ -75,10 +67,12 @@ class RecognitionManager extends ChangeNotifier {
   }
 
   Future<void> stopRecognition() async {
-    if (_currentState != RecognitionState.recording) return;
+    if (!_isRecording) return;
 
     try {
       await _speechService.stopRecognition();
+      _isRecording = false;
+      notifyListeners();
     } catch (e) {
       _lastError = 'Errore nello stop del riconoscimento: $e';
       notifyListeners();
@@ -97,18 +91,30 @@ class RecognitionManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _processSuccessfulAttempt(RecognitionResult result) async {
+  void _processSuccessfulAttempt(RecognitionResult result) {
     try {
-      // Calcola i cristalli guadagnati basandosi sulla performance
-      bool levelCompleted = await _gameService.processRecognitionResult(result);
+      if (_targetText != null) {
+        double similarity = TextSimilarity.calculateSimilarity(
+            result.text,
+            _targetText!
+        );
 
-      if (levelCompleted) {
-        _resetSession();
+        if (similarity >= 0.85) {  // Soglia di successo
+          _successfulAttempts++;
+          _resetForNextAttempt();
+        }
       }
     } catch (e) {
       _lastError = 'Errore nel processare il risultato: $e';
       notifyListeners();
     }
+  }
+
+  void _resetForNextAttempt() {
+    _currentText = null;
+    _lastResult = null;
+    _isRecording = false;
+    notifyListeners();
   }
 
   void _resetSession() {
@@ -117,10 +123,11 @@ class RecognitionManager extends ChangeNotifier {
     _successfulAttempts = 0;
     _lastResult = null;
     _currentText = null;
+    _isRecording = false;
     notifyListeners();
   }
 
-  // Metodi per ottenere statistiche della sessione
+  // Statistiche della sessione
   double get sessionAccuracy {
     if (_totalAttempts == 0) return 0.0;
     return _successfulAttempts / _totalAttempts;
@@ -134,17 +141,15 @@ class RecognitionManager extends ChangeNotifier {
     return total / _sessionResults.length;
   }
 
-  List<RecognitionResult> get sessionResults => List.unmodifiable(_sessionResults);
-
-  // Getters per lo stato corrente
-  RecognitionState get currentState => _currentState;
+  // Getters
   RecognitionResult? get lastResult => _lastResult;
   String? get currentText => _currentText;
   String? get lastError => _lastError;
   double get volumeLevel => _volumeLevel;
-  bool get isRecording => _currentState == RecognitionState.recording;
+  bool get isRecording => _isRecording;
   int get totalAttempts => _totalAttempts;
   int get successfulAttempts => _successfulAttempts;
+  List<RecognitionResult> get sessionResults => List.unmodifiable(_sessionResults);
 
   @override
   void dispose() {

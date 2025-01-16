@@ -4,7 +4,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[italian]{babel}
 \usepackage{lipsum}
-
+\usepackage{multicol}       % Per gestire le colonne
 \usepackage{url}
 \usepackage{indentfirst}
 \usepackage{amsmath}
@@ -14,8 +14,6 @@
 \usepackage{graphicx}
 \usepackage[a-1b]{pdfx}
 
-
-\title{Tesi} 
 
 \date{} 
 
@@ -32,16 +30,43 @@
 \end{flushright}
 \clearpage
 
-\mainmatter
-\author{Lorenzo De Marco - Matricola 920033} 
+\begin{center}
+    \includegraphics[width=8cm]{Images/unito-logo.png} \\
+    \vspace{0.1cm}
+    {\LARGE \textbf{Università degli Studi di Torino}} \\
+    \vspace{0.2cm}
+    {\Large {Corso di Laurea in Informatica}} \\ 
+    \vspace{1cm}
+    
+    
+    {\LARGE \textbf{Titolo della tesi}} \\ 
+    \vspace{0.1cm}
+    {\Large {Tesi di Laurea}} \\
+    \vspace{1cm}
+    
+\end{center}
+    
+\begin{multicols}{2}
+    \noindent \large{\textbf {Relatore:}} \\
+    \large{Esposito Roberto} \\
+    \vspace{0.1cm}
 
-\maketitle
+    \noindent{\large{\textbf {Candidato:}}} \\
+    \large{\textbf{De Marco Lorenzo}} \\
+    \large {Matricola 920033}
+\end{multicols}
+\vspace{0.3cm}
+    
+\begin{center}
+    \large{Anno Accademico 2024/2025}
+\end{center}
+\newpage
 
 \tableofcontents
 \pagestyle{plain}
 
 
-\chapter{Introduzione}
+\chapter{Introduzione al Problema}
 \section{Paragrafo 1}
 
 \chapter{Progettazione}

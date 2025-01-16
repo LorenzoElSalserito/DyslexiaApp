@@ -59,10 +59,12 @@ class AppConfig {
   };
 
   // Path delle risorse
-  static const String wordsPath = 'lib/assets/words.txt';
-  static const String sentencesPath = 'lib/assets/sentences.txt';
-  static const String paragraphsPath = 'lib/assets/paragraphs.txt';
-  static const String pagesPath = 'lib/assets/pages.txt';
+  static const String wordsEasyPath = 'lib/assets/exercises/easy_words.txt';
+  static const String wordsMediumPath = 'lib/assets/exercises/medium_words.txt';
+  static const String wordsHardPath = 'lib/assets/exercises/hard_words.txt';
+  static const String sentencesPath = 'lib/assets/exercises/sentences.txt';
+  static const String paragraphsPath = 'lib/assets/exercises/paragraphs.txt';
+  static const String pagesPath = 'lib/assets/exercises/pages.txt';
 
   // Configurazioni Crystal
   static const Map<int, int> baseLevelCrystalCosts = {

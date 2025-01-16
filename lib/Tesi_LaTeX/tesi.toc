@@ -1,13 +1,13 @@
 \babel@toc {italian}{}\relax 
 \babel@toc {italian}{}\relax 
-\contentsline {chapter}{\numberline {1}Introduzione}{5}{chapter.1}%
-\contentsline {section}{\numberline {1.1}Paragrafo 1}{5}{section.1.1}%
-\contentsline {chapter}{\numberline {2}Progettazione}{7}{chapter.2}%
-\contentsline {section}{\numberline {2.1}Paragrafo 1}{7}{section.2.1}%
-\contentsline {chapter}{\numberline {3}Tecnologie Utilizzate}{9}{chapter.3}%
-\contentsline {section}{\numberline {3.1}Paragrafo 1}{9}{section.3.1}%
-\contentsline {chapter}{\numberline {4}Sviluppo}{11}{chapter.4}%
-\contentsline {section}{\numberline {4.1}Paragrafo 1}{11}{section.4.1}%
-\contentsline {chapter}{\numberline {5}Problemi riscontrati}{13}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Paragrafo 1}{13}{section.5.1}%
-\contentsline {chapter}{\numberline {6}Conclusioni}{15}{chapter.6}%
+\contentsline {chapter}{Introduzione}{v}{chapter*.2}%
+\contentsline {section}{\numberline {0.1}Paragrafo 1}{v}{section.0.1}%
+\contentsline {chapter}{Progettazione}{vii}{chapter*.3}%
+\contentsline {section}{\numberline {0.2}Paragrafo 1}{vii}{section.0.2}%
+\contentsline {chapter}{Tecnologie Utilizzate}{ix}{chapter*.4}%
+\contentsline {section}{\numberline {0.3}Paragrafo 1}{ix}{section.0.3}%
+\contentsline {chapter}{Sviluppo}{xi}{chapter*.5}%
+\contentsline {section}{\numberline {0.4}Paragrafo 1}{xi}{section.0.4}%
+\contentsline {chapter}{Problemi riscontrati}{xiii}{chapter*.6}%
+\contentsline {section}{\numberline {0.5}Paragrafo 1}{xiii}{section.0.5}%
+\contentsline {chapter}{Conclusioni}{xv}{chapter*.7}%

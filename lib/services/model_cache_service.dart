@@ -1,5 +1,3 @@
-// model_cache_service.dart
-
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:crypto/crypto.dart';
@@ -99,18 +97,17 @@ class ModelCacheService {
     final files = await modelDir.list(recursive: true).toList();
     files.sort((a, b) => a.path.compareTo(b.path)); // Ordine consistente
 
-    final digest = AccumulatorSink<Digest>();
-    final hasher = md5.startChunkedConversion(digest);
+    final allBytes = <int>[];
 
     for (var file in files) {
       if (file is File) {
         final content = await file.readAsBytes();
-        hasher.add(content);
+        allBytes.addAll(content);
       }
     }
 
-    hasher.close();
-    return digest.events.single.toString();
+    final hash = md5.convert(allBytes);
+    return hash.toString();
   }
 
   Future<void> clearCache() async {

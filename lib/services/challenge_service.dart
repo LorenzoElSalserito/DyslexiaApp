@@ -1,21 +1,9 @@
-// lib/services/challenge_service.dart
-
-import 'package:flutter/material.dart';
-import 'package:shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/player.dart';
-
-enum ChallengeType {
-  daily,
-  weekly,
-  special
-}
-
-enum ChallengeStatus {
-  notStarted,
-  inProgress,
-  completed,
-  failed
-}
+import '../models/enums.dart';
+import '../models/recognition_result.dart';
 
 class Challenge {
   final String id;
@@ -84,23 +72,69 @@ class ChallengeService extends ChangeNotifier {
     _generateNewChallengesIfNeeded();
   }
 
-  Future<void> _loadChallenges() async {
+  void _loadChallenges() {
     final savedChallenges = _prefs.getString(_challengesKey);
     if (savedChallenges != null) {
-      // Implementa il caricamento delle sfide salvate
+      try {
+        final List<dynamic> challengesList = json.decode(savedChallenges);
+        _activeChallenges = challengesList.map((data) {
+          final template = _getChallengeTemplate(data['id']);
+          if (template != null) {
+            return Challenge.fromJson(data, template);
+          }
+          return null;
+        }).whereType<Challenge>().toList();
+      } catch (e) {
+        print('Errore nel caricamento delle sfide: $e');
+      }
+    }
+  }
+
+  Challenge? _getChallengeTemplate(String id) {
+    switch (id) {
+      case 'daily_streak':
+        return Challenge(
+          id: id,
+          title: 'Streak Maestro',
+          description: 'Mantieni una streak di 5 esercizi',
+          type: ChallengeType.daily,
+          targetValue: 5,
+          crystalReward: 100,
+          expiration: DateTime.now().add(Duration(days: 1)),
+        );
+      case 'daily_accuracy':
+        return Challenge(
+          id: id,
+          title: 'Precisione Perfetta',
+          description: 'Completa 3 esercizi con accuratezza superiore al 90%',
+          type: ChallengeType.daily,
+          targetValue: 3,
+          crystalReward: 150,
+          expiration: DateTime.now().add(Duration(days: 1)),
+        );
+      case 'weekly_exercises':
+        return Challenge(
+          id: id,
+          title: 'Allenamento Costante',
+          description: 'Completa 20 esercizi questa settimana',
+          type: ChallengeType.weekly,
+          targetValue: 20,
+          crystalReward: 500,
+          expiration: DateTime.now().add(Duration(days: 7)),
+        );
+      default:
+        return null;
     }
   }
 
   void _checkAndResetChallenges() {
     final now = DateTime.now();
 
-    // Controllo reset giornaliero
     if (_lastDailyReset == null || !_isSameDay(_lastDailyReset!, now)) {
       _resetDailyChallenges();
       _lastDailyReset = now;
     }
 
-    // Controllo reset settimanale
     if (_lastWeeklyReset == null || !_isSameWeek(_lastWeeklyReset!, now)) {
       _resetWeeklyChallenges();
       _lastWeeklyReset = now;
@@ -114,21 +148,18 @@ class ChallengeService extends ChangeNotifier {
   }
 
   bool _isSameWeek(DateTime date1, DateTime date2) {
-    // Considera la settimana da lunedì a domenica
     final monday1 = date1.subtract(Duration(days: date1.weekday - 1));
     final monday2 = date2.subtract(Duration(days: date2.weekday - 1));
     return _isSameDay(monday1, monday2);
   }
 
   void _resetDailyChallenges() {
-    _activeChallenges.removeWhere((challenge) =>
-    challenge.type == ChallengeType.daily);
+    _activeChallenges.removeWhere((challenge) => challenge.type == ChallengeType.daily);
     _generateDailyChallenges();
   }
 
   void _resetWeeklyChallenges() {
-    _activeChallenges.removeWhere((challenge) =>
-    challenge.type == ChallengeType.weekly);
+    _activeChallenges.removeWhere((challenge) => challenge.type == ChallengeType.weekly);
     _generateWeeklyChallenges();
   }
 
@@ -217,7 +248,7 @@ class ChallengeService extends ChangeNotifier {
 
   Future<void> _saveChallenges() async {
     final challengesData = _activeChallenges.map((c) => c.toJson()).toList();
-    await _prefs.setString(_challengesKey, challengesData.toString());
+    await _prefs.setString(_challengesKey, json.encode(challengesData));
   }
 
   void processExerciseResult(RecognitionResult result) {
@@ -227,4 +258,9 @@ class ChallengeService extends ChangeNotifier {
             (c) => c.id == 'daily_accuracy',
         orElse: () => throw Exception('Challenge not found: daily_accuracy'),
       );
-      updateChallengeProgress(accuracyChallenge.id, accuracyChallenge.cu
+      updateChallengeProgress(accuracyChallenge.id, accuracyChallenge.currentProgress + 1);
+    }
+
+    // Qui puoi aggiungere altre logiche per aggiornare altre sfide basate sul risultato
+  }
+}

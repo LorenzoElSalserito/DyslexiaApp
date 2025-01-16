@@ -1,5 +1,3 @@
-// vosk_service.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:vosk_flutter/vosk_flutter.dart';
@@ -12,7 +10,7 @@ import '../config/app_config.dart';
 
 class VoskService {
   static VoskService? _instance;
-  late VoskSpeechRecognizer _recognizer;
+  VoskFlutter? _recognizer;
   bool _isInitialized = false;
   bool _isDownloading = false;
   String _modelPath = '';
@@ -30,7 +28,9 @@ class VoskService {
 
     try {
       _modelPath = await _prepareModel();
-      _recognizer = await VoskSpeechRecognizer.create(_modelPath);
+      await VoskFlutter.setLogLevel(-1); // Disabilita i log
+      _recognizer = VoskFlutter(_modelPath);
+      await _recognizer?.initialize();
       _isInitialized = true;
     } catch (e) {
       print('Errore nell\'inizializzazione di VOSK: $e');
@@ -68,7 +68,6 @@ class VoskService {
       }
 
       _isDownloading = false;
-
     } catch (e) {
       _isDownloading = false;
       print('Errore nel download del modello: $e');
@@ -100,11 +99,11 @@ class VoskService {
     final archive = ZipDecoder().decodeBytes(bytes);
 
     for (final file in archive) {
-      final filePath = '${Directory.systemTemp.path}/${file.name}';
+      final filePath = '$modelDir/${file.name}';
       if (file.isFile) {
         final outFile = File(filePath);
         await outFile.create(recursive: true);
-        await outFile.writeAsBytes(file.content);
+        await outFile.writeAsBytes(file.content as List<int>);
       }
     }
   }
@@ -113,40 +112,38 @@ class VoskService {
     if (!_isInitialized) await initialize();
 
     final completer = Completer<RecognitionResult>();
-    var startTime = DateTime.now();
-
-    _recognizer.setFinalResultListener((result) {
-      final duration = DateTime.now().difference(startTime);
-      final voskResult = RecognitionResult.fromVoskResult(
-          {
-            'text': result,
-            'duration': duration.inMilliseconds,
-            'confidence': 1.0
-          },
-          targetText
-      );
-      completer.complete(voskResult);
-    });
+    final startTime = DateTime.now();
 
     try {
-      await _recognizer.start();
-    } catch (e) {
-      completer.completeError('Errore durante il riconoscimento vocale: $e');
-    }
+      final result = await _recognizer?.start();
+      final duration = DateTime.now().difference(startTime);
 
-    return completer.future;
+      return RecognitionResult(
+        text: result?.text ?? '',
+        confidence: result?.confidence ?? 0.0,
+        similarity: TextSimilarity.calculateSimilarity(
+            result?.text ?? '',
+            targetText
+        ),
+        isCorrect: false,
+        duration: duration,
+      );
+    } catch (e) {
+      print('Errore durante il riconoscimento vocale: $e');
+      rethrow;
+    }
   }
 
   Future<void> stopRecognition() async {
-    if (_isInitialized) {
-      await _recognizer.stop();
+    if (_isInitialized && _recognizer != null) {
+      await _recognizer?.stop();
     }
   }
 
   Future<void> dispose() async {
     await stopRecognition();
-    if (_isInitialized) {
-      await _recognizer.dispose();
+    if (_isInitialized && _recognizer != null) {
+      await _recognizer?.destroy();
       _isInitialized = false;
     }
   }

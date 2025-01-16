@@ -1,5 +1,0 @@
-ciao
-mondo
-flutter
-dislessia
-apprendimento

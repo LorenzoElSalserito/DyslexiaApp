@@ -17,34 +17,40 @@ dependencies:
   provider: ^6.0.0
   path: ^1.8.0
   shared_preferences: ^2.0.8
+  crypto: ^3.0.3
 
   # UI dependencies
   cupertino_icons: ^1.0.8
-  flutter_svg: ^1.1.6
 
   # VOSK and Audio related
   vosk_flutter: ^0.3.48
   flutter_sound: ^9.2.13
-  permission_handler: ^10.2.0
+  permission_handler: ^10.2.0  # Aggiornato per compatibilità con vosk_flutter
   path_provider: ^2.1.2
 
   # Utilities
   archive: ^3.4.10
-  http: ^0.13.5
+  http: ^0.13.5  # Downgrade per compatibilità
   string_similarity: ^2.0.0
+  collection: ^1.18.0
+  json_annotation: ^4.8.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  json_serializable: ^6.7.1
+  build_runner: ^2.4.7
 
 flutter:
   uses-material-design: true
   assets:
-    - lib/assets/words.txt
-    - lib/assets/sentences.txt
-    - lib/assets/paragraphs.txt
-    - lib/assets/pages.txt
+    - lib/assets/exercises/easy_words.txt
+    - lib/assets/exercises/medium_words.txt
+    - lib/assets/exercises/hard_words.txt
+    - lib/assets/exercises/sentences.txt
+    - lib/assets/exercises/paragraphs.txt
+    - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
 
   fonts:

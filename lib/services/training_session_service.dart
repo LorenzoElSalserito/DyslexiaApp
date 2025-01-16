@@ -1,10 +1,8 @@
-// training_session_service.dart
-
 import 'dart:async';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/recognition_result.dart';
 import '../services/learning_analytics_service.dart';
-import '../services/game_service.dart';
 import '../services/recognition_manager.dart';
 
 class TrainingSession {
@@ -38,7 +36,9 @@ class TrainingSession {
       startTime: DateTime.parse(json['startTime'] as String),
       targetWords: json['targetWords'] as int,
       currentLevel: json['currentLevel'] as int,
-      results: (json['results'] as List).map((r) => RecognitionResult.fromVoskResult(r, '')).toList(),
+      results: (json['results'] as List)
+          .map((r) => RecognitionResult.fromVoskResult(r, ''))
+          .toList(),
       crystalsEarned: json['crystalsEarned'] as int,
       isCompleted: json['isCompleted'] as bool,
     );
@@ -48,7 +48,6 @@ class TrainingSession {
 class TrainingSessionService {
   final SharedPreferences _prefs;
   final LearningAnalyticsService _analyticsService;
-  final GameService _gameService;
   final RecognitionManager _recognitionManager;
 
   static const String _currentSessionKey = 'current_training_session';
@@ -60,11 +59,9 @@ class TrainingSessionService {
   TrainingSessionService({
     required SharedPreferences prefs,
     required LearningAnalyticsService analyticsService,
-    required GameService gameService,
     required RecognitionManager recognitionManager,
   }) : _prefs = prefs,
         _analyticsService = analyticsService,
-        _gameService = gameService,
         _recognitionManager = recognitionManager {
     _loadCurrentSession();
     _setupRecognitionListener();
@@ -83,22 +80,25 @@ class TrainingSessionService {
   Future<void> _loadCurrentSession() async {
     final sessionJson = _prefs.getString(_currentSessionKey);
     if (sessionJson != null) {
-      _currentSession = TrainingSession.fromJson(
-          Map<String, dynamic>.from(json.decode(sessionJson))
-      );
-      _sessionController.add(_currentSession);
+      try {
+        final sessionData = jsonDecode(sessionJson);
+        _currentSession = TrainingSession.fromJson(sessionData);
+        _sessionController.add(_currentSession);
+      } catch (e) {
+        print('Errore nel caricamento della sessione: $e');
+      }
     }
   }
 
-  Future<void> startNewSession() async {
+  Future<void> startNewSession(int targetWords, int currentLevel) async {
     if (_currentSession?.isCompleted == false) {
       await _saveSessionToHistory(_currentSession!);
     }
 
     _currentSession = TrainingSession(
       startTime: DateTime.now(),
-      targetWords: _gameService.currentLevelTarget,
-      currentLevel: _gameService.player.currentLevel,
+      targetWords: targetWords,
+      currentLevel: currentLevel,
     );
 
     await _saveCurrentSession();
@@ -145,10 +145,8 @@ class TrainingSessionService {
     if (_currentSession == null) {
       await _prefs.remove(_currentSessionKey);
     } else {
-      await _prefs.setString(
-        _currentSessionKey,
-        json.encode(_currentSession!.toJson()),
-      );
+      final sessionJson = jsonEncode(_currentSession!.toJson());
+      await _prefs.setString(_currentSessionKey, sessionJson);
     }
   }
 
@@ -161,20 +159,25 @@ class TrainingSessionService {
       history.removeAt(0);
     }
 
-    await _prefs.setString(
-      _sessionsHistoryKey,
-      json.encode(history.map((s) => s.toJson()).toList()),
+    final historyJson = jsonEncode(
+        history.map((s) => s.toJson()).toList()
     );
+    await _prefs.setString(_sessionsHistoryKey, historyJson);
   }
 
   Future<List<TrainingSession>> getSessionHistory() async {
     final historyJson = _prefs.getString(_sessionsHistoryKey);
     if (historyJson == null) return [];
 
-    final historyList = json.decode(historyJson) as List;
-    return historyList
-        .map((s) => TrainingSession.fromJson(Map<String, dynamic>.from(s)))
-        .toList();
+    try {
+      final List<dynamic> historyData = jsonDecode(historyJson);
+      return historyData
+          .map((data) => TrainingSession.fromJson(data))
+          .toList();
+    } catch (e) {
+      print('Errore nel caricamento della cronologia: $e');
+      return [];
+    }
   }
 
   Future<void> cancelCurrentSession() async {
@@ -193,8 +196,10 @@ class TrainingSessionService {
     if (results.isEmpty) return {};
 
     final successfulAttempts = results.where((r) => r.isCorrect).length;
-    final averageSimilarity = results.fold<double>(0, (sum, r) => sum + r.similarity) / results.length;
-    final averageTime = results.fold<double>(0, (sum, r) => sum + r.duration.inSeconds) / results.length;
+    final averageSimilarity = results.fold<double>(
+        0, (sum, r) => sum + r.similarity) / results.length;
+    final averageTime = results.fold<int>(
+        0, (sum, r) => sum + r.duration.inSeconds) / results.length;
 
     return {
       'totalAttempts': results.length,

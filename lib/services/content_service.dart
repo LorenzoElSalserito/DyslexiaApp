@@ -1,70 +1,191 @@
 import 'dart:math';
+import 'package:flutter/services.dart';
 import '../models/content_models.dart';
+import '../models/enums.dart';
+import '../config/app_config.dart';
 
 class ContentService {
   late ContentSet _contentSet;
   final Random _random = Random();
+  Map<String, List<String>> _cachedContent = {};
 
   // Inizializza il servizio caricando i dati
   Future<void> initialize() async {
-    // In un'app reale, qui caricheresti i dati da un file o da un database
-    // Per ora, useremo dati di esempio
-    _contentSet = await _loadMockData();
+    try {
+      // Carica tutti i contenuti necessari
+      final easyWords = await _loadWords(AppConfig.wordsEasyPath);
+      final mediumWords = await _loadWords(AppConfig.wordsMediumPath);
+      final hardWords = await _loadWords(AppConfig.wordsHardPath);
+      final sentences = await _loadSentences(AppConfig.sentencesPath);
+      final paragraphs = await _loadParagraphs(AppConfig.paragraphsPath);
+      final pages = await _loadPages(AppConfig.pagesPath);
+
+      // Crea il ContentSet
+      _contentSet = ContentSet(
+        dictionary: [...easyWords.map((word) => Word(word)),
+          ...mediumWords.map((word) => Word(word)),
+          ...hardWords.map((word) => Word(word))],
+        sentences: sentences.map((text) =>
+            Sentence(text.split(' ').map((word) => Word(word)).toList())
+        ).toList(),
+        paragraphs: paragraphs.map((text) =>
+            Paragraph(text.split('.').where((s) => s.trim().isNotEmpty)
+                .map((sentence) =>
+                Sentence(sentence.trim().split(' ')
+                    .map((word) => Word(word)).toList())
+            ).toList())
+        ).toList(),
+        pages: pages.map((text) =>
+            Page(text.split('\n\n').where((p) => p.trim().isNotEmpty)
+                .map((paragraph) =>
+                Paragraph(paragraph.split('.').where((s) => s.trim().isNotEmpty)
+                    .map((sentence) =>
+                    Sentence(sentence.trim().split(' ')
+                        .map((word) => Word(word)).toList())
+                ).toList())
+            ).toList())
+        ).toList(),
+      );
+    } catch (e) {
+      print('Errore nell\'inizializzazione di ContentService: $e');
+      rethrow;
+    }
   }
 
-  Future<ContentSet> _loadMockData() async {
-    // Simula il caricamento dei dati con un ritardo
-    await Future.delayed(Duration(seconds: 2));
+  Future<String> loadAsset(String path) async {
+    try {
+      if (_cachedContent.containsKey(path)) {
+        return _cachedContent[path]!.join('\n');
+      }
 
-    return ContentSet(
-      dictionary: List.generate(1000, (index) => Word('parola$index')),
-      sentences: List.generate(100, (index) =>
-          Sentence(List.generate(5, (wordIndex) => Word('parola${index * 5 + wordIndex}')))),
-      paragraphs: List.generate(50, (index) =>
-          Paragraph(List.generate(3, (sentenceIndex) =>
-              Sentence(List.generate(5, (wordIndex) => Word('parola${index * 15 + sentenceIndex * 5 + wordIndex}')))))),
-      pages: List.generate(10, (index) =>
-          Page(List.generate(5, (paragraphIndex) =>
-              Paragraph(List.generate(3, (sentenceIndex) =>
-                  Sentence(List.generate(5, (wordIndex) => Word('parola${index * 75 + paragraphIndex * 15 + sentenceIndex * 5 + wordIndex}')))))))),
-    );
+      final content = await rootBundle.loadString(path);
+      _cachedContent[path] = content.split('\n')
+          .where((line) => line.trim().isNotEmpty)
+          .toList();
+
+      return content;
+    } catch (e) {
+      print('Errore nel caricamento del file $path: $e');
+      return '';
+    }
   }
 
-  // Metodi per ottenere contenuti casuali per ciascun livello
-  Word getRandomWordForLevel1() => _contentSet.getRandomWord();
-
-  Sentence getRandomSentenceForLevel2() => _contentSet.getRandomSentence();
-
-  Paragraph getRandomParagraphForLevel3() => _contentSet.getRandomParagraph();
-
-  Page getRandomPageForLevel4() => _contentSet.getRandomPage();
-
-  // Metodo per ottenere un set di parole per il Livello 1
-  List<Word> getWordsForLevel1(int count) {
-    return List.generate(count, (_) => getRandomWordForLevel1());
+  Future<List<String>> _loadWords(String path) async {
+    try {
+      final content = await loadAsset(path);
+      return content.split('\n')
+          .where((word) => word.trim().isNotEmpty)
+          .map((word) => word.trim())
+          .toList();
+    } catch (e) {
+      print('Errore nel caricamento delle parole da $path: $e');
+      return [];
+    }
   }
 
-  // Metodo per ottenere un set di frasi per il Livello 2
-  List<Sentence> getSentencesForLevel2(int count) {
-    return List.generate(count, (_) => getRandomSentenceForLevel2());
+  Future<List<String>> _loadSentences(String path) async {
+    try {
+      final content = await loadAsset(path);
+      return content.split('\n')
+          .where((sentence) => sentence.trim().isNotEmpty)
+          .map((sentence) => sentence.trim())
+          .toList();
+    } catch (e) {
+      print('Errore nel caricamento delle frasi da $path: $e');
+      return [];
+    }
   }
 
-  // Metodo per ottenere un set di paragrafi per il Livello 3
-  List<Paragraph> getParagraphsForLevel3(int count) {
-    return List.generate(count, (_) => getRandomParagraphForLevel3());
+  Future<List<String>> _loadParagraphs(String path) async {
+    try {
+      final content = await loadAsset(path);
+      return content.split('\n\n')
+          .where((paragraph) => paragraph.trim().isNotEmpty)
+          .map((paragraph) => paragraph.trim())
+          .toList();
+    } catch (e) {
+      print('Errore nel caricamento dei paragrafi da $path: $e');
+      return [];
+    }
   }
 
-  // Metodo per ottenere un set di pagine per il Livello 4
-  List<Page> getPagesForLevel4(int count) {
-    return List.generate(count, (_) => getRandomPageForLevel4());
+  Future<List<String>> _loadPages(String path) async {
+    try {
+      final content = await loadAsset(path);
+      return content.split('\n\n\n')
+          .where((page) => page.trim().isNotEmpty)
+          .map((page) => page.trim())
+          .toList();
+    } catch (e) {
+      print('Errore nel caricamento delle pagine da $path: $e');
+      return [];
+    }
   }
 
-  // Metodo per calcolare il punteggio in cristalli per un dato contenuto
+  Word getRandomWordForLevel(int level, Difficulty difficulty) {
+    final words = _getWordsForDifficulty(difficulty);
+    return words[_random.nextInt(words.length)];
+  }
+
+  List<Word> _getWordsForDifficulty(Difficulty difficulty) {
+    switch (difficulty) {
+      case Difficulty.easy:
+        return _contentSet.dictionary.where((word) =>
+        word.text.length <= 5).toList();
+      case Difficulty.medium:
+        return _contentSet.dictionary.where((word) =>
+        word.text.length > 5 && word.text.length <= 8).toList();
+      case Difficulty.hard:
+        return _contentSet.dictionary.where((word) =>
+        word.text.length > 8).toList();
+    }
+  }
+
+  Sentence getRandomSentence() => _contentSet.getRandomSentence();
+  Paragraph getRandomParagraph() => _contentSet.getRandomParagraph();
+  Page getRandomPage() => _contentSet.getRandomPage();
+
+  List<Word> getWordsForLevel(int count, Difficulty difficulty) {
+    final words = _getWordsForDifficulty(difficulty);
+    if (words.length < count) {
+      return words;
+    }
+
+    final selectedWords = <Word>[];
+    final usedIndexes = <int>{};
+
+    while (selectedWords.length < count) {
+      final index = _random.nextInt(words.length);
+      if (!usedIndexes.contains(index)) {
+        selectedWords.add(words[index]);
+        usedIndexes.add(index);
+      }
+    }
+
+    return selectedWords;
+  }
+
+  List<Sentence> getSentencesForLevel(int count) {
+    return List.generate(count, (_) => getRandomSentence());
+  }
+
+  List<Paragraph> getParagraphsForLevel(int count) {
+    return List.generate(count, (_) => getRandomParagraph());
+  }
+
+  List<Page> getPagesForLevel(int count) {
+    return List.generate(count, (_) => getRandomPage());
+  }
+
   int calculateCrystals(dynamic content) {
     if (content is Word) return content.crystalValue;
     if (content is Sentence) return content.crystalValue;
     if (content is Paragraph) return content.crystalValue;
     if (content is Page) return content.crystalValue;
     return 0;
+  }
+
+  void clearCache() {
+    _cachedContent.clear();
   }
 }
