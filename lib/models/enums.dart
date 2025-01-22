@@ -1,40 +1,46 @@
 // lib/models/enums.dart
+
+/// Livelli di difficoltà del gioco
 enum Difficulty {
   easy,
   medium,
-  hard
+  hard,
 }
 
-enum ExerciseType {
-  word,
-  sentence,
-  paragraph,
-  page
-}
-
-enum AudioState {
-  stopped,
-  recording,
-  paused
-}
-
-enum CrystalType {
-  red,
-  orange,
-  yellow,
-  blue,
-  white
-}
-
+/// Tipi di sfide disponibili
 enum ChallengeType {
   daily,
   weekly,
-  special
+  special,
 }
 
+/// Stato delle sfide
 enum ChallengeStatus {
   notStarted,
   inProgress,
   completed,
-  failed
+  failed,
+}
+
+/// Tipi di esercizi
+enum ExerciseType {
+  word,
+  sentence,
+  paragraph,
+  page,
+}
+
+/// Stati dell'audio
+enum AudioState {
+  stopped,
+  recording,
+  paused,
+}
+
+/// Tipi di feedback
+enum FeedbackType {
+  success,
+  error,
+  warning,
+  progress,
 }

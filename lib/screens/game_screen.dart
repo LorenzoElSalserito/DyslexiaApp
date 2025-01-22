@@ -69,8 +69,7 @@ class GameScreen extends StatelessWidget {
           ),
           Text(
             'Matricola: ${player.matricola}',
-            style: // Modifica TextStyle
-            TextStyle(
+            style: TextStyle(
               color: Colors.black87,
               fontSize: 16,
               fontFamily: 'OpenDyslexic',
@@ -85,8 +84,7 @@ class GameScreen extends StatelessWidget {
               SizedBox(width: 5),
               Text(
                 '${player.totalCrystals}',
-                style: // Modifica TextStyle
-                TextStyle(
+                style: TextStyle(
                   color: Colors.black87,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -118,7 +116,7 @@ class GameScreen extends StatelessWidget {
             showDialog(
               context: context,
               builder: (context) => CrystalPopup(
-                crystals: earnedCrystals,
+                earnedCrystals: earnedCrystals,
                 level: player.currentLevel,
                 progress: gameService.levelProgress,
               ),

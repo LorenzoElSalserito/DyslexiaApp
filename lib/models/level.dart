@@ -1,7 +1,6 @@
 // level.dart
 import 'crystal.dart';
-
-enum Difficulty { easy, medium, hard }
+import 'enums.dart';
 
 class Level {
   final int number;

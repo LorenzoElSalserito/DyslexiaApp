@@ -1,4 +1,3 @@
-// crystal_popup.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../models/recognition_result.dart';
@@ -24,17 +23,18 @@ class CrystalReward {
 }
 
 class CrystalPopup extends StatefulWidget {
-  final CrystalReward reward;
+  final int earnedCrystals;
   final int level;
   final double progress;
   final RecognitionResult? recognitionResult;
 
-  CrystalPopup({
-    required this.reward,
+  const CrystalPopup({
+    Key? key,
+    required this.earnedCrystals,
     required this.level,
     required this.progress,
     this.recognitionResult,
-  });
+  }) : super(key: key);
 
   @override
   _CrystalPopupState createState() => _CrystalPopupState();
@@ -57,15 +57,15 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 1.2),
-        weight: 40.0,
+        weight: 30.0,
       ),
       TweenSequenceItem(
         tween: Tween<double>(begin: 1.2, end: 1.0),
-        weight: 60.0,
+        weight: 70.0,
       ),
     ]).animate(CurvedAnimation(
       parent: _controller,
-      curve: Interval(0.0, 0.6, curve: Curves.easeOut),
+      curve: Interval(0.0, 0.6, curve: Curves.elasticOut),
     ));
 
     _rotateAnimation = Tween<double>(
@@ -117,43 +117,6 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
     }
   }
 
-  Widget _buildBonusItem(String label, double multiplier, IconData icon) {
-    final isActive = multiplier > 1.0;
-    final color = isActive ? Colors.green : Colors.grey;
-
-    return AnimatedBuilder(
-      animation: _bonusScaleAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: isActive ? _bonusScaleAnimation.value : 1.0,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: color.withOpacity(0.3),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  '$label: ${(multiplier * 100 - 100).toStringAsFixed(0)}%',
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -193,44 +156,12 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
           ),
           SizedBox(height: 20),
           Text(
-            '${widget.reward.totalCrystals} Cristalli',
+            '${widget.earnedCrystals} Cristalli',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
             ),
-          ),
-          if (widget.reward.streak > 0) ...[
-            SizedBox(height: 8),
-            Text(
-              'Streak: ${widget.reward.streak}',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-          SizedBox(height: 20),
-          Column(
-            children: [
-              _buildBonusItem(
-                'Bonus Streak',
-                widget.reward.streakMultiplier,
-                Icons.auto_awesome,
-              ),
-              SizedBox(height: 8),
-              _buildBonusItem(
-                'Bonus Difficoltà',
-                widget.reward.difficultyMultiplier,
-                Icons.trending_up,
-              ),
-              SizedBox(height: 8),
-              _buildBonusItem(
-                'Bonus NG+',
-                widget.reward.newGamePlusMultiplier,
-                Icons.replay,
-              ),
-            ],
           ),
           if (widget.recognitionResult != null) ...[
             SizedBox(height: 16),

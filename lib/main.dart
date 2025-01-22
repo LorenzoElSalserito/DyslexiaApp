@@ -1,4 +1,3 @@
-// main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -120,20 +119,18 @@ class MyApp extends StatelessWidget {
         ),
 
         // Game Service Provider
-        ProxyProvider3<Player, ContentService, ExerciseManager, GameService>(
-          update: (context, player, contentService, exerciseManager, previous) =>
-              GameService(
-                player: player,
-                contentService: contentService,
-                exerciseManager: exerciseManager,
-              ),
+        Provider(
+          create: (context) => GameService(
+            player: context.read<Player>(),
+            contentService: contentService,
+            exerciseManager: context.read<ExerciseManager>(),
+          ),
         ),
 
         // Recognition Manager Provider
         ChangeNotifierProvider(
           create: (context) => RecognitionManager(
             speechService: SpeechRecognitionService(),
-            gameService: context.read<GameService>(),
           ),
         ),
 
@@ -142,7 +139,6 @@ class MyApp extends StatelessWidget {
           create: (context) => TrainingSessionService(
             prefs: prefs,
             analyticsService: context.read<LearningAnalyticsService>(),
-            gameService: context.read<GameService>(),
             recognitionManager: context.read<RecognitionManager>(),
           ),
         ),

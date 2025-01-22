@@ -1,4 +1,3 @@
-// voice_recognition_feedback.dart
 import 'package:flutter/material.dart';
 import '../models/recognition_result.dart';
 import '../utils/text_similarity.dart';
@@ -43,7 +42,7 @@ class VoiceRecognitionFeedback extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildPulsatingCircle(),
+              PulsatingCircle(),
               SizedBox(width: 8),
               Text(
                 'Registrazione in corso...',
@@ -61,25 +60,6 @@ class VoiceRecognitionFeedback extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-
-  Widget _buildPulsatingCircle() {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(seconds: 1),
-      builder: (context, value, child) {
-        return Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.red.withOpacity(1 - value),
-            border: Border.all(color: Colors.red),
-          ),
-        );
-      },
-      repeat: true,
     );
   }
 
@@ -308,6 +288,60 @@ class VoiceRecognitionFeedback extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class PulsatingCircle extends StatefulWidget {
+  @override
+  _PulsatingCircleState createState() => _PulsatingCircleState();
+}
+
+class _PulsatingCircleState extends State<PulsatingCircle> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: Duration(seconds: 1),
+      vsync: this,
+    );
+
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _controller.reverse();
+        } else if (status == AnimationStatus.dismissed) {
+          _controller.forward();
+        }
+      });
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.red.withOpacity(1 - _animation.value),
+            border: Border.all(color: Colors.red),
+          ),
+        );
+      },
     );
   }
 }

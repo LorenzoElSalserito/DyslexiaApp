@@ -40,6 +40,14 @@ class GameService extends ChangeNotifier {
     ).text;
   }
 
+  int getCurrentLevelTarget() {
+    final level = Level.allLevels.firstWhere(
+          (level) => level.number == player.currentLevel,
+      orElse: () => Level.allLevels.first,
+    );
+    return level.targetWords;
+  }
+
   SubLevel getCurrentSubLevel() {
     final level = Level.allLevels.firstWhere(
           (level) => level.number == player.currentLevel,

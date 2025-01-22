@@ -1,7 +1,7 @@
 // lib/widgets/challenge_list.dart
-
 import 'package:flutter/material.dart';
 import '../services/challenge_service.dart';
+import '../models/enums.dart';
 
 class ChallengeList extends StatelessWidget {
   final List<Challenge> challenges;
@@ -244,7 +244,7 @@ class ChallengeCard extends StatelessWidget {
         return _getTypeColor();
       case ChallengeStatus.failed:
         return Colors.red;
-      default:
+      case ChallengeStatus.notStarted:
         return Colors.grey.withOpacity(0.3);
     }
   }

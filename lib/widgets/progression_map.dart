@@ -1,9 +1,9 @@
-// progression_map.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/game_service.dart';
 import '../models/player.dart';
 import '../models/level.dart';
+import '../models/enums.dart';
 import '../config/app_config.dart';
 
 class ProgressionMap extends StatelessWidget {
@@ -23,6 +23,35 @@ class ProgressionMap extends StatelessWidget {
         SizedBox(height: 10),
         if (gameService.currentStreak > 0)
           _buildStreakIndicator(gameService.currentStreak),
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, IconData icon) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
       ],
     );
   }
@@ -131,7 +160,7 @@ class ProgressionMap extends StatelessWidget {
               ),
               Center(
                 child: Text(
-                  'Step ${gameService.player.currentStep} / ${gameService.currentLevelTarget}',
+                  'Step ${gameService.player.currentStep} / ${gameService.getCurrentLevelTarget()}',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -176,13 +205,13 @@ class ProgressionMap extends StatelessWidget {
           _buildDetailRow(
             'Fase Attuale',
             currentSubLevel.name,
-            Icons.trending_up,
+            Icons.emoji_flags,
           ),
           SizedBox(height: 8),
           _buildDetailRow(
             'Obiettivo',
-            '${gameService.currentLevelTarget} completati',
-            Icons.target,
+            '${gameService.getCurrentLevelTarget()} completati',
+            Icons.stars,
           ),
           SizedBox(height: 8),
           _buildDetailRow(
@@ -242,35 +271,6 @@ class ProgressionMap extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value, IconData icon) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
   IconData _getLevelIcon(int level) {
     switch (level) {
       case 1:
@@ -294,6 +294,8 @@ class ProgressionMap extends StatelessWidget {
         return '⭐⭐ Difficoltà: Media';
       case Difficulty.hard:
         return '⭐⭐⭐ Difficoltà: Difficile';
+      default:
+        return 'Difficoltà sconosciuta';
     }
   }
 
@@ -305,6 +307,8 @@ class ProgressionMap extends StatelessWidget {
         return Colors.orange;
       case Difficulty.hard:
         return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 }

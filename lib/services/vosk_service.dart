@@ -1,19 +1,24 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:vosk_flutter/vosk_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:archive/archive.dart';
+import 'package:vosk_flutter/vosk_flutter.dart';
 import '../models/recognition_result.dart';
 import '../utils/text_similarity.dart';
 import '../config/app_config.dart';
 
 class VoskService {
   static VoskService? _instance;
-  VoskFlutter? _recognizer;
+  VoskFlutterPlugin? _recognizer;
+  Model? _model;
+  Recognizer? _speechRecognizer;
+  SpeechService? _speechService;
   bool _isInitialized = false;
   bool _isDownloading = false;
   String _modelPath = '';
+  StreamSubscription? _resultSubscription;
+  StreamSubscription? _partialSubscription;
 
   // Singleton pattern
   static VoskService get instance {
@@ -28,9 +33,20 @@ class VoskService {
 
     try {
       _modelPath = await _prepareModel();
-      await VoskFlutter.setLogLevel(-1); // Disabilita i log
-      _recognizer = VoskFlutter(_modelPath);
-      await _recognizer?.initialize();
+      _recognizer = VoskFlutterPlugin.instance();
+
+      // Create model
+      _model = await _recognizer!.createModel(_modelPath);
+
+      // Create recognizer with sample rate
+      _speechRecognizer = await _recognizer!.createRecognizer(
+        model: _model!,
+        sampleRate: AppConfig.sampleRate,
+      );
+
+      // Initialize speech service
+      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+
       _isInitialized = true;
     } catch (e) {
       print('Errore nell\'inizializzazione di VOSK: $e');
@@ -111,39 +127,80 @@ class VoskService {
   Future<RecognitionResult> startRecognition(String targetText) async {
     if (!_isInitialized) await initialize();
 
-    final completer = Completer<RecognitionResult>();
     final startTime = DateTime.now();
+    final completer = Completer<RecognitionResult>();
 
     try {
-      final result = await _recognizer?.start();
-      final duration = DateTime.now().difference(startTime);
+      if (_speechService == null) {
+        throw Exception('Speech service not initialized');
+      }
 
-      return RecognitionResult(
-        text: result?.text ?? '',
-        confidence: result?.confidence ?? 0.0,
-        similarity: TextSimilarity.calculateSimilarity(
-            result?.text ?? '',
-            targetText
-        ),
-        isCorrect: false,
-        duration: duration,
+      // Subscribe to partial results
+      _partialSubscription = _speechService!.onPartial().listen(
+            (result) {
+          print('Partial result: $result');
+        },
       );
+
+      // Subscribe to final results
+      _resultSubscription = _speechService!.onResult().listen(
+            (result) {
+          final duration = DateTime.now().difference(startTime);
+          final similarity = TextSimilarity.calculateSimilarity(result, targetText);
+
+          final recognitionResult = RecognitionResult(
+            text: result,
+            confidence: 1.0,
+            similarity: similarity,
+            isCorrect: similarity >= 0.85,
+            duration: duration,
+          );
+
+          if (!completer.isCompleted) {
+            completer.complete(recognitionResult);
+          }
+        },
+      );
+
+      await _speechService!.start(
+        onRecognitionError: (error) {
+          print('Recognition error: $error');
+          if (!completer.isCompleted) {
+            completer.completeError(error);
+          }
+        },
+      );
+
     } catch (e) {
       print('Errore durante il riconoscimento vocale: $e');
-      rethrow;
+      if (!completer.isCompleted) {
+        completer.completeError(e);
+      }
     }
+
+    return completer.future;
   }
 
   Future<void> stopRecognition() async {
-    if (_isInitialized && _recognizer != null) {
-      await _recognizer?.stop();
+    if (_isInitialized && _speechService != null) {
+      await _speechService!.stop();
+      await _resultSubscription?.cancel();
+      await _partialSubscription?.cancel();
+      _resultSubscription = null;
+      _partialSubscription = null;
     }
   }
 
   Future<void> dispose() async {
     await stopRecognition();
-    if (_isInitialized && _recognizer != null) {
-      await _recognizer?.destroy();
+    if (_isInitialized) {
+      _speechRecognizer?.dispose();
+      _model?.dispose();
+      await _speechService?.dispose();
+      _speechService = null;
+      _speechRecognizer = null;
+      _model = null;
+      _recognizer = null;
       _isInitialized = false;
     }
   }
