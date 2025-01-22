@@ -61,3 +61,6 @@ flutter:
           style: italic
         - asset: lib/assets/fonts/OpenDyslexic-Bold.otf
           weight: 700
+
+#TODO: securizzare il profilo, aggiungere delle opzioni coerenti, ampliare gli esercizi, rendere la UI adattabile al device in uso
+#TODO: trovare un modo per usare i dati per uso-studio a livello accademico (creare eventuale disclaimer a prima accensione con checkbox per non visualizzarlo più)
