@@ -4,11 +4,13 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../config/app_config.dart';
 
+/// Servizio per la gestione della cache del modello di riconoscimento vocale.
+/// Implementa meccanismi di caching, verifica e pulizia dei modelli VOSK.
 class ModelCacheService {
   static const String _cacheFileName = 'model_cache_info.json';
   static ModelCacheService? _instance;
 
-  // Singleton pattern
+  /// Implementazione del pattern Singleton per garantire un'unica istanza del servizio
   static ModelCacheService get instance {
     _instance ??= ModelCacheService._();
     return _instance!;
@@ -16,16 +18,19 @@ class ModelCacheService {
 
   ModelCacheService._();
 
+  /// Ottiene il percorso della directory di cache per i modelli
   Future<String> get _cacheDir async {
     final appDir = await getApplicationDocumentsDirectory();
     return '${appDir.path}/model_cache';
   }
 
+  /// Ottiene il file che contiene le informazioni di cache
   Future<File> get _cacheFile async {
     final dir = await _cacheDir;
     return File('$dir/$_cacheFileName');
   }
 
+  /// Inizializza il servizio creando le directory necessarie
   Future<void> initialize() async {
     final dir = await _cacheDir;
     final directory = Directory(dir);
@@ -34,6 +39,7 @@ class ModelCacheService {
     }
   }
 
+  /// Verifica se il modello è presente in cache e valido
   Future<bool> isModelCached() async {
     try {
       final cacheInfo = await _loadCacheInfo();
@@ -62,6 +68,7 @@ class ModelCacheService {
     }
   }
 
+  /// Carica le informazioni di cache dal file
   Future<Map<String, dynamic>?> _loadCacheInfo() async {
     try {
       final file = await _cacheFile;
@@ -75,6 +82,7 @@ class ModelCacheService {
     }
   }
 
+  /// Aggiorna le informazioni di cache per un nuovo modello
   Future<void> updateCacheInfo(String modelPath) async {
     try {
       final hash = await _calculateModelHash(modelPath);
@@ -92,6 +100,7 @@ class ModelCacheService {
     }
   }
 
+  /// Calcola l'hash MD5 del modello per verificarne l'integrità
   Future<String> _calculateModelHash(String modelPath) async {
     final modelDir = Directory(modelPath);
     final files = await modelDir.list(recursive: true).toList();
@@ -110,6 +119,7 @@ class ModelCacheService {
     return hash.toString();
   }
 
+  /// Pulisce la cache eliminando tutti i files
   Future<void> clearCache() async {
     try {
       final dir = await _cacheDir;
@@ -122,6 +132,7 @@ class ModelCacheService {
     }
   }
 
+  /// Calcola la dimensione totale della cache in bytes
   Future<int> getCacheSize() async {
     try {
       final dir = await _cacheDir;
@@ -141,6 +152,7 @@ class ModelCacheService {
     }
   }
 
+  /// Ottiene la data dell'ultimo aggiornamento della cache
   Future<DateTime?> getLastUpdateTime() async {
     try {
       final cacheInfo = await _loadCacheInfo();

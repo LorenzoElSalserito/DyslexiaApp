@@ -1,59 +1,156 @@
+// lib/models/player.dart
+
 import 'package:flutter/foundation.dart';
 import '../services/file_storage_service.dart';
+import 'dart:convert';
 
 class Player with ChangeNotifier {
   final FileStorageService _storageService = FileStorageService();
 
-  String name = '';
-  String surname = '';
-  String matricola = '';
-  String corso = '';
-  int totalCrystals = 0;
-  int currentLevel = 1;
-  int currentStep = 0;
-  bool isAdmin = false;
-  int newGamePlusCount = 0;
-  Set<String> usedWords = {};
-  Set<String> usedSentences = {};
+  // Proprietà fondamentali del giocatore
+  String _id = '';
+  String _name = '';
+  int _totalCrystals = 0;
+  int _currentLevel = 1;
+  int _currentStep = 0;
+  bool _isAdmin = false;
+  int _newGamePlusCount = 0;
+  Set<String> _usedWords = {};
+  Set<String> _usedSentences = {};
+  DateTime? _lastPlayDate;
+  int _maxConsecutiveDays = 0;
+  int _currentConsecutiveDays = 0;
+  Map<String, dynamic> _gameData = {};
 
-  static const Map<int, int> baseLevelCrystalCosts = {
+  static const Map<int, int> _baseLevelCrystalCosts = {
     1: 300,
     2: 1500,
     3: 5000,
     4: 10000,
   };
 
-  int get levelCrystalCost => (baseLevelCrystalCosts[currentLevel] ?? 0) * (newGamePlusCount + 1);
-
-  Player() {
-    loadProgress();
+  // Getters e Setters con notifica
+  String get id => _id;
+  set id(String value) {
+    _id = value;
+    notifyListeners();
   }
 
-  Future<void> setPlayerInfo(String name, String surname, String matricola, String corso) async {
-    this.name = name;
-    this.surname = surname;
-    this.matricola = matricola;
-    this.corso = corso;
-    totalCrystals = 0;
-    currentLevel = 1;
-    currentStep = 0;
-    isAdmin = (name.toLowerCase() == 'admin');
-    newGamePlusCount = 0;
-    usedWords.clear();
-    usedSentences.clear();
+  String get name => _name;
+  set name(String value) {
+    if (value.isNotEmpty && _name != value) {
+      _name = value;
+      notifyListeners();
+    }
+  }
+
+  int get totalCrystals => _totalCrystals;
+  set totalCrystals(int value) {
+    if (_totalCrystals != value) {
+      _totalCrystals = value;
+      _gameData['crystals'] = value;
+      notifyListeners();
+    }
+  }
+
+  int get currentLevel => _currentLevel;
+  set currentLevel(int value) {
+    if (_currentLevel != value) {
+      _currentLevel = value;
+      _gameData['level'] = value;
+      notifyListeners();
+    }
+  }
+
+  int get currentStep => _currentStep;
+  set currentStep(int value) {
+    if (_currentStep != value) {
+      _currentStep = value;
+      notifyListeners();
+    }
+  }
+
+  bool get isAdmin => _isAdmin;
+  int get newGamePlusCount => _newGamePlusCount;
+  Set<String> get usedWords => Set.unmodifiable(_usedWords);
+  Set<String> get usedSentences => Set.unmodifiable(_usedSentences);
+  DateTime? get lastPlayDate => _lastPlayDate;
+  Map<String, dynamic> get gameData => Map.unmodifiable(_gameData);
+
+  int get maxConsecutiveDays => _maxConsecutiveDays;
+  set maxConsecutiveDays(int value) {
+    if (_maxConsecutiveDays != value) {
+      _maxConsecutiveDays = value;
+      notifyListeners();
+    }
+  }
+
+  int get currentConsecutiveDays => _currentConsecutiveDays;
+  set currentConsecutiveDays(int value) {
+    if (_currentConsecutiveDays != value) {
+      _currentConsecutiveDays = value;
+      notifyListeners();
+    }
+  }
+
+  int get levelCrystalCost =>
+      (_baseLevelCrystalCosts[currentLevel] ?? 0) * (newGamePlusCount + 1);
+
+  Future<void> setPlayerInfo(String name) async {
+    if (name.isEmpty) {
+      throw Exception('Il nome non può essere vuoto');
+    }
+
+    _name = name;
+    _totalCrystals = 0;
+    _currentLevel = 1;
+    _currentStep = 0;
+    _isAdmin = (name.toLowerCase() == 'admin');
+    _newGamePlusCount = 0;
+    _maxConsecutiveDays = 0;
+    _currentConsecutiveDays = 0;
+    _lastPlayDate = DateTime.now();
+    _usedWords.clear();
+    _usedSentences.clear();
+    _gameData.clear();
+
     await saveProgress();
     notifyListeners();
   }
 
-  void addCrystals(int amount) {
-    totalCrystals += amount;
-    notifyListeners();
+  void updateConsecutiveDays() {
+    final now = DateTime.now();
+    final yesterday = now.subtract(Duration(days: 1));
+
+    if (_lastPlayDate != null) {
+      if (_lastPlayDate!.year == yesterday.year &&
+          _lastPlayDate!.month == yesterday.month &&
+          _lastPlayDate!.day == yesterday.day) {
+        currentConsecutiveDays++;
+        if (currentConsecutiveDays > maxConsecutiveDays) {
+          maxConsecutiveDays = currentConsecutiveDays;
+        }
+      } else if (_lastPlayDate!.year != now.year ||
+          _lastPlayDate!.month != now.month ||
+          _lastPlayDate!.day != now.day) {
+        currentConsecutiveDays = 1;
+      }
+    } else {
+      currentConsecutiveDays = 1;
+    }
+
+    _lastPlayDate = now;
     saveProgress();
   }
 
-  bool canLevelUp() {
-    return totalCrystals >= levelCrystalCost;
+  void addCrystals(int amount) {
+    if (amount != 0) {
+      totalCrystals += amount;
+      saveProgress();
+    }
   }
+
+  bool canLevelUp() => totalCrystals >= levelCrystalCost;
 
   void levelUp() {
     if (canLevelUp() || isAdmin) {
@@ -62,74 +159,92 @@ class Player with ChangeNotifier {
       }
       currentLevel++;
       currentStep = 0;
-      notifyListeners();
       saveProgress();
     }
   }
 
   void incrementStep() {
     currentStep++;
-    notifyListeners();
-    saveProgress();
-  }
-
-  void addUsedWord(String word) {
-    usedWords.add(word);
-    saveProgress();
-  }
-
-  void addUsedSentence(String sentence) {
-    usedSentences.add(sentence);
+    updateConsecutiveDays();
     saveProgress();
   }
 
   void startNewGamePlus() {
-    newGamePlusCount++;
+    _newGamePlusCount++;
     currentLevel = 1;
     currentStep = 0;
-    usedWords.clear();
-    usedSentences.clear();
-    notifyListeners();
+    _usedWords.clear();
+    _usedSentences.clear();
+    _gameData['newGamePlus'] = _newGamePlusCount;
     saveProgress();
+    notifyListeners();
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': _id,
+      'name': _name,
+      'totalCrystals': _totalCrystals,
+      'currentLevel': _currentLevel,
+      'currentStep': _currentStep,
+      'isAdmin': _isAdmin,
+      'newGamePlusCount': _newGamePlusCount,
+      'maxConsecutiveDays': _maxConsecutiveDays,
+      'currentConsecutiveDays': _currentConsecutiveDays,
+      'lastPlayDate': _lastPlayDate?.toIso8601String(),
+      'usedWords': _usedWords.toList(),
+      'usedSentences': _usedSentences.toList(),
+      'gameData': _gameData,
+    };
+  }
+
+  void fromJson(Map<String, dynamic> json) {
+    _id = json['id']?.toString() ?? '';
+    _name = json['name']?.toString() ?? '';
+    _totalCrystals = _parseIntSafely(json['totalCrystals']);
+    _currentLevel = _parseIntSafely(json['currentLevel'], defaultValue: 1);
+    _currentStep = _parseIntSafely(json['currentStep']);
+    _isAdmin = json['isAdmin'] == true;
+    _newGamePlusCount = _parseIntSafely(json['newGamePlusCount']);
+    _maxConsecutiveDays = _parseIntSafely(json['maxConsecutiveDays']);
+    _currentConsecutiveDays = _parseIntSafely(json['currentConsecutiveDays']);
+
+    final lastPlayDateStr = json['lastPlayDate']?.toString();
+    _lastPlayDate = lastPlayDateStr != null && lastPlayDateStr.isNotEmpty
+        ? DateTime.parse(lastPlayDateStr)
+        : null;
+
+    _usedWords = (json['usedWords'] as List?)?.map((e) => e.toString()).toSet() ?? {};
+    _usedSentences = (json['usedSentences'] as List?)?.map((e) => e.toString()).toSet() ?? {};
+    _gameData = (json['gameData'] as Map?)?.cast<String, dynamic>() ?? {};
+
+    notifyListeners();
+  }
+
+  int _parseIntSafely(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is String) {
+      return int.tryParse(value) ?? defaultValue;
+    }
+    return defaultValue;
   }
 
   Future<void> saveProgress() async {
-    await _storageService.writeProfile({
-      'name': name,
-      'surname': surname,
-      'matricola': matricola,
-      'corso': corso,
-      'totalCrystals': totalCrystals.toString(),
-      'currentLevel': currentLevel.toString(),
-      'currentStep': currentStep.toString(),
-      'isAdmin': isAdmin.toString(),
-      'newGamePlusCount': newGamePlusCount.toString(),
-      'usedWords': usedWords.join(','),
-      'usedSentences': usedSentences.join('|'),
-    });
+    if (_id.isNotEmpty) {
+      final profileData = toJson();
+      await _storageService.writeProfile(_id, profileData);
+      notifyListeners();
+    }
   }
 
   Future<bool> loadProgress() async {
+    if (_id.isEmpty) return false;
+
     try {
-      final profileData = await _storageService.readProfile();
+      final profileData = await _storageService.readProfile(_id);
       if (profileData.isNotEmpty) {
-        name = profileData['name'] as String? ?? '';
-        surname = profileData['surname'] as String? ?? '';
-        matricola = profileData['matricola'] as String? ?? '';
-        corso = profileData['corso'] as String? ?? '';
-        totalCrystals = int.tryParse(profileData['totalCrystals'] as String? ?? '0') ?? 0;
-        currentLevel = int.tryParse(profileData['currentLevel'] as String? ?? '1') ?? 1;
-        currentStep = int.tryParse(profileData['currentStep'] as String? ?? '0') ?? 0;
-        isAdmin = (profileData['isAdmin'] as String? ?? 'false') == 'true';
-        newGamePlusCount = int.tryParse(profileData['newGamePlusCount'] as String? ?? '0') ?? 0;
-
-        final usedWordsString = profileData['usedWords'] as String? ?? '';
-        usedWords = usedWordsString.split(',').where((w) => w.isNotEmpty).toSet();
-
-        final usedSentencesString = profileData['usedSentences'] as String? ?? '';
-        usedSentences = usedSentencesString.split('|').where((s) => s.isNotEmpty).toSet();
-
-        notifyListeners();
+        fromJson(profileData);
         return true;
       }
       return false;
@@ -140,22 +255,24 @@ class Player with ChangeNotifier {
   }
 
   Future<void> resetProgress() async {
-    await _storageService.deleteProfile();
-    name = '';
-    surname = '';
-    matricola = '';
-    corso = '';
-    totalCrystals = 0;
-    currentLevel = 1;
-    currentStep = 0;
-    isAdmin = false;
-    newGamePlusCount = 0;
-    usedWords.clear();
-    usedSentences.clear();
+    if (_id.isNotEmpty) {
+      await _storageService.deleteProfile(_id);
+    }
+    _totalCrystals = 0;
+    _currentLevel = 1;
+    _currentStep = 0;
+    _newGamePlusCount = 0;
+    _maxConsecutiveDays = 0;
+    _currentConsecutiveDays = 0;
+    _lastPlayDate = null;
+    _usedWords.clear();
+    _usedSentences.clear();
+    _gameData.clear();
     notifyListeners();
   }
 
   Future<bool> hasProfile() async {
-    return await _storageService.profileExists();
+    if (_id.isEmpty) return false;
+    return await _storageService.profileExists(_id);
   }
 }

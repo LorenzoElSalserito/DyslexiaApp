@@ -1,13 +1,16 @@
-// lib/services/recognition_manager.dart
 import 'package:flutter/foundation.dart';
 import '../models/recognition_result.dart';
 import '../services/speech_recognition_service.dart';
 import '../models/enums.dart';
 import '../utils/text_similarity.dart';
 
+/// Il RecognitionManager è responsabile di coordinare il processo di riconoscimento vocale,
+/// gestire i risultati e mantenere le statistiche della sessione corrente.
 class RecognitionManager extends ChangeNotifier {
+  // Il servizio di riconoscimento vocale sottostante
   final SpeechRecognitionService _speechService;
 
+  // Stati del riconoscimento
   bool _isRecording = false;
   RecognitionResult? _lastResult;
   String? _currentText;
@@ -15,35 +18,39 @@ class RecognitionManager extends ChangeNotifier {
   String? _lastError;
   double _volumeLevel = 0.0;
 
+  // Statistiche della sessione
   List<RecognitionResult> _sessionResults = [];
   int _totalAttempts = 0;
   int _successfulAttempts = 0;
 
+  /// Costruisce un nuovo manager con il servizio di riconoscimento fornito
   RecognitionManager({
     required SpeechRecognitionService speechService,
   }) : _speechService = speechService {
     _initializeListeners();
   }
 
+  /// Inizializza gli ascoltatori per i vari eventi del servizio di riconoscimento
   void _initializeListeners() {
-    // Ascolta il livello del volume
+    // Monitora il livello del volume in tempo reale
     _speechService.volumeStream.listen((volume) {
       _volumeLevel = volume;
       notifyListeners();
     });
 
-    // Ascolta i risultati
+    // Gestisce i risultati del riconoscimento vocale
     _speechService.resultStream.listen((result) {
       _handleRecognitionResult(result);
     });
 
-    // Ascolta gli errori
+    // Gestisce gli errori del servizio
     _speechService.errorStream.listen((error) {
       _lastError = error;
       notifyListeners();
     });
   }
 
+  /// Avvia una nuova sessione di riconoscimento con il testo target fornito
   Future<void> startNewRecognition(String text) async {
     if (_isRecording) return;
 
@@ -66,6 +73,7 @@ class RecognitionManager extends ChangeNotifier {
     }
   }
 
+  /// Ferma la sessione di riconoscimento corrente
   Future<void> stopRecognition() async {
     if (!_isRecording) return;
 
@@ -79,6 +87,7 @@ class RecognitionManager extends ChangeNotifier {
     }
   }
 
+  /// Gestisce l'elaborazione di un nuovo risultato di riconoscimento
   void _handleRecognitionResult(RecognitionResult result) {
     _lastResult = result;
     _sessionResults.add(result);
@@ -91,6 +100,7 @@ class RecognitionManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Elabora un tentativo riuscito di riconoscimento
   void _processSuccessfulAttempt(RecognitionResult result) {
     try {
       if (_targetText != null) {
@@ -99,7 +109,8 @@ class RecognitionManager extends ChangeNotifier {
             _targetText!
         );
 
-        if (similarity >= 0.85) {  // Soglia di successo
+        // Verifica se il risultato supera la soglia di successo
+        if (similarity >= 0.85) {
           _successfulAttempts++;
           _resetForNextAttempt();
         }
@@ -110,6 +121,7 @@ class RecognitionManager extends ChangeNotifier {
     }
   }
 
+  /// Resetta lo stato per il prossimo tentativo
   void _resetForNextAttempt() {
     _currentText = null;
     _lastResult = null;
@@ -117,6 +129,7 @@ class RecognitionManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resetta completamente la sessione corrente
   void _resetSession() {
     _sessionResults.clear();
     _totalAttempts = 0;
@@ -127,12 +140,13 @@ class RecognitionManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Statistiche della sessione
+  /// Calcola l'accuratezza della sessione corrente
   double get sessionAccuracy {
     if (_totalAttempts == 0) return 0.0;
     return _successfulAttempts / _totalAttempts;
   }
 
+  /// Calcola la similarità media dei risultati della sessione
   double get averageSimilarity {
     if (_sessionResults.isEmpty) return 0.0;
     final total = _sessionResults
@@ -141,7 +155,7 @@ class RecognitionManager extends ChangeNotifier {
     return total / _sessionResults.length;
   }
 
-  // Getters
+  // Getters per accedere allo stato del manager
   RecognitionResult? get lastResult => _lastResult;
   String? get currentText => _currentText;
   String? get lastError => _lastError;

@@ -1,6 +1,7 @@
 // lib/widgets/challenge_list.dart
+
 import 'package:flutter/material.dart';
-import '../services/challenge_service.dart';
+import '../models/challenge.dart';
 import '../models/enums.dart';
 
 class ChallengeList extends StatelessWidget {
@@ -25,7 +26,7 @@ class ChallengeList extends StatelessWidget {
 
     return ListView.builder(
       shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: filteredChallenges.length,
       itemBuilder: (context, index) {
         return ChallengeCard(challenge: filteredChallenges[index]);
@@ -45,7 +46,7 @@ class ChallengeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -61,46 +62,28 @@ class ChallengeCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              _getBackgroundColor().withOpacity(0.1),
-              _getBackgroundColor().withOpacity(0.05),
+              challenge.color.withOpacity(0.1),
+              challenge.color.withOpacity(0.05),
             ],
           ),
         ),
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   _buildTypeIcon(),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          challenge.title,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          challenge.description,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: _buildChallengeInfo(),
                   ),
                 ],
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildProgressBar(),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               _buildRewardSection(),
               _buildTimeRemaining(),
             ],
@@ -112,30 +95,51 @@ class ChallengeCard extends StatelessWidget {
 
   Widget _buildTypeIcon() {
     IconData icon;
-    Color color;
+    Color color = challenge.color;
 
     switch (challenge.type) {
       case ChallengeType.daily:
         icon = Icons.calendar_today;
-        color = Colors.blue;
         break;
       case ChallengeType.weekly:
         icon = Icons.date_range;
-        color = Colors.purple;
         break;
       case ChallengeType.special:
         icon = Icons.star;
-        color = Colors.orange;
         break;
     }
 
     return Container(
-      padding: EdgeInsets.all(8),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color),
+    );
+  }
+
+  Widget _buildChallengeInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          challenge.title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'OpenDyslexic',
+          ),
+        ),
+        Text(
+          challenge.description,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+            fontFamily: 'OpenDyslexic',
+          ),
+        ),
+      ],
     );
   }
 
@@ -152,7 +156,7 @@ class ChallengeCard extends StatelessWidget {
             minHeight: 8,
           ),
         ),
-        SizedBox(height: 4),
+        const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -161,6 +165,7 @@ class ChallengeCard extends StatelessWidget {
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 12,
+                fontFamily: 'OpenDyslexic',
               ),
             ),
             Text(
@@ -169,6 +174,7 @@ class ChallengeCard extends StatelessWidget {
                 color: _getProgressColor(),
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
+                fontFamily: 'OpenDyslexic',
               ),
             ),
           ],
@@ -180,25 +186,26 @@ class ChallengeCard extends StatelessWidget {
   Widget _buildRewardSection() {
     return Row(
       children: [
-        Icon(
+        const Icon(
           Icons.diamond,
           color: Colors.amber,
           size: 16,
         ),
-        SizedBox(width: 4),
+        const SizedBox(width: 4),
         Text(
           '+${challenge.crystalReward}',
-          style: TextStyle(
+          style: const TextStyle(
             color: Colors.amber,
             fontWeight: FontWeight.bold,
+            fontFamily: 'OpenDyslexic',
           ),
         ),
         if (challenge.status == ChallengeStatus.completed)
           Padding(
-            padding: EdgeInsets.only(left: 8),
+            padding: const EdgeInsets.only(left: 8),
             child: Icon(
               Icons.check_circle,
-              color: Colors.green,
+              color: challenge.color,
               size: 16,
             ),
           ),
@@ -212,7 +219,7 @@ class ChallengeCard extends StatelessWidget {
     final minutes = remaining.inMinutes % 60;
 
     return Padding(
-      padding: EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -221,7 +228,7 @@ class ChallengeCard extends StatelessWidget {
             color: Colors.grey[600],
             size: 14,
           ),
-          SizedBox(width: 4),
+          const SizedBox(width: 4),
           Text(
             hours > 0
                 ? '$hours ore e $minutes minuti'
@@ -229,6 +236,7 @@ class ChallengeCard extends StatelessWidget {
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 12,
+              fontFamily: 'OpenDyslexic',
             ),
           ),
         ],
@@ -241,7 +249,7 @@ class ChallengeCard extends StatelessWidget {
       case ChallengeStatus.completed:
         return Colors.green;
       case ChallengeStatus.inProgress:
-        return _getTypeColor();
+        return challenge.color;
       case ChallengeStatus.failed:
         return Colors.red;
       case ChallengeStatus.notStarted:
@@ -249,34 +257,14 @@ class ChallengeCard extends StatelessWidget {
     }
   }
 
-  Color _getBackgroundColor() {
-    switch (challenge.type) {
-      case ChallengeType.daily:
-        return Colors.blue;
-      case ChallengeType.weekly:
-        return Colors.purple;
-      case ChallengeType.special:
-        return Colors.orange;
-    }
-  }
-
-  Color _getTypeColor() {
-    switch (challenge.type) {
-      case ChallengeType.daily:
-        return Colors.blue;
-      case ChallengeType.weekly:
-        return Colors.purple;
-      case ChallengeType.special:
-        return Colors.orange;
-    }
-  }
-
   Color _getProgressColor() {
-    if (challenge.status == ChallengeStatus.completed) {
-      return Colors.green;
-    } else if (challenge.status == ChallengeStatus.failed) {
-      return Colors.red;
+    switch (challenge.status) {
+      case ChallengeStatus.completed:
+        return Colors.green;
+      case ChallengeStatus.failed:
+        return Colors.red;
+      default:
+        return challenge.color;
     }
-    return _getTypeColor();
   }
 }

@@ -6,6 +6,8 @@ import '../services/challenge_service.dart';
 import '../widgets/challenge_list.dart';
 
 class ChallengesScreen extends StatefulWidget {
+  const ChallengesScreen({Key? key}) : super(key: key);
+
   @override
   _ChallengesScreenState createState() => _ChallengesScreenState();
 }

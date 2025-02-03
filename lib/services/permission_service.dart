@@ -1,116 +1,179 @@
-// permission_service.dart
+// lib/services/permission_service.dart
 
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:app_settings/app_settings.dart';
 
+/// Servizio centralizzato per la gestione dei permessi dell'applicazione.
+/// Gestisce i permessi in modo diverso per piattaforme mobile e desktop.
 class PermissionService {
   static final PermissionService _instance = PermissionService._internal();
-
   factory PermissionService() => _instance;
 
-  PermissionService._internal();
+  final List<String> _permissionLogs = [];
 
-  /// Richiede il permesso per il microfono
-  Future<bool> requestMicrophonePermission() async {
-    var status = await Permission.microphone.status;
+  PermissionService._internal() {
+    _logPermissionEvent('PermissionService inizializzato');
+  }
 
-    if (status.isDenied) {
-      status = await Permission.microphone.request();
+  /// Verifica se la piattaforma corrente richiede la gestione dei permessi
+  bool get _requiresPermissionHandling {
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
+  /// Richiede tutti i permessi necessari per l'applicazione
+  Future<bool> requestAllPermissions(BuildContext context) async {
+    _logPermissionEvent('Inizio richiesta permessi');
+
+    // Su desktop, i permessi sono gestiti dal sistema operativo
+    if (!_requiresPermissionHandling) {
+      _logPermissionEvent('Piattaforma desktop rilevata, permessi gestiti dal sistema');
+      return true;
     }
 
-    return status.isGranted;
-  }
+    try {
+      final permissions = [Permission.microphone, Permission.storage];
 
-  /// Verifica se il permesso del microfono è stato concesso
-  Future<bool> checkMicrophonePermission() async {
-    return await Permission.microphone.isGranted;
-  }
+      _logPermissionEvent('Verifica permessi su piattaforma mobile');
 
-  /// Verifica se il permesso del microfono è stato negato permanentemente
-  Future<bool> isMicrophonePermissionPermanentlyDenied() async {
-    return await Permission.microphone.isPermanentlyDenied;
-  }
+      for (var permission in permissions) {
+        final status = await permission.status;
+        _logPermissionEvent('Stato corrente ${permission.toString()}: ${status.toString()}');
 
-  /// Richiede tutti i permessi necessari per l'app
-  Future<Map<Permission, bool>> requestAllPermissions() async {
-    Map<Permission, bool> permissionsStatus = {};
+        if (status.isDenied) {
+          _logPermissionEvent('Richiesta ${permission.toString()}');
+          final result = await permission.request();
+          _logPermissionEvent('Risultato richiesta: ${result.toString()}');
 
-    // Aggiungi qui altri permessi se necessario
-    final permissions = [
-      Permission.microphone,
-    ];
+          if (result.isPermanentlyDenied && context.mounted) {
+            _logPermissionEvent('Permesso negato permanentemente');
+            await _showPermissionDialog(context, permission);
+          }
+        }
+      }
 
-    for (var permission in permissions) {
-      permissionsStatus[permission] = await _requestPermission(permission);
-    }
+      final allGranted = await checkAllPermissions();
+      _logPermissionEvent('Verifica finale permessi: ${allGranted ? 'OK' : 'NON OK'}');
 
-    return permissionsStatus;
-  }
-
-  /// Richiede un singolo permesso
-  Future<bool> _requestPermission(Permission permission) async {
-    var status = await permission.status;
-
-    if (status.isDenied) {
-      status = await permission.request();
-    }
-
-    return status.isGranted;
-  }
-
-  /// Apre le impostazioni del dispositivo
-  Future<void> openSettings() async {
-    await AppSettings.openAppSettings();
-  }
-
-  /// Gestisce un permesso negato
-  Future<bool> handleDeniedPermission(Permission permission) async {
-    if (await permission.isPermanentlyDenied) {
-      // Se il permesso è stato negato permanentemente, apri le impostazioni
-      await openSettings();
+      return allGranted;
+    } catch (e) {
+      _logPermissionEvent('Errore nella richiesta permessi: $e');
       return false;
     }
-
-    // Richiedi nuovamente il permesso
-    final status = await permission.request();
-    return status.isGranted;
   }
 
-  /// Verifica se tutti i permessi necessari sono stati concessi
+  /// Verifica lo stato di tutti i permessi necessari
   Future<bool> checkAllPermissions() async {
-    final permissions = [
-      Permission.microphone,
-      // Aggiungi qui altri permessi se necessario
-    ];
+    _logPermissionEvent('Verifica stato permessi');
 
-    for (var permission in permissions) {
-      if (!await permission.isGranted) {
-        return false;
-      }
+    // Su desktop, assumiamo che i permessi siano gestiti dal sistema
+    if (!_requiresPermissionHandling) {
+      _logPermissionEvent('Piattaforma desktop, permessi gestiti dal sistema');
+      return true;
     }
 
-    return true;
+    try {
+      final micStatus = await Permission.microphone.status;
+      final storageStatus = await Permission.storage.status;
+
+      _logPermissionEvent('Stato microfono: ${micStatus.toString()}');
+      _logPermissionEvent('Stato storage: ${storageStatus.toString()}');
+
+      return micStatus.isGranted && storageStatus.isGranted;
+    } catch (e) {
+      _logPermissionEvent('Errore nella verifica permessi: $e');
+      return false;
+    }
   }
 
-  /// Restituisce lo stato corrente di un permesso
-  Future<String> getPermissionStatus(Permission permission) async {
-    final status = await permission.status;
+  /// Mostra un dialogo informativo per i permessi negati
+  Future<void> _showPermissionDialog(BuildContext context, Permission permission) async {
+    if (!_requiresPermissionHandling) return;
 
-    switch (status) {
-      case PermissionStatus.granted:
-        return 'Concesso';
-      case PermissionStatus.denied:
-        return 'Negato';
-      case PermissionStatus.permanentlyDenied:
-        return 'Negato Permanentemente';
-      case PermissionStatus.restricted:
-        return 'Limitato';
-      case PermissionStatus.limited:
-        return 'Limitato';
-      case PermissionStatus.provisional:
-        return 'Provvisorio';
+    _logPermissionEvent('Mostro dialogo per ${permission.toString()}');
+
+    String permissionName = '';
+    String explanation = '';
+
+    switch (permission) {
+      case Permission.microphone:
+        permissionName = 'Microfono';
+        explanation = 'Il microfono è necessario per il riconoscimento vocale durante gli esercizi di lettura.';
+      case Permission.storage:
+        permissionName = 'Storage';
+        explanation = 'L\'accesso allo storage è necessario per salvare i file di configurazione.';
       default:
-        return 'Sconosciuto';
+        permissionName = 'Richiesto';
+        explanation = 'Questo permesso è necessario per il funzionamento dell\'app.';
     }
+
+    if (context.mounted) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text(
+              'Permesso $permissionName Necessario',
+              style: const TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  explanation,
+                  style: const TextStyle(fontFamily: 'OpenDyslexic'),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Per abilitare il permesso, vai nelle impostazioni.',
+                  style: TextStyle(
+                    fontFamily: 'OpenDyslexic',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                child: const Text(
+                  'Apri Impostazioni',
+                  style: TextStyle(fontFamily: 'OpenDyslexic'),
+                ),
+                onPressed: () async {
+                  _logPermissionEvent('Apertura impostazioni');
+                  await openAppSettings();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  /// Registra un evento nel log dei permessi
+  void _logPermissionEvent(String event) {
+    final timestamp = DateTime.now().toIso8601String();
+    final logEntry = '[$timestamp] $event';
+    print('PermissionService: $logEntry');
+    _permissionLogs.add(logEntry);
+
+    if (_permissionLogs.length > 100) {
+      _permissionLogs.removeAt(0);
+    }
+  }
+
+  /// Ottiene i log degli eventi dei permessi
+  List<String> getPermissionLogs() => List.unmodifiable(_permissionLogs);
+
+  /// Pulisce i log degli eventi
+  void clearPermissionLogs() {
+    _permissionLogs.clear();
+    _logPermissionEvent('Log puliti');
   }
 }

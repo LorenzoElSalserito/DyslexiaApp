@@ -206,6 +206,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.7"
+  etau:
+    dependency: transitive
+    description:
+      name: etau
+      sha256: "4b43a615ecceb1de7c5a35f0a159920b4fdb8ce5a33d71d3828a31efedc67572"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.14-alpha.4"
   fake_async:
     dependency: transitive
     description:
@@ -260,26 +268,26 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_sound
-      sha256: b1cd5e670a1603f07013311e2db9d32328a62926e4a4cc11f5afee94d9c83560
+      sha256: "08e375d699d85e1a823e250d4c01596eadd92ddf8918b6825e4f23e4dd97cddb"
       url: "https://pub.dev"
     source: hosted
-    version: "9.18.0"
+    version: "9.19.1"
   flutter_sound_platform_interface:
     dependency: transitive
     description:
       name: flutter_sound_platform_interface
-      sha256: "0ae538e74e625b8e9d95ff91d35644fcbd84cd5dfa7c0ab6b017356106ac9541"
+      sha256: "07d11ca22b1c2e3ffc7c26f0bb6d869c67cef802ff9832e91c9c5e95a3355f6d"
       url: "https://pub.dev"
     source: hosted
-    version: "9.18.0"
+    version: "9.19.1"
   flutter_sound_web:
     dependency: transitive
     description:
       name: flutter_sound_web
-      sha256: "52166c89971631519527bc1938619506834da76567d96245526a3ee937417db4"
+      sha256: "6f7a954947c18a5b2c2294ecea639c38c266430f6e30b19473191eebc7ab66bd"
       url: "https://pub.dev"
     source: hosted
-    version: "9.18.0"
+    version: "9.19.1"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -563,7 +571,7 @@ packages:
     source: hosted
     version: "9.1.4"
   permission_handler_platform_interface:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: permission_handler_platform_interface
       sha256: "6760eb5ef34589224771010805bea6054ad28453906936f843a8cc4d3a55c4a4"
@@ -654,10 +662,10 @@ packages:
     dependency: transitive
     description:
       name: shared_preferences_android
-      sha256: "02a7d8a9ef346c9af715811b01fbd8e27845ad2c41148eefd31321471b41863d"
+      sha256: "138b7bbbc7f59c56236e426c37afb8f78cbc57b094ac64c440e0bb90e380a4f5"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.0"
+    version: "2.4.2"
   shared_preferences_foundation:
     dependency: transitive
     description:
@@ -799,6 +807,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.3.0+3"
+  tau_web:
+    dependency: transitive
+    description:
+      name: tau_web
+      sha256: c612cd3dcd9b7aa3472c0272bf3531fc232cd80e53ed7d7388b77dd541720cd6
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.14-alpha.4"
   term_glyph:
     dependency: transitive
     description:
@@ -891,10 +907,10 @@ packages:
     dependency: transitive
     description:
       name: web_socket_channel
-      sha256: "9f187088ed104edd8662ca07af4b124465893caf063ba29758f97af57e61da8f"
+      sha256: "0b8e2457400d8a859b7b2030786835a28a8e80836ef64402abef392ff4f1d0e5"
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.1"
+    version: "3.0.2"
   xdg_directories:
     dependency: transitive
     description:

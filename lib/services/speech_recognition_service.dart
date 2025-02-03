@@ -5,49 +5,57 @@ import '../services/vosk_service.dart';
 import '../services/audio_service.dart';
 import '../models/recognition_result.dart';
 
+/// Definisce i possibili stati del processo di riconoscimento vocale
 enum RecognitionState {
-  idle,
-  initializing,
-  recording,
-  processing,
-  completed,
-  error
+  idle,         // In attesa di iniziare
+  initializing, // Inizializzazione dei servizi
+  recording,    // Registrazione in corso
+  processing,   // Elaborazione del risultato
+  completed,    // Riconoscimento completato
+  error         // Errore durante il processo
 }
 
+/// Servizio che coordina il processo di riconoscimento vocale,
+/// integrando il servizio audio con il motore VOSK
 class SpeechRecognitionService {
+  // Servizi fondamentali per il riconoscimento
   final VoskService _voskService;
   final AudioService _audioService;
 
+  // Gestione dello stato interno
   RecognitionState _state = RecognitionState.idle;
   String? _currentTargetText;
 
+  // Stream controllers per la comunicazione con l'esterno
   final _stateController = StreamController<RecognitionState>.broadcast();
   final _volumeController = StreamController<double>.broadcast();
   final _resultController = StreamController<RecognitionResult>.broadcast();
   final _errorController = StreamController<String>.broadcast();
 
-  // Streams pubblici
+  // Stream pubblici per osservare gli eventi del servizio
   Stream<RecognitionState> get stateStream => _stateController.stream;
   Stream<double> get volumeStream => _volumeController.stream;
   Stream<RecognitionResult> get resultStream => _resultController.stream;
   Stream<String> get errorStream => _errorController.stream;
 
+  /// Costruttore che inizializza i servizi necessari
   SpeechRecognitionService() :
         _voskService = VoskService.instance,
         _audioService = AudioService() {
     _initializeServices();
   }
 
+  /// Inizializza i servizi di base necessari per il riconoscimento
   Future<void> _initializeServices() async {
     _updateState(RecognitionState.initializing);
     try {
-      // Inizializza entrambi i servizi
+      // Inizializza entrambi i servizi in parallelo
       await Future.wait([
         _voskService.initialize(),
         _audioService.initialize(),
       ]);
 
-      // Sottoscrivi agli stream dell'audio service
+      // Sottoscrizione agli eventi del servizio audio
       _audioService.volumeLevel.listen((volume) {
         _volumeController.add(volume);
       });
@@ -58,6 +66,7 @@ class SpeechRecognitionService {
     }
   }
 
+  /// Avvia una nuova sessione di riconoscimento
   Future<void> startRecognition(String targetText) async {
     if (_state != RecognitionState.idle) return;
 
@@ -73,7 +82,7 @@ class SpeechRecognitionService {
 
       _updateState(RecognitionState.processing);
 
-      // Emetti il risultato
+      // Comunica il risultato agli ascoltatori
       _resultController.add(result);
 
       _updateState(RecognitionState.completed);
@@ -82,6 +91,7 @@ class SpeechRecognitionService {
     }
   }
 
+  /// Interrompe la sessione di riconoscimento corrente
   Future<void> stopRecognition() async {
     if (_state != RecognitionState.recording) return;
 
@@ -98,6 +108,7 @@ class SpeechRecognitionService {
     }
   }
 
+  /// Annulla completamente la sessione corrente
   Future<void> cancelRecognition() async {
     try {
       await _audioService.stopRecording();
@@ -108,17 +119,20 @@ class SpeechRecognitionService {
     }
   }
 
+  /// Aggiorna lo stato interno e notifica gli ascoltatori
   void _updateState(RecognitionState newState) {
     _state = newState;
     _stateController.add(newState);
   }
 
+  /// Gestisce gli errori in modo centralizzato
   void _handleError(String error) {
     print('SpeechRecognitionService Error: $error');
     _errorController.add(error);
     _updateState(RecognitionState.error);
   }
 
+  /// Rilascia tutte le risorse utilizzate dal servizio
   Future<void> dispose() async {
     await cancelRecognition();
     await _stateController.close();
@@ -128,7 +142,7 @@ class SpeechRecognitionService {
     await _audioService.dispose();
   }
 
-  // Getters utili
+  // Getters per lo stato del servizio
   RecognitionState get currentState => _state;
   bool get isRecording => _state == RecognitionState.recording;
   String? get currentTargetText => _currentTargetText;

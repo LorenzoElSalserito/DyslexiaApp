@@ -1,12 +1,15 @@
+// lib/widgets/progression_map.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/game_service.dart';
 import '../models/player.dart';
 import '../models/level.dart';
 import '../models/enums.dart';
-import '../config/app_config.dart';
 
 class ProgressionMap extends StatelessWidget {
+  const ProgressionMap({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     final player = Provider.of<Player>(context);
@@ -14,65 +17,29 @@ class ProgressionMap extends StatelessWidget {
     final currentSubLevel = gameService.getCurrentSubLevel();
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _buildLevelHeader(player, gameService),
-        SizedBox(height: 10),
+        _buildLevelHeader(player),
+        const SizedBox(height: 8),
         _buildProgressBar(gameService),
-        SizedBox(height: 16),
-        _buildLevelDetails(player, gameService, currentSubLevel),
-        SizedBox(height: 10),
-        if (gameService.currentStreak > 0)
+        const SizedBox(height: 8),
+        _buildLevelDetails(gameService, currentSubLevel),
+        if (gameService.hasActiveStreak) ...[
+          const SizedBox(height: 8),
           _buildStreakIndicator(gameService.currentStreak),
+        ],
       ],
     );
   }
 
-  Widget _buildDetailRow(String label, String value, IconData icon) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 16),
-            SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLevelHeader(Player player, GameService gameService) {
+  Widget _buildLevelHeader(Player player) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.shade700, Colors.blue.shade900],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          colors: [Colors.pink.shade500, Colors.pink.shade900],
         ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -82,32 +49,33 @@ class ProgressionMap extends StatelessWidget {
               Icon(
                 _getLevelIcon(player.currentLevel),
                 color: Colors.white,
-                size: 28,
+                size: 20,
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
                 'Livello ${player.currentLevel}',
-                style: TextStyle(
-                  fontSize: 24,
+                style: const TextStyle(
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
+                  fontFamily: 'OpenDyslexic',
                 ),
               ),
             ],
           ),
           if (player.newGamePlusCount > 0)
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 'NG+${player.newGamePlusCount}',
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  fontFamily: 'OpenDyslexic',
                 ),
               ),
             ),
@@ -117,40 +85,34 @@ class ProgressionMap extends StatelessWidget {
   }
 
   Widget _buildProgressBar(GameService gameService) {
+    final levelProgress = gameService.levelProgress;
+    final averageAccuracy = gameService.getAverageAccuracy();
+
     return Column(
       children: [
         Container(
-          width: 300,
-          height: 30,
+          width: 240,
+          height: 20,
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.5),
-              width: 2,
-            ),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Stack(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(10),
                 child: TweenAnimationBuilder<double>(
-                  duration: Duration(milliseconds: 500),
-                  curve: Curves.easeInOut,
-                  tween: Tween<double>(
-                    begin: 0,
-                    end: gameService.levelProgress,
-                  ),
-                  builder: (context, value, child) {
+                  duration: const Duration(milliseconds: 500),
+                  tween: Tween<double>(begin: 0, end: levelProgress),
+                  builder: (context, value, _) {
                     return FractionallySizedBox(
                       widthFactor: value,
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [
-                              Colors.green.shade300,
-                              Colors.green.shade500,
-                            ],
+                            colors: averageAccuracy >= GameService.requiredAccuracy
+                                ? [Colors.green.shade400, Colors.green.shade600]
+                                : [Colors.orange.shade400, Colors.orange.shade600],
                           ),
                         ),
                       ),
@@ -158,112 +120,89 @@ class ProgressionMap extends StatelessWidget {
                   },
                 ),
               ),
-              Center(
-                child: Text(
-                  'Step ${gameService.player.currentStep} / ${gameService.getCurrentLevelTarget()}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    shadows: [
-                      Shadow(
-                        offset: Offset(1, 1),
-                        blurRadius: 2,
-                        color: Colors.black.withOpacity(0.5),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
-          _getDifficultyText(gameService.currentDifficulty),
+          '${(averageAccuracy * 100).toStringAsFixed(1)}% Accuratezza',
           style: TextStyle(
-            color: _getDifficultyColor(gameService.currentDifficulty),
-            fontWeight: FontWeight.bold,
+            color: averageAccuracy >= GameService.requiredAccuracy ? Colors.green : Colors.orange,
+            fontSize: 12,
+            fontFamily: 'OpenDyslexic',
           ),
         ),
       ],
     );
   }
 
-  Widget _buildLevelDetails(Player player, GameService gameService, SubLevel currentSubLevel) {
+  Widget _buildLevelDetails(GameService gameService, SubLevel currentSubLevel) {
+    final targetDays = GameService.requiredDaysForLevelUp;
+    final daysWithGoodAccuracy = (gameService.getLevelUpProgress() * targetDays).floor();
+
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         children: [
-          _buildDetailRow(
-            'Fase Attuale',
-            currentSubLevel.name,
-            Icons.emoji_flags,
-          ),
-          SizedBox(height: 8),
-          _buildDetailRow(
-            'Obiettivo',
-            '${gameService.getCurrentLevelTarget()} completati',
-            Icons.stars,
-          ),
-          SizedBox(height: 8),
-          _buildDetailRow(
-            'Cristalli',
-            '${player.totalCrystals}',
-            Icons.diamond,
-          ),
-          if (gameService.canBuyLevel())
-            Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shopping_cart, color: Colors.green, size: 16),
-                  SizedBox(width: 4),
-                  Text(
-                    'Puoi acquistare il livello successivo!',
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          _buildCompactDetailRow('Fase:', currentSubLevel.name, Icons.flag),
+          const SizedBox(height: 6),
+          _buildCompactDetailRow('Obiettivo:', '${(GameService.requiredAccuracy * 100).toInt()}%', Icons.track_changes),
+          const SizedBox(height: 6),
+          _buildCompactDetailRow('Giorni:', '$daysWithGoodAccuracy/$targetDays', Icons.calendar_today),
         ],
       ),
     );
   }
 
+  Widget _buildCompactDetailRow(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white, size: 14),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.8),
+            fontSize: 12,
+            fontFamily: 'OpenDyslexic',
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'OpenDyslexic',
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStreakIndicator(int streak) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.orange.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.orange.withOpacity(0.3),
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.local_fire_department, color: Colors.orange),
-          SizedBox(width: 8),
+          const Icon(Icons.local_fire_department, size: 14, color: Colors.orange),
+          const SizedBox(width: 4),
           Text(
             'Streak: $streak',
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.orange,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+              fontSize: 12,
+              fontFamily: 'OpenDyslexic',
             ),
           ),
         ],
@@ -272,43 +211,12 @@ class ProgressionMap extends StatelessWidget {
   }
 
   IconData _getLevelIcon(int level) {
-    switch (level) {
-      case 1:
-        return Icons.text_fields;  // Parole
-      case 2:
-        return Icons.short_text;   // Frasi
-      case 3:
-        return Icons.article;      // Paragrafi
-      case 4:
-        return Icons.menu_book;    // Pagine
-      default:
-        return Icons.help;
-    }
-  }
-
-  String _getDifficultyText(Difficulty difficulty) {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return '⭐ Difficoltà: Facile';
-      case Difficulty.medium:
-        return '⭐⭐ Difficoltà: Media';
-      case Difficulty.hard:
-        return '⭐⭐⭐ Difficoltà: Difficile';
-      default:
-        return 'Difficoltà sconosciuta';
-    }
-  }
-
-  Color _getDifficultyColor(Difficulty difficulty) {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return Colors.green;
-      case Difficulty.medium:
-        return Colors.orange;
-      case Difficulty.hard:
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
+    return switch (level) {
+      1 => Icons.text_fields,
+      2 => Icons.short_text,
+      3 => Icons.article,
+      4 => Icons.menu_book,
+      _ => Icons.help,
+    };
   }
 }

@@ -1,55 +1,12 @@
+// lib/services/challenge_service.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/player.dart';
 import '../models/enums.dart';
+import '../models/challenge.dart';
 import '../models/recognition_result.dart';
-
-class Challenge {
-  final String id;
-  final String title;
-  final String description;
-  final ChallengeType type;
-  final int targetValue;
-  final int crystalReward;
-  final DateTime expiration;
-  ChallengeStatus status;
-  int currentProgress;
-
-  Challenge({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.type,
-    required this.targetValue,
-    required this.crystalReward,
-    required this.expiration,
-    this.status = ChallengeStatus.notStarted,
-    this.currentProgress = 0,
-  });
-
-  double get progressPercentage => currentProgress / targetValue;
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'status': status.index,
-    'currentProgress': currentProgress,
-  };
-
-  factory Challenge.fromJson(Map<String, dynamic> json, Challenge template) {
-    return Challenge(
-      id: template.id,
-      title: template.title,
-      description: template.description,
-      type: template.type,
-      targetValue: template.targetValue,
-      crystalReward: template.crystalReward,
-      expiration: template.expiration,
-      status: ChallengeStatus.values[json['status'] as int],
-      currentProgress: json['currentProgress'] as int,
-    );
-  }
-}
 
 class ChallengeService extends ChangeNotifier {
   final SharedPreferences _prefs;
@@ -64,7 +21,7 @@ class ChallengeService extends ChangeNotifier {
     _initializeChallenges();
   }
 
-  List<Challenge> get activeChallenges => _activeChallenges;
+  List<Challenge> get activeChallenges => List.unmodifiable(_activeChallenges);
 
   void _initializeChallenges() {
     _loadChallenges();
@@ -80,7 +37,7 @@ class ChallengeService extends ChangeNotifier {
         _activeChallenges = challengesList.map((data) {
           final template = _getChallengeTemplate(data['id']);
           if (template != null) {
-            return Challenge.fromJson(data, template);
+            return Challenge.fromJson(data as Map<String, dynamic>, template);
           }
           return null;
         }).whereType<Challenge>().toList();
@@ -91,6 +48,10 @@ class ChallengeService extends ChangeNotifier {
   }
 
   Challenge? _getChallengeTemplate(String id) {
+    final now = DateTime.now();
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final nextWeek = now.add(Duration(days: 7));
+
     switch (id) {
       case 'daily_streak':
         return Challenge(
@@ -100,7 +61,7 @@ class ChallengeService extends ChangeNotifier {
           type: ChallengeType.daily,
           targetValue: 5,
           crystalReward: 100,
-          expiration: DateTime.now().add(Duration(days: 1)),
+          expiration: tomorrow,
         );
       case 'daily_accuracy':
         return Challenge(
@@ -110,7 +71,7 @@ class ChallengeService extends ChangeNotifier {
           type: ChallengeType.daily,
           targetValue: 3,
           crystalReward: 150,
-          expiration: DateTime.now().add(Duration(days: 1)),
+          expiration: tomorrow,
         );
       case 'weekly_exercises':
         return Challenge(
@@ -120,7 +81,7 @@ class ChallengeService extends ChangeNotifier {
           type: ChallengeType.weekly,
           targetValue: 20,
           crystalReward: 500,
-          expiration: DateTime.now().add(Duration(days: 7)),
+          expiration: nextWeek,
         );
       default:
         return null;
@@ -207,15 +168,6 @@ class ChallengeService extends ChangeNotifier {
         crystalReward: 500,
         expiration: nextWeek,
       ),
-      Challenge(
-        id: 'weekly_perfect',
-        title: 'Perfezione Settimanale',
-        description: 'Ottieni 5 risultati perfetti',
-        type: ChallengeType.weekly,
-        targetValue: 5,
-        crystalReward: 750,
-        expiration: nextWeek,
-      ),
     ];
 
     _activeChallenges.addAll(weeklyChallenges);
@@ -252,15 +204,13 @@ class ChallengeService extends ChangeNotifier {
   }
 
   void processExerciseResult(RecognitionResult result) {
-    // Aggiorna le sfide relative all'accuratezza
     if (result.similarity >= 0.9) {
       final accuracyChallenge = _activeChallenges.firstWhere(
             (c) => c.id == 'daily_accuracy',
         orElse: () => throw Exception('Challenge not found: daily_accuracy'),
       );
-      updateChallengeProgress(accuracyChallenge.id, accuracyChallenge.currentProgress + 1);
+      updateChallengeProgress(
+          accuracyChallenge.id, accuracyChallenge.currentProgress + 1);
     }
-
-    // Qui puoi aggiungere altre logiche per aggiornare altre sfide basate sul risultato
   }
 }

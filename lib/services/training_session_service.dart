@@ -5,13 +5,14 @@ import '../models/recognition_result.dart';
 import '../services/learning_analytics_service.dart';
 import '../services/recognition_manager.dart';
 
+/// Rappresenta una singola sessione di allenamento con tutti i suoi dettagli
 class TrainingSession {
-  final DateTime startTime;
-  final int targetWords;
-  final int currentLevel;
-  List<RecognitionResult> results;
-  int crystalsEarned;
-  bool isCompleted;
+  final DateTime startTime;         // Momento di inizio della sessione
+  final int targetWords;           // Obiettivo di parole da completare
+  final int currentLevel;          // Livello attuale del giocatore
+  List<RecognitionResult> results; // Risultati ottenuti durante la sessione
+  int crystalsEarned;             // Cristalli guadagnati nella sessione
+  bool isCompleted;               // Indica se la sessione è stata completata
 
   TrainingSession({
     required this.startTime,
@@ -22,6 +23,7 @@ class TrainingSession {
     this.isCompleted = false,
   });
 
+  /// Converte la sessione in formato JSON per il salvataggio
   Map<String, dynamic> toJson() => {
     'startTime': startTime.toIso8601String(),
     'targetWords': targetWords,
@@ -31,6 +33,7 @@ class TrainingSession {
     'isCompleted': isCompleted,
   };
 
+  /// Crea una sessione da un oggetto JSON
   factory TrainingSession.fromJson(Map<String, dynamic> json) {
     return TrainingSession(
       startTime: DateTime.parse(json['startTime'] as String),
@@ -45,14 +48,18 @@ class TrainingSession {
   }
 }
 
+/// Servizio che gestisce le sessioni di allenamento e analizza le performance
 class TrainingSessionService {
+  // Costanti per la gestione della persistenza
+  static const String _currentSessionKey = 'current_training_session';
+  static const String _sessionsHistoryKey = 'training_sessions_history';
+
+  // Dipendenze del servizio
   final SharedPreferences _prefs;
   final LearningAnalyticsService _analyticsService;
   final RecognitionManager _recognitionManager;
 
-  static const String _currentSessionKey = 'current_training_session';
-  static const String _sessionsHistoryKey = 'training_sessions_history';
-
+  // Stato interno del servizio
   TrainingSession? _currentSession;
   final _sessionController = StreamController<TrainingSession?>.broadcast();
 
@@ -67,8 +74,10 @@ class TrainingSessionService {
     _setupRecognitionListener();
   }
 
+  /// Stream per osservare i cambiamenti nella sessione corrente
   Stream<TrainingSession?> get sessionStream => _sessionController.stream;
 
+  /// Configura l'ascolto dei risultati del riconoscimento
   void _setupRecognitionListener() {
     _recognitionManager.addListener(() {
       if (_recognitionManager.lastResult != null) {
@@ -77,6 +86,7 @@ class TrainingSessionService {
     });
   }
 
+  /// Carica la sessione corrente dalle preferenze salvate
   Future<void> _loadCurrentSession() async {
     final sessionJson = _prefs.getString(_currentSessionKey);
     if (sessionJson != null) {
@@ -90,6 +100,7 @@ class TrainingSessionService {
     }
   }
 
+  /// Avvia una nuova sessione di allenamento
   Future<void> startNewSession(int targetWords, int currentLevel) async {
     if (_currentSession?.isCompleted == false) {
       await _saveSessionToHistory(_currentSession!);
@@ -106,6 +117,7 @@ class TrainingSessionService {
     _sessionController.add(_currentSession);
   }
 
+  /// Gestisce un nuovo risultato di riconoscimento
   void _handleNewResult(RecognitionResult result) {
     if (_currentSession == null) return;
 
@@ -122,8 +134,8 @@ class TrainingSessionService {
     _sessionController.add(_currentSession);
   }
 
+  /// Calcola i cristalli guadagnati per un risultato
   int _calculateCrystalsForResult(RecognitionResult result) {
-    // Base di cristalli per livello
     final baseCrystals = switch (_currentSession!.currentLevel) {
       1 => 10,  // Parole
       2 => 30,  // Frasi
@@ -132,7 +144,6 @@ class TrainingSessionService {
       _ => 10,
     };
 
-    // Calcola bonus basato sulla performance
     double multiplier = 1.0;
     if (result.similarity >= 0.95) multiplier = 1.5;
     else if (result.similarity >= 0.90) multiplier = 1.3;
@@ -141,6 +152,7 @@ class TrainingSessionService {
     return (baseCrystals * multiplier).round();
   }
 
+  /// Salva la sessione corrente nelle preferenze
   Future<void> _saveCurrentSession() async {
     if (_currentSession == null) {
       await _prefs.remove(_currentSessionKey);
@@ -150,11 +162,12 @@ class TrainingSessionService {
     }
   }
 
+  /// Salva una sessione completata nella cronologia
   Future<void> _saveSessionToHistory(TrainingSession session) async {
     final history = await getSessionHistory();
     history.add(session);
 
-    // Mantieni solo le ultime 50 sessioni
+    // Mantiene solo le ultime 50 sessioni
     if (history.length > 50) {
       history.removeAt(0);
     }
@@ -165,6 +178,7 @@ class TrainingSessionService {
     await _prefs.setString(_sessionsHistoryKey, historyJson);
   }
 
+  /// Recupera la cronologia delle sessioni
   Future<List<TrainingSession>> getSessionHistory() async {
     final historyJson = _prefs.getString(_sessionsHistoryKey);
     if (historyJson == null) return [];
@@ -180,15 +194,17 @@ class TrainingSessionService {
     }
   }
 
+  /// Annulla la sessione corrente
   Future<void> cancelCurrentSession() async {
     _currentSession = null;
     await _saveCurrentSession();
     _sessionController.add(null);
   }
 
+  /// Ottiene la sessione corrente
   TrainingSession? getCurrentSession() => _currentSession;
 
-  // Statistiche della sessione corrente
+  /// Ottiene le statistiche della sessione corrente
   Map<String, dynamic> getCurrentSessionStats() {
     if (_currentSession == null) return {};
 
@@ -212,6 +228,7 @@ class TrainingSessionService {
     };
   }
 
+  /// Rilascio delle risorse
   Future<void> dispose() async {
     await _sessionController.close();
   }

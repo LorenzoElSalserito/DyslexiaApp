@@ -1,37 +1,42 @@
-// text_similarity.dart
-
+/// Classe che implementa algoritmi specializzati per il calcolo della similarità
+/// tra testi, ottimizzata per le particolari esigenze degli utenti con dislessia.
 class TextSimilarity {
-  /// Coppie di lettere comunemente confuse nella dislessia
+  /// Coppie di lettere che vengono spesso confuse nella dislessia.
+  /// Questa mappa aiuta a gestire gli errori più comuni in modo più tollerante.
   static const Map<String, List<String>> _commonConfusions = {
-    'b': ['d', 'p'],
-    'd': ['b', 'q'],
-    'p': ['q', 'b'],
-    'q': ['p', 'd'],
-    'm': ['n', 'w'],
-    'n': ['m'],
-    'a': ['e'],
-    'e': ['a'],
-    's': ['z'],
-    'z': ['s'],
-    'f': ['v'],
-    'v': ['f'],
-    'l': ['i'],
-    'i': ['l'],
+    'b': ['d', 'p'],  // Confusione tra b/d/p
+    'd': ['b', 'q'],  // Confusione tra d/b/q
+    'p': ['q', 'b'],  // Confusione tra p/q/b
+    'q': ['p', 'd'],  // Confusione tra q/p/d
+    'm': ['n', 'w'],  // Confusione tra m/n/w
+    'n': ['m'],       // Confusione tra n/m
+    'a': ['e'],       // Confusione tra a/e
+    'e': ['a'],       // Confusione tra e/a
+    's': ['z'],       // Confusione tra s/z
+    'z': ['s'],       // Confusione tra z/s
+    'f': ['v'],       // Confusione tra f/v
+    'v': ['f'],       // Confusione tra v/f
+    'l': ['i'],       // Confusione tra l/i
+    'i': ['l'],       // Confusione tra i/l
   };
 
-  /// Errori comuni di sequenza
+  /// Sequenze di lettere che spesso causano difficoltà nella lettura
   static const List<String> _commonSequenceErrors = [
-    'chi', 'che', 'ghi', 'ghe',
-    'gn', 'gl', 'sc'
+    'chi', 'che',     // Suoni chi/che
+    'ghi', 'ghe',     // Suoni ghi/ghe
+    'gn',             // Suono gn
+    'gl',             // Suono gl
+    'sc'              // Suono sc
   ];
 
-  /// Calcola la similarità tra il testo riconosciuto e il target
+  /// Calcola la similarità tra il testo riconosciuto e il target.
+  /// Utilizza un approccio combinato che considera vari aspetti della lettura.
   static double calculateSimilarity(String recognized, String target) {
     // Normalizza i testi prima del confronto
     final normalizedRecognized = _normalizeText(recognized);
     final normalizedTarget = _normalizeText(target);
 
-    // Combina diverse metriche per un risultato più accurato
+    // Calcola diverse metriche di similarità
     double phoneticalSim = _calculatePhoneticSimilarity(
         normalizedRecognized,
         normalizedTarget
@@ -49,16 +54,17 @@ class TextSimilarity {
     );
 
     // Pesi per le diverse metriche
-    const double PHONETIC_WEIGHT = 0.4;
-    const double LEVENSHTEIN_WEIGHT = 0.4;
-    const double SEQUENCE_WEIGHT = 0.2;
+    const double PHONETIC_WEIGHT = 0.4;    // 40% similarità fonetica
+    const double LEVENSHTEIN_WEIGHT = 0.4;  // 40% similarità di editing
+    const double SEQUENCE_WEIGHT = 0.2;     // 20% similarità di sequenza
 
+    // Combina le metriche con i loro pesi
     return (phoneticalSim * PHONETIC_WEIGHT) +
         (levenshteinSim * LEVENSHTEIN_WEIGHT) +
         (sequenceSim * SEQUENCE_WEIGHT);
   }
 
-  /// Normalizza il testo per gestire errori comuni della dislessia
+  /// Normalizza il testo rimuovendo punteggiatura e uniformando gli spazi
   static String _normalizeText(String text) {
     return text
         .toLowerCase()
@@ -67,12 +73,13 @@ class TextSimilarity {
         .trim();
   }
 
-  /// Calcola la similarità fonetica
+  /// Calcola la similarità fonetica tra due testi
   static double _calculatePhoneticSimilarity(String s1, String s2) {
-    // Implementa regole fonetiche italiane
+    // Converte i testi in codici fonetici
     String phonetic1 = _getPhoneticCode(s1);
     String phonetic2 = _getPhoneticCode(s2);
 
+    // Calcola la similarità tra i codici fonetici
     return _calculateLevenshteinSimilarity(phonetic1, phonetic2, considerConfusions: false);
   }
 
@@ -80,7 +87,7 @@ class TextSimilarity {
   static String _getPhoneticCode(String text) {
     String result = text.toLowerCase();
 
-    // Regole fonetiche italiane
+    // Applica le regole fonetiche italiane
     result = result
         .replaceAll('chi', 'ki')
         .replaceAll('che', 'ke')
@@ -102,15 +109,18 @@ class TextSimilarity {
     if (s1 == s2) return 1.0;
     if (s1.isEmpty || s2.isEmpty) return 0.0;
 
+    // Matrice per la programmazione dinamica
     List<List<int>> matrix = List.generate(
         s1.length + 1,
             (i) => List.generate(s2.length + 1, (j) => j == 0 ? i : 0)
     );
 
+    // Inizializza la prima riga
     for (int j = 0; j <= s2.length; j++) {
       matrix[0][j] = j;
     }
 
+    // Calcola la distanza di Levenshtein
     for (int i = 1; i <= s1.length; i++) {
       for (int j = 1; j <= s2.length; j++) {
         int cost = _calculateSubstitutionCost(
@@ -125,7 +135,7 @@ class TextSimilarity {
           matrix[i - 1][j - 1] + cost,            // substitution
         ].reduce((curr, next) => curr < next ? curr : next);
 
-        // Gestisce le trasposizioni (inversioni di lettere adiacenti)
+        // Gestione delle trasposizioni
         if (i > 1 && j > 1 &&
             s1[i - 1] == s2[j - 2] &&
             s1[i - 2] == s2[j - 1]) {
@@ -137,6 +147,7 @@ class TextSimilarity {
       }
     }
 
+    // Calcola la similarità normalizzata
     int maxLength = s1.length > s2.length ? s1.length : s2.length;
     return 1.0 - (matrix[s1.length][s2.length] / maxLength);
   }
@@ -180,18 +191,16 @@ class TextSimilarity {
   static String getDetailedFeedback(String recognized, String target) {
     List<String> feedback = [];
 
-    // Analizza inversioni di lettere
+    // Analizza diversi tipi di errori
     if (_hasLetterInversions(recognized, target)) {
       feedback.add("Attenzione alle inversioni di lettere");
     }
 
-    // Analizza confusioni comuni
     var confusions = _findCommonConfusions(recognized, target);
     if (confusions.isNotEmpty) {
       feedback.add("Fai attenzione a distinguere: ${confusions.join(', ')}");
     }
 
-    // Analizza errori di sequenza
     if (_hasSequenceErrors(recognized, target)) {
       feedback.add("Controlla le combinazioni di lettere");
     }
@@ -213,7 +222,7 @@ class TextSimilarity {
     return false;
   }
 
-  /// Trova le confusioni di lettere comuni
+  /// Trova le confusioni di lettere comuni nel testo
   static Set<String> _findCommonConfusions(String s1, String s2) {
     Set<String> confusions = {};
 

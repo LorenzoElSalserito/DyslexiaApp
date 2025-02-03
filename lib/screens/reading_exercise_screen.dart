@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
 import '../services/vosk_service.dart';
 import '../services/audio_service.dart';
 import '../services/game_notification_manager.dart';
 import '../models/recognition_result.dart';
 import '../services/recognition_manager.dart';
+import '../services/exercise_manager.dart';
 import '../widgets/voice_recognition_feedback.dart';
 
 class ReadingExerciseScreen extends StatefulWidget {
@@ -14,12 +16,14 @@ class ReadingExerciseScreen extends StatefulWidget {
 
 class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
     with SingleTickerProviderStateMixin {
-  late String text;
+  String text = "";
   bool isRecording = false;
   bool exerciseCompleted = false;
   String recognizedText = '';
   double similarity = 0.0;
   DateTime? exerciseStartTime;
+  bool isLoading = true;
+  String? errorMessage;
 
   late final VoskService voskService;
   late final AudioService audioService;
@@ -33,8 +37,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
     voskService = VoskService.instance;
     audioService = AudioService();
     notificationManager = GameNotificationManager();
+
     _setupAnimation();
-    _initializeServices();
+    _initializeAll();
   }
 
   void _setupAnimation() {
@@ -52,21 +57,53 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
     ));
   }
 
+  Future<void> _initializeAll() async {
+    try {
+      // Su Linux, saltiamo il controllo dei permessi
+      if (!Platform.isLinux) {
+        // Controllo permessi per altre piattaforme se necessario
+      }
+
+      await _initializeServices();
+      await _generateNewExercise();
+
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          errorMessage = null;
+        });
+      }
+    } catch (e) {
+      print('Errore nell\'inizializzazione: $e');
+      if (mounted) {
+        setState(() {
+          errorMessage = 'Errore nell\'inizializzazione: $e';
+          isLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _initializeServices() async {
     try {
       await voskService.initialize();
       await audioService.initialize();
     } catch (e) {
-      print('Errore nell\'inizializzazione dei servizi: $e');
-      // Mostra un messaggio di errore all'utente
+      throw Exception('Errore nell\'inizializzazione dei servizi: $e');
+    }
+  }
+
+  Future<void> _generateNewExercise() async {
+    try {
+      final exerciseManager = Provider.of<ExerciseManager>(context, listen: false);
+      final exercise = await exerciseManager.generateExercise();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Errore nell\'inizializzazione: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          text = exercise.content;
+        });
       }
+    } catch (e) {
+      throw Exception('Errore nella generazione dell\'esercizio: $e');
     }
   }
 
@@ -81,12 +118,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
       });
     } catch (e) {
       print('Errore nell\'avvio della registrazione: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Errore nell\'avvio della registrazione: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        errorMessage = 'Errore nell\'avvio della registrazione: $e';
+      });
     }
   }
 
@@ -107,12 +141,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
       }
     } catch (e) {
       print('Errore nello stop della registrazione: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Errore nello stop della registrazione: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        errorMessage = 'Errore nello stop della registrazione: $e';
+      });
     }
   }
 
@@ -138,8 +169,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
           TextButton(
             child: Text('Continua'),
             onPressed: () {
-              Navigator.pop(context);  // Chiude il dialog
-              Navigator.pop(context);  // Torna alla schermata precedente
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
           ),
         ],
@@ -153,56 +184,87 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen>
       appBar: AppBar(
         title: Text('Esercizio di Lettura'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontFamily: 'OpenDyslexic',
-                  ),
-                ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    if (errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red),
               ),
-            ),
-            SizedBox(height: 20),
-            if (isRecording)
-              VoiceRecognitionFeedback(
-                isRecording: isRecording,
-                volumeLevel: 0.5,  // TODO: implementare il livello del volume reale
-                targetText: text,
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _initializeAll,
+                child: Text('Riprova'),
               ),
-            if (exerciseCompleted)
-              VoiceRecognitionFeedback(
-                isRecording: false,
-                result: RecognitionResult(
-                  text: recognizedText,
-                  confidence: 1.0,
-                  similarity: similarity,
-                  isCorrect: similarity >= 0.85,
-                ),
-                targetText: text,
-              ),
-            Spacer(),
-            ElevatedButton(
-              onPressed: isRecording ? _stopRecording : _startRecording,
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: isRecording ? Colors.red : Colors.blue,
-              ),
-              child: Text(
-                isRecording ? 'Stop Registrazione' : 'Inizia Registrazione',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontFamily: 'OpenDyslexic',
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 20),
+          if (isRecording)
+            VoiceRecognitionFeedback(
+              isRecording: isRecording,
+              volumeLevel: 0.5,
+              targetText: text,
+            ),
+          if (exerciseCompleted)
+            VoiceRecognitionFeedback(
+              isRecording: false,
+              result: RecognitionResult(
+                text: recognizedText,
+                confidence: 1.0,
+                similarity: similarity,
+                isCorrect: similarity >= 0.85,
+              ),
+              targetText: text,
+            ),
+          Spacer(),
+          ElevatedButton(
+            onPressed: isRecording ? _stopRecording : _startRecording,
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: isRecording ? Colors.red : Colors.blue,
+            ),
+            child: Text(
+              isRecording ? 'Stop Registrazione' : 'Inizia Registrazione',
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -25,12 +25,13 @@ dependencies:
   # VOSK and Audio related
   vosk_flutter: ^0.3.48
   flutter_sound: ^9.2.13
-  permission_handler: ^10.2.0  # Aggiornato per compatibilità con vosk_flutter
+  permission_handler: ^10.2.0
+  permission_handler_platform_interface: ^3.12.0
   path_provider: ^2.1.2
 
   # Utilities
   archive: ^3.4.10
-  http: ^0.13.5  # Downgrade per compatibilità
+  http: ^0.13.5
   string_similarity: ^2.0.0
   collection: ^1.18.0
   json_annotation: ^4.8.1
@@ -44,6 +45,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
   assets:
     - lib/assets/exercises/easy_words.txt
     - lib/assets/exercises/medium_words.txt
@@ -53,6 +55,7 @@ flutter:
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
 
+
   fonts:
     - family: OpenDyslexic
       fonts:
@@ -61,6 +64,13 @@ flutter:
           style: italic
         - asset: lib/assets/fonts/OpenDyslexic-Bold.otf
           weight: 700
+        - asset: lib/assets/fonts/OpenDyslexic-Bold-Italic.otf
+          weight: 700
 
-#TODO: securizzare il profilo, aggiungere delle opzioni coerenti, ampliare gli esercizi, rendere la UI adattabile al device in uso
-#TODO: trovare un modo per usare i dati per uso-studio a livello accademico (creare eventuale disclaimer a prima accensione con checkbox per non visualizzarlo più)
+
+#TODO: ampliare i file degli esercizi
+#TODO: in base all'accuratezza posso passare al prossimo livello, non in base al numero minimo di parole. Devo avere una accuratezza del 80% per 5 giorni
+#TODO: inserire un sistema per cui ogni 100 parole, frasi, paragrafi letti, si resetta la memoria di quelle usate
+#TODO: assicurarsi che la UI sia in un unica pagina (no scrolling) e che vada bene sia per pc, tablet e smartphone
+#TODO: assicurarsi che tutti gli elementi implementati siano in uso
+#TODO: assicurarsi che il profilo "admin" abbia i pulsanti per poter avanzare di livello senza dover fare gli esercizi fino al NG+

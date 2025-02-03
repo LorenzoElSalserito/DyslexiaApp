@@ -1,15 +1,14 @@
-// learning_analytics_service.dart
-
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/recognition_result.dart';
 
+/// Classe che rappresenta le statistiche di apprendimento dell'utente
 class LearningStats {
-  final int totalAttempts;
-  final int successfulAttempts;
-  final double averageSimilarity;
-  final double averageTime;
-  final Map<String, int> commonErrors;
+  final int totalAttempts;           // Numero totale di tentativi
+  final int successfulAttempts;      // Tentativi completati con successo
+  final double averageSimilarity;    // Media delle similarità nei riconoscimenti
+  final double averageTime;          // Tempo medio di completamento
+  final Map<String, int> commonErrors; // Mappa degli errori più frequenti
 
   LearningStats({
     required this.totalAttempts,
@@ -19,6 +18,7 @@ class LearningStats {
     required this.commonErrors,
   });
 
+  // Conversione da e verso JSON per la persistenza
   Map<String, dynamic> toJson() => {
     'totalAttempts': totalAttempts,
     'successfulAttempts': successfulAttempts,
@@ -38,30 +38,33 @@ class LearningStats {
   }
 }
 
+/// Servizio per l'analisi e il tracciamento dell'apprendimento
 class LearningAnalyticsService {
+  // Chiavi per il salvataggio persistente
   static const String _statsKey = 'learning_stats';
   static const String _sessionKey = 'current_session';
   final SharedPreferences _prefs;
 
+  // Stato della sessione corrente
   List<RecognitionResult> _currentSessionResults = [];
   DateTime? _sessionStartTime;
 
   LearningAnalyticsService(this._prefs);
 
-  // Inizializza una nuova sessione
+  /// Inizia una nuova sessione di apprendimento
   void startSession() {
     _sessionStartTime = DateTime.now();
     _currentSessionResults.clear();
   }
 
-  // Aggiunge un risultato alla sessione corrente
+  /// Aggiunge un risultato alla sessione corrente
   void addResult(RecognitionResult result) {
     _currentSessionResults.add(result);
     _saveCurrentSession();
     _updateStats(result);
   }
 
-  // Salva la sessione corrente
+  /// Salva lo stato della sessione corrente
   Future<void> _saveCurrentSession() async {
     if (_sessionStartTime == null) return;
 
@@ -73,20 +76,22 @@ class LearningAnalyticsService {
     await _prefs.setString(_sessionKey, json.encode(sessionData));
   }
 
-  // Aggiorna le statistiche generali
+  /// Aggiorna le statistiche globali con un nuovo risultato
   Future<void> _updateStats(RecognitionResult result) async {
     final currentStats = await getStats();
 
-    // Calcola nuove statistiche
+    // Calcola le nuove statistiche
     final newTotalAttempts = currentStats.totalAttempts + 1;
-    final newSuccessfulAttempts = currentStats.successfulAttempts + (result.isCorrect ? 1 : 0);
+    final newSuccessfulAttempts = currentStats.successfulAttempts +
+        (result.isCorrect ? 1 : 0);
 
     // Aggiorna la media di similarità
-    final newAverageSimilarity = ((currentStats.averageSimilarity * currentStats.totalAttempts) +
-        result.similarity) / newTotalAttempts;
+    final newAverageSimilarity = ((currentStats.averageSimilarity *
+        currentStats.totalAttempts) + result.similarity) / newTotalAttempts;
 
     // Aggiorna il tempo medio
-    final newAverageTime = ((currentStats.averageTime * currentStats.totalAttempts) +
+    final newAverageTime = ((currentStats.averageTime *
+        currentStats.totalAttempts) +
         result.duration.inSeconds) / newTotalAttempts;
 
     // Aggiorna gli errori comuni
@@ -108,14 +113,13 @@ class LearningAnalyticsService {
     await _saveStats(newStats);
   }
 
-  // Analizza gli errori nel risultato
+  /// Analizza il tipo di errore nel risultato
   String _analyzeError(RecognitionResult result) {
-    // Implementa qui la logica per categorizzare gli errori
-    // Per ora restituisce una categoria generica
+    // TODO: Implementare una categorizzazione più dettagliata degli errori
     return 'error_general';
   }
 
-  // Ottieni le statistiche correnti
+  /// Ottiene le statistiche correnti
   Future<LearningStats> getStats() async {
     final statsJson = _prefs.getString(_statsKey);
     if (statsJson == null) {
@@ -131,12 +135,12 @@ class LearningAnalyticsService {
     return LearningStats.fromJson(json.decode(statsJson));
   }
 
-  // Salva le statistiche
+  /// Salva le statistiche globali
   Future<void> _saveStats(LearningStats stats) async {
     await _prefs.setString(_statsKey, json.encode(stats.toJson()));
   }
 
-  // Ottieni le statistiche della sessione corrente
+  /// Ottiene le statistiche della sessione corrente
   LearningStats getCurrentSessionStats() {
     if (_currentSessionResults.isEmpty) {
       return LearningStats(
@@ -148,12 +152,17 @@ class LearningAnalyticsService {
       );
     }
 
-    final successfulAttempts = _currentSessionResults.where((r) => r.isCorrect).length;
-    final totalSimilarity = _currentSessionResults.fold<double>(
-        0, (sum, result) => sum + result.similarity);
-    final totalTime = _currentSessionResults.fold<int>(
-        0, (sum, result) => sum + result.duration.inSeconds);
+    // Calcola le statistiche per la sessione corrente
+    final successfulAttempts = _currentSessionResults
+        .where((r) => r.isCorrect).length;
 
+    final totalSimilarity = _currentSessionResults
+        .fold<double>(0, (sum, result) => sum + result.similarity);
+
+    final totalTime = _currentSessionResults
+        .fold<int>(0, (sum, result) => sum + result.duration.inSeconds);
+
+    // Analizza gli errori della sessione
     final commonErrors = <String, int>{};
     for (var result in _currentSessionResults.where((r) => !r.isCorrect)) {
       final error = _analyzeError(result);
@@ -169,7 +178,7 @@ class LearningAnalyticsService {
     );
   }
 
-  // Resetta tutte le statistiche
+  /// Resetta tutte le statistiche
   Future<void> resetStats() async {
     await _prefs.remove(_statsKey);
     await _prefs.remove(_sessionKey);
@@ -177,20 +186,24 @@ class LearningAnalyticsService {
     _sessionStartTime = null;
   }
 
-  // Calcola il progresso dell'utente
+  /// Calcola il progresso complessivo dell'utente
   double calculateProgress() {
     final sessionStats = getCurrentSessionStats();
     if (sessionStats.totalAttempts == 0) return 0.0;
 
-    // Combina diversi fattori per calcolare il progresso
-    final accuracyWeight = 0.4;
-    final timeWeight = 0.3;
-    final similarityWeight = 0.3;
+    // Pesi per i diversi fattori di progresso
+    const accuracyWeight = 0.4;    // 40% per l'accuratezza
+    const timeWeight = 0.3;        // 30% per il tempo
+    const similarityWeight = 0.3;  // 30% per la similarità
 
-    final accuracyScore = sessionStats.successfulAttempts / sessionStats.totalAttempts;
-    final timeScore = sessionStats.averageTime < 10 ? 1.0 : 10 / sessionStats.averageTime;
+    // Calcola i singoli punteggi
+    final accuracyScore = sessionStats.successfulAttempts /
+        sessionStats.totalAttempts;
+    final timeScore = sessionStats.averageTime < 10 ? 1.0 :
+    10 / sessionStats.averageTime;
     final similarityScore = sessionStats.averageSimilarity;
 
+    // Combina i punteggi con i rispettivi pesi
     return (accuracyScore * accuracyWeight) +
         (timeScore * timeWeight) +
         (similarityScore * similarityWeight);

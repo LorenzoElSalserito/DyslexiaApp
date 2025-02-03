@@ -1,27 +1,33 @@
-// game_notification_manager.dart
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../widgets/streak_notification.dart';
 
+/// Definisce i diversi tipi di notifiche che possono essere mostrate nel gioco
 enum NotificationType {
-  streak,
-  achievement,
-  levelUp,
-  bonus,
-  challenge
+  streak,      // Notifica per le serie di successi consecutivi
+  achievement, // Notifica per gli obiettivi sbloccati
+  levelUp,     // Notifica per l'avanzamento di livello
+  bonus,       // Notifica per bonus speciali
+  challenge    // Notifica per le sfide
 }
 
+/// Gestore centralizzato delle notifiche di gioco
+/// Implementa il pattern Singleton per garantire un unico punto di gestione
 class GameNotificationManager {
+  // Implementazione del Singleton
   static final GameNotificationManager _instance = GameNotificationManager._internal();
   factory GameNotificationManager() => _instance;
   GameNotificationManager._internal();
 
+  // Controller per lo stream delle notifiche e gestione della visualizzazione
   final StreamController<Widget> _notificationController = StreamController<Widget>.broadcast();
   Stream<Widget> get notificationStream => _notificationController.stream;
 
+  // Gestione dell'overlay delle notifiche attuali
   OverlayEntry? _currentOverlay;
   Timer? _dismissTimer;
 
+  /// Mostra una notifica di streak (serie di successi consecutivi)
   void showStreakNotification(BuildContext context, int streak, double multiplier) {
     final notification = StreakNotification(
       streak: streak,
@@ -31,24 +37,30 @@ class GameNotificationManager {
     _showNotification(context, notification);
   }
 
+  /// Mostra una notifica per un achievement sbloccato
   void showAchievementUnlocked(BuildContext context, String title, String description) {
     final notification = _buildAchievementNotification(title, description);
     _showNotification(context, notification);
   }
 
+  /// Mostra una notifica di avanzamento livello
   void showLevelUp(BuildContext context, int level) {
     final notification = _buildLevelUpNotification(level);
     _showNotification(context, notification);
   }
 
+  /// Mostra una notifica per un bonus sbloccato
   void showBonusUnlocked(BuildContext context, String bonusType, double multiplier) {
     final notification = _buildBonusNotification(bonusType, multiplier);
     _showNotification(context, notification);
   }
 
+  /// Metodo interno per mostrare qualsiasi tipo di notifica
   void _showNotification(BuildContext context, Widget notification) {
+    // Rimuove eventuali notifiche precedenti
     _removeCurrentOverlay();
 
+    // Crea una nuova entry nell'overlay
     _currentOverlay = OverlayEntry(
       builder: (context) => Positioned(
         top: MediaQuery.of(context).padding.top + 20,
@@ -63,16 +75,20 @@ class GameNotificationManager {
       ),
     );
 
+    // Inserisce la notifica nell'overlay
     Overlay.of(context).insert(_currentOverlay!);
 
+    // Imposta il timer per la rimozione automatica
     _dismissTimer?.cancel();
     _dismissTimer = Timer(Duration(seconds: 3), () {
       _removeCurrentOverlay();
     });
 
+    // Notifica gli ascoltatori dello stream
     _notificationController.add(notification);
   }
 
+  /// Rimuove la notifica corrente
   void _removeCurrentOverlay() {
     _dismissTimer?.cancel();
     _dismissTimer = null;
@@ -80,6 +96,7 @@ class GameNotificationManager {
     _currentOverlay = null;
   }
 
+  /// Costruisce una notifica per l'unlock di un achievement
   Widget _buildAchievementNotification(String title, String description) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -125,6 +142,7 @@ class GameNotificationManager {
     );
   }
 
+  /// Costruisce una notifica per l'avanzamento di livello
   Widget _buildLevelUpNotification(int level) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -159,6 +177,7 @@ class GameNotificationManager {
     );
   }
 
+  /// Costruisce una notifica per l'unlock di un bonus
   Widget _buildBonusNotification(String bonusType, double multiplier) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -193,6 +212,7 @@ class GameNotificationManager {
     );
   }
 
+  /// Rilascia le risorse quando il manager viene distrutto
   void dispose() {
     _dismissTimer?.cancel();
     _removeCurrentOverlay();
