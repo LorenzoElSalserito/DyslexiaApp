@@ -1,0 +1,95 @@
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+if (flutterRoot == null) {
+    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+}
+
+buildscript {
+    ext.kotlin_version = '1.7.10'
+
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://alphacephei.com/maven/' }  // For Vosk dependencies
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.3.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+// This section is crucial for proper plugin integration
+android {
+    // We'll explicitly set the namespace to match our package name
+    namespace 'com.example.local_vosk_flutter'
+    compileSdkVersion 33
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 33
+
+        // Adding version information
+        versionCode 1
+        versionName "1.0"
+
+        // Configure proguard
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    // This helps prevent conflicts with other libraries
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+
+    // Vosk dependencies
+    implementation 'com.alphacephei:vosk-android:0.3.45'
+    implementation 'org.apache.commons:commons-compress:1.21'
+
+    // Standard Android dependencies
+    implementation 'androidx.annotation:annotation:1.5.0'
+    implementation 'androidx.core:core-ktx:1.9.0'
+
+    // This ensures proper integration with Flutter
+    compileOnly 'io.flutter:flutter_embedding_debug:1.0.0-3316dd8728419ad3534e3f6112aa6291f587078a'
+}
+
+// This block ensures the plugin is properly registered with Flutter
+afterEvaluate {
+    def containsEmbeddingDependencies = false
+    configurations.compileOnly.dependencies.each {
+        if (it.group == 'io.flutter' && it.name.startsWith('flutter_embedding')) {
+            containsEmbeddingDependencies = true
+        }
+    }
+    if (!containsEmbeddingDependencies) {
+        throw new GradleException('Flutter embedding dependencies not found. Ensure you have a compileOnly dependency on the Flutter embedding artifact.')
+    }
+}

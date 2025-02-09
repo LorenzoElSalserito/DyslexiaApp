@@ -1,0 +1,40 @@
+name: vosk_flutter
+description: A Flutter plugin for Vosk speech recognition, local implementation
+version: 0.1.0
+homepage: https://github.com/yourusername/vosk_flutter
+
+environment:
+  sdk: ">=2.17.0 <4.0.0"
+  flutter: ">=2.5.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.0.15
+  path: ^1.8.3
+  ffi: ^2.0.2
+  archive: ^3.4.9
+  http: ^0.13.5
+  json_annotation: ^4.8.1
+  permission_handler: ^10.2.0
+  # Aggiungiamo queste dipendenze per il CLI
+  args: ^2.4.2
+  build_cli_annotations: ^2.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+  build_runner: ^2.4.6
+  json_serializable: ^6.7.1
+  # Aggiungiamo il build_cli per generare il codice del CLI
+  build_cli: ^2.2.3
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.example.local_vosk_flutter
+        pluginClass: LocalVoskFlutterPlugin
+      ios:
+        pluginClass: LocalVoskFlutterPlugin

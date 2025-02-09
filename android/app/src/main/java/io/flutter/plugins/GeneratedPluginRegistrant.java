@@ -41,9 +41,9 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin shared_preferences_android, io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin", e);
     }
     try {
-      flutterEngine.getPlugins().add(new org.vosk.vosk_flutter.VoskFlutterPlugin());
+      flutterEngine.getPlugins().add(new com.example.local_vosk_flutter.LocalVoskFlutterPlugin());
     } catch (Exception e) {
-      Log.e(TAG, "Error registering plugin vosk_flutter, org.vosk.vosk_flutter.VoskFlutterPlugin", e);
+      Log.e(TAG, "Error registering plugin vosk_flutter, com.example.local_vosk_flutter.LocalVoskFlutterPlugin", e);
     }
   }
 }

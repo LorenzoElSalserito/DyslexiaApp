@@ -10,13 +10,18 @@ import '../config/app_config.dart';
 /// ContentService gestisce il caricamento e la gestione di tutto il contenuto testuale
 /// dell'applicazione, inclusi parole, frasi, paragrafi e pagine.
 class ContentService extends ChangeNotifier {
+  // Cache per i contenuti caricati
   late ContentSet _contentSet;
-  final Random _random = Random();
-  Map<String, List<String>> _cachedContent = {};
-  bool _isInitialized = false;
+  final Map<String, List<String>> _cachedContent = {};
 
-  // Getter per verificare lo stato di inizializzazione
-  bool get isInitialized => _isInitialized;
+  // Tracciamento delle parole usate
+  final Set<String> _usedWords = {};
+  static const int _maxUsedWords = 20; // Reset dopo 20 parole usate
+  int _exerciseCounter = 0;
+
+  // Gestione dello stato
+  bool _isInitialized = false;
+  final Random _random = Random();
 
   /// Inizializza il servizio caricando tutti i contenuti necessari
   Future<void> initialize() async {
@@ -95,7 +100,7 @@ class ContentService extends ChangeNotifier {
       final content = await loadAsset(path);
       return content.split('\n')
           .where((word) => word.trim().isNotEmpty)
-          .map((word) => word.trim())
+          .map((word) => word.trim().toLowerCase()) // Normalizziamo le parole
           .toList();
     } catch (e) {
       print('Errore nel caricamento delle parole da $path: $e');
@@ -109,7 +114,7 @@ class ContentService extends ChangeNotifier {
       final content = await loadAsset(path);
       return content.split('\n')
           .where((sentence) => sentence.trim().isNotEmpty)
-          .map((sentence) => sentence.trim())
+          .map((sentence) => _normalizeSentence(sentence))
           .toList();
     } catch (e) {
       print('Errore nel caricamento delle frasi da $path: $e');
@@ -123,7 +128,7 @@ class ContentService extends ChangeNotifier {
       final content = await loadAsset(path);
       return content.split('\n\n')
           .where((paragraph) => paragraph.trim().isNotEmpty)
-          .map((paragraph) => paragraph.trim())
+          .map((paragraph) => _normalizeParagraph(paragraph))
           .toList();
     } catch (e) {
       print('Errore nel caricamento dei paragrafi da $path: $e');
@@ -137,7 +142,7 @@ class ContentService extends ChangeNotifier {
       final content = await loadAsset(path);
       return content.split('\n\n\n')
           .where((page) => page.trim().isNotEmpty)
-          .map((page) => page.trim())
+          .map((page) => _normalizePage(page))
           .toList();
     } catch (e) {
       print('Errore nel caricamento delle pagine da $path: $e');
@@ -145,77 +150,106 @@ class ContentService extends ChangeNotifier {
     }
   }
 
-  /// Ottiene una parola casuale per un dato livello e difficoltà
+  /// Normalizza una frase
+  String _normalizeSentence(String sentence) {
+    return sentence.trim()
+        .replaceAll(RegExp(r'\s+'), ' ') // Rimuove spazi multipli
+        .replaceAll(RegExp(r'[^\w\s\.,!?]'), '') // Mantiene solo punteggiatura base
+        .trim();
+  }
+
+  /// Normalizza un paragrafo
+  String _normalizeParagraph(String paragraph) {
+    return paragraph.split('.')
+        .map((sentence) => _normalizeSentence(sentence))
+        .where((sentence) => sentence.isNotEmpty)
+        .join('. ');
+  }
+
+  /// Normalizza una pagina
+  String _normalizePage(String page) {
+    return page.split('\n\n')
+        .map((paragraph) => _normalizeParagraph(paragraph))
+        .where((paragraph) => paragraph.isNotEmpty)
+        .join('\n\n');
+  }
+
+  /// Ottiene una parola casuale appropriata per il livello e la difficoltà
   Word getRandomWordForLevel(int level, Difficulty difficulty) {
-    final words = _getWordsForDifficulty(difficulty);
-    return words[_random.nextInt(words.length)];
+    _exerciseCounter++;
+
+    // Reset delle parole usate ogni 20 esercizi
+    if (_exerciseCounter >= _maxUsedWords) {
+      _usedWords.clear();
+      _exerciseCounter = 0;
+      notifyListeners();
+    }
+
+    // Filtra le parole in base alla difficoltà
+    final availableWords = _getWordsForDifficulty(difficulty)
+        .where((word) => !_usedWords.contains(word.text))
+        .toList();
+
+    if (availableWords.isEmpty) {
+      // Se non ci sono parole disponibili, resetta e riprova
+      _usedWords.clear();
+      return getRandomWordForLevel(level, difficulty);
+    }
+
+    // Seleziona una parola casuale
+    final word = availableWords[_random.nextInt(availableWords.length)];
+    _usedWords.add(word.text);
+    notifyListeners();
+    return word;
   }
 
   /// Filtra le parole in base alla difficoltà
   List<Word> _getWordsForDifficulty(Difficulty difficulty) {
+    final words = _contentSet.dictionary;
     switch (difficulty) {
       case Difficulty.easy:
-        return _contentSet.dictionary.where((word) =>
-        word.text.length <= 5).toList();
+      // Parole brevi con sillabe semplici (2-3 sillabe, max 5 lettere)
+        return words.where((word) =>
+        _countSyllables(word.text) <= 2 &&
+            word.text.length <= 5 &&
+            !_hasComplexSyllables(word.text)
+        ).toList();
+
       case Difficulty.medium:
-        return _contentSet.dictionary.where((word) =>
-        word.text.length > 5 && word.text.length <= 8).toList();
+      // Parole di media lunghezza (3-4 sillabe, 6-8 lettere)
+        return words.where((word) =>
+        _countSyllables(word.text) <= 4 &&
+            word.text.length > 5 &&
+            word.text.length <= 8
+        ).toList();
+
       case Difficulty.hard:
-        return _contentSet.dictionary.where((word) =>
-        word.text.length > 8).toList();
+      // Parole lunghe o complesse (4+ sillabe o 8+ lettere)
+        return words.where((word) =>
+        _countSyllables(word.text) > 4 ||
+            word.text.length > 8 ||
+            _hasComplexSyllables(word.text)
+        ).toList();
     }
   }
 
-  /// Ottiene una frase casuale
-  Sentence getRandomSentence() => _contentSet.getRandomSentence();
+  /// Conta le sillabe in una parola italiana
+  int _countSyllables(String word) {
+    final vowels = RegExp('[aeiouAEIOU]');
+    final diphthongs = RegExp('(ai|au|ei|eu|oi|ou|ia|ie|io|iu|ua|ue|ui|uo)');
 
-  /// Ottiene un paragrafo casuale
-  Paragraph getRandomParagraph() => _contentSet.getRandomParagraph();
-
-  /// Ottiene una pagina casuale
-  Page getRandomPage() => _contentSet.getRandomPage();
-
-  /// Ottiene un insieme di parole per un dato livello e difficoltà
-  List<Word> getWordsForLevel(int count, Difficulty difficulty) {
-    final words = _getWordsForDifficulty(difficulty);
-    if (words.length < count) return words;
-
-    final selectedWords = <Word>[];
-    final usedIndexes = <int>{};
-
-    while (selectedWords.length < count) {
-      final index = _random.nextInt(words.length);
-      if (!usedIndexes.contains(index)) {
-        selectedWords.add(words[index]);
-        usedIndexes.add(index);
-      }
-    }
-
-    return selectedWords;
+    int count = vowels.allMatches(word).length;
+    count -= diphthongs.allMatches(word).length;
+    return count > 0 ? count : 1;
   }
 
-  /// Ottiene un insieme di frasi per un dato livello
-  List<Sentence> getSentencesForLevel(int count) {
-    return List.generate(count, (_) => getRandomSentence());
-  }
-
-  /// Ottiene un insieme di paragrafi per un dato livello
-  List<Paragraph> getParagraphsForLevel(int count) {
-    return List.generate(count, (_) => getRandomParagraph());
-  }
-
-  /// Ottiene un insieme di pagine per un dato livello
-  List<Page> getPagesForLevel(int count) {
-    return List.generate(count, (_) => getRandomPage());
-  }
-
-  /// Calcola il valore in cristalli per un dato contenuto
-  int calculateCrystals(dynamic content) {
-    if (content is Word) return content.crystalValue;
-    if (content is Sentence) return content.crystalValue;
-    if (content is Paragraph) return content.crystalValue;
-    if (content is Page) return content.crystalValue;
-    return 0;
+  /// Verifica se una parola contiene sillabe complesse
+  bool _hasComplexSyllables(String word) {
+    // Gruppi consonantici complessi in italiano
+    final complexGroups = RegExp(
+        '(str|spr|scr|spl|sbl|sgl|sbr|sfr|zz|gn|gl|gh|ch|sc[ie])'
+    );
+    return complexGroups.hasMatch(word);
   }
 
   /// Pulisce la cache dei contenuti
@@ -223,4 +257,17 @@ class ContentService extends ChangeNotifier {
     _cachedContent.clear();
     notifyListeners();
   }
+
+  /// Resetta manualmente il contatore degli esercizi e le parole usate
+  void resetExerciseCounter() {
+    _exerciseCounter = 0;
+    _usedWords.clear();
+    notifyListeners();
+  }
+
+  // Getters
+  bool get isInitialized => _isInitialized;
+  ContentSet get contentSet => _contentSet;
+  int get exerciseCounter => _exerciseCounter;
+  Set<String> get usedWords => Set.unmodifiable(_usedWords);
 }

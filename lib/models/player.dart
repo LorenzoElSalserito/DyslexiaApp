@@ -74,8 +74,16 @@ class Player with ChangeNotifier {
   int get newGamePlusCount => _newGamePlusCount;
   Set<String> get usedWords => Set.unmodifiable(_usedWords);
   Set<String> get usedSentences => Set.unmodifiable(_usedSentences);
-  DateTime? get lastPlayDate => _lastPlayDate;
   Map<String, dynamic> get gameData => Map.unmodifiable(_gameData);
+
+  DateTime? get lastPlayDate => _lastPlayDate;
+  set lastPlayDate(DateTime? value) {
+    if (_lastPlayDate != value) {
+      _lastPlayDate = value;
+      _gameData['lastPlayDate'] = value?.toIso8601String();
+      notifyListeners();
+    }
+  }
 
   int get maxConsecutiveDays => _maxConsecutiveDays;
   set maxConsecutiveDays(int value) {

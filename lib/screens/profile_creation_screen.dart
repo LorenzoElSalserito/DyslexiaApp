@@ -6,7 +6,10 @@ import '../services/player_manager.dart';
 import '../models/player.dart';
 import 'game_screen.dart';
 
+/// Schermata per la creazione di un nuovo profilo utente
 class ProfileCreationScreen extends StatefulWidget {
+  const ProfileCreationScreen({Key? key}) : super(key: key);
+
   @override
   _ProfileCreationScreenState createState() => _ProfileCreationScreenState();
 }
@@ -16,6 +19,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   final _nameController = TextEditingController();
   bool _isSaving = false;
 
+  /// Crea un nuovo profilo con il nome fornito
   Future<void> _createProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -37,7 +41,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => GameScreen()),
+        MaterialPageRoute(builder: (context) => const GameScreen()),
       );
     } catch (e) {
       if (!mounted) return;
@@ -65,10 +69,13 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Crea Profilo'),
+        title: const Text(
+          'OpenDSA: Reading - Crea Profilo',
+          style: TextStyle(fontFamily: 'OpenDyslexic'),
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.close),
+            icon: const Icon(Icons.close),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -87,7 +94,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
               padding: const EdgeInsets.all(20.0),
               child: Container(
                 width: 300,
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -104,7 +111,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      const Text(
                         'Come ti chiami?',
                         style: TextStyle(
                           fontSize: 24,
@@ -112,7 +119,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                           fontFamily: 'OpenDyslexic',
                         ),
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: _nameController,
                         decoration: InputDecoration(
@@ -121,7 +128,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
-                          prefixIcon: Icon(Icons.person),
+                          prefixIcon: const Icon(Icons.person),
                           enabled: !_isSaving,
                         ),
                         textCapitalization: TextCapitalization.words,
@@ -140,23 +147,23 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                         },
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _createProfile(),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'OpenDyslexic',
                           fontSize: 16,
                         ),
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: _isSaving ? null : _createProfile,
                         style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
                           backgroundColor: Colors.blue.shade400,
                         ),
                         child: _isSaving
-                            ? SizedBox(
+                            ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
@@ -164,7 +171,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                            : Text(
+                            : const Text(
                           'Crea Profilo',
                           style: TextStyle(
                             fontSize: 18,

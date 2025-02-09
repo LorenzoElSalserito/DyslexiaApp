@@ -5,7 +5,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.3
+  sdk: ">=3.5.3 <4.0.0"
 
 dependencies:
   flutter:
@@ -23,7 +23,6 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # VOSK and Audio related
-  vosk_flutter: ^0.3.48
   flutter_sound: ^9.2.13
   permission_handler: ^10.2.0
   permission_handler_platform_interface: ^3.12.0
@@ -43,6 +42,10 @@ dev_dependencies:
   json_serializable: ^6.7.1
   build_runner: ^2.4.7
 
+dependency_overrides:
+  vosk_flutter:
+    path: ./local_vosk_flutter
+
 flutter:
   uses-material-design: true
 
@@ -54,7 +57,6 @@ flutter:
     - lib/assets/exercises/paragraphs.txt
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
-
 
   fonts:
     - family: OpenDyslexic
@@ -69,8 +71,7 @@ flutter:
 
 
 #TODO: ampliare i file degli esercizi
-#TODO: in base all'accuratezza posso passare al prossimo livello, non in base al numero minimo di parole. Devo avere una accuratezza del 80% per 5 giorni
-#TODO: inserire un sistema per cui ogni 100 parole, frasi, paragrafi letti, si resetta la memoria di quelle usate
+#TODO: ricordarsi di far si che il popup dei cristalli di log giornalieri compaia una sola volta per giorno, poi si disabilita
 #TODO: assicurarsi che la UI sia in un unica pagina (no scrolling) e che vada bene sia per pc, tablet e smartphone
 #TODO: assicurarsi che tutti gli elementi implementati siano in uso
 #TODO: assicurarsi che il profilo "admin" abbia i pulsanti per poter avanzare di livello senza dover fare gli esercizi fino al NG+

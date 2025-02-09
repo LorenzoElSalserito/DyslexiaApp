@@ -2,24 +2,165 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:thesis_project/models/enums.dart';
 import '../models/player.dart';
 import '../services/game_service.dart';
 import '../services/store_service.dart';
 import '../services/challenge_service.dart';
 import '../models/challenge.dart';
 import '../widgets/progression_map.dart';
+import '../services/game_notification_manager.dart';
 import 'store_screen.dart';
-import 'options_screen.dart';
 import 'challenges_screen.dart';
+import 'reading_exercise_screen.dart';
 
-class GameScreen extends StatelessWidget {
-  const GameScreen({Key? key}) : super(key: key);
+/// Schermata principale del gioco che mostra il progresso del giocatore,
+/// le sfide attive e le varie opzioni di gioco disponibili.
+class GameScreen extends StatefulWidget {
+  const GameScreen({super.key});
+
+  @override
+  State<GameScreen> createState() => _GameScreenState();
+}
+
+class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
+  // Servizi e stato
+  late final GameNotificationManager _notificationManager;
+  bool _hasCheckedDailyBonus = false;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationManager = GameNotificationManager();
+    // Registriamo l'observer per gestire i cambi di stato dell'app
+    WidgetsBinding.instance.addObserver(this);
+
+    // Inizializzazione posticipata dopo il build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeScreen();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Controlliamo il bonus quando l'app torna in foreground
+    if (state == AppLifecycleState.resumed && _isInitialized) {
+      _checkDailyBonus();
+    }
+  }
+
+  /// Inizializza la schermata e controlla il bonus giornaliero
+  Future<void> _initializeScreen() async {
+    if (!mounted) return;
+
+    try {
+      // Otteniamo i servizi necessari
+      final gameService = Provider.of<GameService>(context, listen: false);
+
+      // Aspettiamo che il GameService sia inizializzato
+      if (!gameService.isInitialized) {
+        await gameService.initialize();
+      }
+
+      // Controlliamo il bonus giornaliero
+      await _checkDailyBonus();
+
+      setState(() => _isInitialized = true);
+    } catch (e) {
+      debugPrint('Errore nell\'inizializzazione della schermata: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Si è verificato un errore: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Controlla e mostra il bonus giornaliero se necessario
+  Future<void> _checkDailyBonus() async {
+    if (_hasCheckedDailyBonus) return;
+
+    try {
+      final player = Provider.of<Player>(context, listen: false);
+      final now = DateTime.now();
+      final lastPlayDate = player.lastPlayDate;
+
+      // Verifica se è un nuovo giorno
+      if (lastPlayDate == null ||
+          lastPlayDate.year != now.year ||
+          lastPlayDate.month != now.month ||
+          lastPlayDate.day != now.day) {
+
+        // Calcola il bonus basato sui giorni consecutivi
+        bool isConsecutiveDay = lastPlayDate != null &&
+            _isConsecutiveDay(lastPlayDate, now);
+
+        int consecutiveDays = player.currentConsecutiveDays;
+        if (isConsecutiveDay) {
+          consecutiveDays++;
+          if (consecutiveDays > player.maxConsecutiveDays) {
+            player.maxConsecutiveDays = consecutiveDays;
+          }
+        } else {
+          consecutiveDays = 1;
+        }
+
+        // Aggiorna il contatore dei giorni consecutivi
+        player.currentConsecutiveDays = consecutiveDays;
+
+        // Calcola e assegna il bonus
+        int bonus = _calculateDailyBonus(consecutiveDays);
+        player.addCrystals(bonus);
+
+        // Mostra la notifica del bonus
+        if (mounted) {
+          await _notificationManager.showDailyLoginBonus(
+            context,
+            consecutiveDays,
+          );
+        }
+
+        // Aggiorna la data dell'ultimo accesso
+        player.lastPlayDate = now;
+        await player.saveProgress();
+      }
+
+      setState(() => _hasCheckedDailyBonus = true);
+    } catch (e) {
+      debugPrint('Errore nel controllo del bonus giornaliero: $e');
+    }
+  }
+
+  /// Verifica se due date sono consecutive
+  bool _isConsecutiveDay(DateTime previous, DateTime current) {
+    final yesterday = current.subtract(const Duration(days: 1));
+    return previous.year == yesterday.year &&
+        previous.month == yesterday.month &&
+        previous.day == yesterday.day;
+  }
+
+  /// Calcola il bonus giornaliero basato sui giorni consecutivi
+  int _calculateDailyBonus(int consecutiveDays) {
+    // Bonus base di 10 cristalli più 0.5 per ogni giorno consecutivo
+    return (10 + (consecutiveDays - 1) * 0.5).round();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer2<Player, GameService>(
       builder: (context, player, gameService, _) {
+        if (!_isInitialized) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
         return Scaffold(
           body: Container(
             decoration: BoxDecoration(
@@ -35,13 +176,16 @@ class GameScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    _buildTopSection(context, player),
+                    _buildTopSection(player),
                     const SizedBox(height: 50),
-                    _buildProgressionSection(context, player, gameService),
+                    SizedBox(
+                      height: 180,
+                      child: ProgressionMap(),
+                    ),
                     const SizedBox(height: 50),
-                    _buildActiveChallenges(context),
+                    _buildActiveChallenges(),
                     const SizedBox(height: 50),
-                    _buildButtonsSection(context, player),
+                    _buildButtonsSection(player),
                   ],
                 ),
               ),
@@ -52,12 +196,9 @@ class GameScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTopSection(BuildContext context, Player player) {
+  Widget _buildTopSection(Player player) {
     final store = Provider.of<StoreService>(context);
     final currentTitle = store.currentTitle;
-
-    // Debug: stampa il valore del player.name nel terminale
-    print('DEBUG: player.name = ${player.name}');
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -141,14 +282,7 @@ class GameScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressionSection(BuildContext context, Player player, GameService gameService) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 180),
-      child: const ProgressionMap(),
-    );
-  }
-
-  Widget _buildActiveChallenges(BuildContext context) {
+  Widget _buildActiveChallenges() {
     return Consumer<ChallengeService>(
       builder: (context, challengeService, _) {
         final activeChallenges = challengeService.activeChallenges
@@ -172,10 +306,7 @@ class GameScreen extends StatelessWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ChallengesScreen()),
-                  ),
+                  onPressed: () => Navigator.pushNamed(context, '/challenges'),
                   child: const Text(
                     'Vedi tutte',
                     style: TextStyle(
@@ -226,9 +357,7 @@ class GameScreen extends StatelessWidget {
           LinearProgressIndicator(
             value: challenge.progressPercentage,
             backgroundColor: Colors.white24,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              challenge.type == ChallengeType.daily ? Colors.amber : Colors.purple,
-            ),
+            valueColor: AlwaysStoppedAnimation<Color>(challenge.color),
           ),
           const SizedBox(height: 4),
           Text(
@@ -244,7 +373,7 @@ class GameScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildButtonsSection(BuildContext context, Player player) {
+  Widget _buildButtonsSection(Player player) {
     return Column(
       children: [
         _buildButton(
@@ -258,11 +387,8 @@ class GameScreen extends StatelessWidget {
             Expanded(
               child: _buildButton(
                 'Sfide',
-                const Color(0xFF4A148C), // Viola scuro ad alto contrasto
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ChallengesScreen()),
-                ),
+                const Color(0xFF4A148C),
+                    () => Navigator.pushNamed(context, '/challenges'),
               ),
             ),
             const SizedBox(width: 8),
@@ -270,10 +396,7 @@ class GameScreen extends StatelessWidget {
               child: _buildButton(
                 'Negozio',
                 Colors.amber.shade900,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const StoreScreen()),
-                ),
+                    () => Navigator.pushNamed(context, '/store'),
               ),
             ),
           ],
@@ -281,17 +404,19 @@ class GameScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Row(
           children: [
-            /*Expanded(
-              child: _buildButton(
-                'Opzioni',
-                Colors.cyan.shade900,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const OptionsScreen()),
+            if (player.isAdmin) ...[
+              Expanded(
+                child: _buildButton(
+                  'Level Up',
+                  Colors.purple.shade900,
+                      () {
+                    player.levelUp();
+                    _notificationManager.showLevelUp(context, player.currentLevel);
+                  },
                 ),
               ),
-            ),*/
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: _buildButton(
                 'Menu',
@@ -316,6 +441,10 @@ class GameScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         elevation: 2,
+        shadowColor: color.withOpacity(0.5),
+        // Miglioriamo l'accessibilità con il contrasto
+        minimumSize: const Size(100, 48),
+        tapTargetSize: MaterialTapTargetSize.padded,
       ),
       child: Text(
         text,
@@ -326,5 +455,12 @@ class GameScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _notificationManager.dispose();
+    super.dispose();
   }
 }

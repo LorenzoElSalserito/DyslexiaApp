@@ -1,324 +1,186 @@
 import 'package:flutter/material.dart';
 import '../models/recognition_result.dart';
-import '../utils/text_similarity.dart';
+import 'dart:math' as math;
 
 class VoiceRecognitionFeedback extends StatelessWidget {
+  // Parametri principali
   final bool isRecording;
-  final double? volumeLevel;
-  final RecognitionResult? result;
   final String targetText;
+  final double volumeLevel;
+  final RecognitionResult? result;
+  final int? currentAttempt;
+  final int? totalAttempts;
+
+  // Costanti di stile
+  static const double _maxWaveHeight = 60.0;
+  static const int _wavePoints = 8;
+  static const Duration _waveDuration = Duration(milliseconds: 1500);
 
   const VoiceRecognitionFeedback({
     Key? key,
     required this.isRecording,
-    this.volumeLevel,
-    this.result,
     required this.targetText,
+    this.volumeLevel = 0.0,
+    this.result,
+    this.currentAttempt,
+    this.totalAttempts,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (isRecording) _buildRecordingIndicator(),
-        if (result != null) _buildRecognitionResult(context),
-      ],
-    );
-  }
-
-  Widget _buildRecordingIndicator() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.red.withOpacity(0.3),
-          width: 2,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              PulsatingCircle(),
-              SizedBox(width: 8),
-              Text(
-                'Registrazione in corso...',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'OpenDyslexic',
-                ),
-              ),
-            ],
+        // Indicatore di progresso delle registrazioni
+        if (currentAttempt != null && totalAttempts != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(totalAttempts!, (index) {
+                final isCompleted = index < currentAttempt!;
+                final isCurrent = index == currentAttempt;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: CircleAvatar(
+                    radius: 8,
+                    backgroundColor: isCompleted
+                        ? Colors.green
+                        : isCurrent
+                        ? Colors.blue
+                        : Colors.grey[300],
+                    child: isCompleted
+                        ? const Icon(Icons.check, size: 12, color: Colors.white)
+                        : null,
+                  ),
+                );
+              }),
+            ),
           ),
-          if (volumeLevel != null) ...[
-            SizedBox(height: 8),
-            _buildVolumeMeter(),
-          ],
-        ],
-      ),
-    );
-  }
 
-  Widget _buildVolumeMeter() {
-    return Column(
-      children: [
-        Container(
-          height: 20,
-          width: double.infinity,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: volumeLevel,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Colors.red.withOpacity(0.5),
+        // Visualizzazione dell'onda sonora durante la registrazione
+        if (isRecording)
+          SizedBox(
+            height: _maxWaveHeight,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_wavePoints, (index) {
+                return _WaveBar(
+                  index: index,
+                  volumeLevel: volumeLevel,
+                  maxHeight: _maxWaveHeight,
+                  duration: _waveDuration,
+                );
+              }),
+            ),
+          ),
+
+        // Visualizzazione del risultato del riconoscimento
+        if (result != null && !isRecording)
+          _buildRecognitionResult(context),
+
+        // Messaggi informativi
+        if (isRecording)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              'Sto ascoltando...',
+              style: TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          'Livello Volume',
-          style: TextStyle(
-            color: Colors.red[300],
-            fontSize: 12,
-            fontFamily: 'OpenDyslexic',
-          ),
-        ),
       ],
     );
   }
 
   Widget _buildRecognitionResult(BuildContext context) {
-    final similarity = result!.similarity * 100;
-    final isCorrect = result!.isCorrect;
-    final textFeedback = TextSimilarity.getDetailedFeedback(
-        result!.text,
-        targetText
-    );
+    if (result == null) return const SizedBox.shrink();
 
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isCorrect ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isCorrect ? Colors.green : Colors.orange,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Testo Riconosciuto:',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[700],
-              fontFamily: 'OpenDyslexic',
-            ),
-          ),
-          SizedBox(height: 8),
-          _buildTextComparison(),
-          SizedBox(height: 16),
-          _buildAccuracyIndicator(similarity, isCorrect),
-          SizedBox(height: 12),
-          _buildDetailedFeedback(textFeedback, isCorrect),
-          if (!isCorrect) _buildCommonErrorsSection(),
-        ],
-      ),
-    );
-  }
+    final similarity = (result!.similarity * 100).toStringAsFixed(1);
+    final color = result!.isCorrect ? Colors.green : Colors.orange;
 
-  Widget _buildTextComparison() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          result!.text,
-          style: TextStyle(
-            fontSize: 16,
-            fontFamily: 'OpenDyslexic',
-            height: 1.5,
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Testo Target:',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[700],
-            fontFamily: 'OpenDyslexic',
-          ),
-        ),
-        Text(
-          targetText,
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey[600],
-            fontFamily: 'OpenDyslexic',
-            height: 1.5,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAccuracyIndicator(double similarity, bool isCorrect) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Accuratezza:',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
-                fontFamily: 'OpenDyslexic',
-              ),
+            Row(
+              children: [
+                Icon(
+                  result!.isCorrect ? Icons.check_circle : Icons.info,
+                  color: color,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Accuratezza: $similarity%',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 8),
             Text(
-              '${similarity.toStringAsFixed(1)}%',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isCorrect ? Colors.green : Colors.orange,
-                fontFamily: 'OpenDyslexic',
-              ),
+              'Testo riconosciuto:',
+              style: Theme.of(context).textTheme.titleSmall,
             ),
+            const SizedBox(height: 4),
+            Text(
+              result!.text,
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 8),
+            Text(result!.getFeedbackMessage()),
           ],
         ),
-        SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: result!.similarity,
-            backgroundColor: Colors.grey[200],
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isCorrect ? Colors.green : Colors.orange,
-            ),
-            minHeight: 8,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailedFeedback(String feedback, bool isCorrect) {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isCorrect ? Icons.check_circle : Icons.info,
-                color: isCorrect ? Colors.green : Colors.orange,
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Feedback:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'OpenDyslexic',
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          Text(
-            feedback,
-            style: TextStyle(
-              fontStyle: FontStyle.italic,
-              color: Colors.grey[700],
-              fontFamily: 'OpenDyslexic',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommonErrorsSection() {
-    return Container(
-      margin: EdgeInsets.only(top: 16),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Colors.orange.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Suggerimenti per migliorare:',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.orange[700],
-              fontFamily: 'OpenDyslexic',
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            '• Leggi lentamente e con calma\n'
-                '• Concentrati su una parola alla volta\n'
-                '• Usa il dito per seguire il testo\n'
-                '• Prendi un respiro profondo prima di iniziare',
-            style: TextStyle(
-              color: Colors.orange[700],
-              fontSize: 14,
-              height: 1.5,
-              fontFamily: 'OpenDyslexic',
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
-class PulsatingCircle extends StatefulWidget {
+/// Widget animato che rappresenta una barra dell'onda sonora
+class _WaveBar extends StatefulWidget {
+  final int index;
+  final double volumeLevel;
+  final double maxHeight;
+  final Duration duration;
+
+  const _WaveBar({
+    Key? key,
+    required this.index,
+    required this.volumeLevel,
+    required this.maxHeight,
+    required this.duration,
+  }) : super(key: key);
+
   @override
-  _PulsatingCircleState createState() => _PulsatingCircleState();
+  State<_WaveBar> createState() => _WaveBarState();
 }
 
-class _PulsatingCircleState extends State<PulsatingCircle> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
+class _WaveBarState extends State<_WaveBar> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: Duration(seconds: 1),
+      duration: widget.duration,
       vsync: this,
     );
 
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller)
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _controller.reverse();
-        } else if (status == AnimationStatus.dismissed) {
-          _controller.forward();
-        }
-      });
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
 
-    _controller.forward();
+    _controller.repeat(reverse: true);
   }
 
   @override
@@ -332,13 +194,18 @@ class _PulsatingCircleState extends State<PulsatingCircle> with SingleTickerProv
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
+        final wave = math.sin(_animation.value * math.pi +
+            widget.index * (math.pi / widget.maxHeight));
+        final normalizedHeight =
+            (wave + 1) / 2 * widget.maxHeight * widget.volumeLevel;
+
         return Container(
-          width: 12,
-          height: 12,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          width: 4,
+          height: normalizedHeight.clamp(2.0, widget.maxHeight),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.red.withOpacity(1 - _animation.value),
-            border: Border.all(color: Colors.red),
+            color: Colors.blue.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(2),
           ),
         );
       },

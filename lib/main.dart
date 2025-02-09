@@ -20,25 +20,44 @@ import 'screens/store_screen.dart';
 import 'screens/reading_exercise_screen.dart';
 import 'config/theme_config.dart';
 
+/// Punto di ingresso principale dell'applicazione
 void main() async {
+  // Assicuriamoci che Flutter sia inizializzato correttamente
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inizializzazione delle SharedPreferences
   final prefs = await SharedPreferences.getInstance();
 
+  // Configurazione del percorso per la libreria VOSK
+  const String voskLibPath = String.fromEnvironment('VOSK_LIB_PATH');
+  debugPrint("VOSK_LIB_PATH: $voskLibPath");
+
+  // Avvio dell'applicazione con la gestione dello stato tramite Provider
   runApp(
     MultiProvider(
       providers: [
+        // Provider per la gestione dei profili utente
         ChangeNotifierProvider(
           create: (_) => PlayerManager(prefs),
         ),
+
+        // Provider per il giocatore corrente
         ChangeNotifierProvider(
           create: (_) => Player(),
         ),
+
+        // Provider per il servizio dei contenuti
         ChangeNotifierProvider(
           create: (_) => ContentService(),
+          lazy: false, // Inizializza immediatamente per caricare i contenuti
         ),
+
+        // Provider per il servizio di analytics
         Provider(
           create: (_) => LearningAnalyticsService(prefs),
         ),
+
+        // Provider per il gestore degli esercizi
         ChangeNotifierProxyProvider2<Player, ContentService, ExerciseManager>(
           create: (context) => ExerciseManager(
             player: context.read<Player>(),
@@ -46,66 +65,92 @@ void main() async {
             analyticsService: context.read<LearningAnalyticsService>(),
           ),
           update: (context, player, contentService, previous) =>
-              ExerciseManager(
-                player: player,
-                contentService: contentService,
-                analyticsService: context.read<LearningAnalyticsService>(),
-              ),
+          previous ?? ExerciseManager(
+            player: player,
+            contentService: contentService,
+            analyticsService: context.read<LearningAnalyticsService>(),
+          ),
         ),
-        ChangeNotifierProxyProvider<Player, GameService>(
+
+        // Provider per il servizio di gioco
+        ChangeNotifierProxyProvider3<Player, ContentService, ExerciseManager, GameService>(
           create: (context) => GameService(
             player: context.read<Player>(),
             contentService: context.read<ContentService>(),
             exerciseManager: context.read<ExerciseManager>(),
           ),
-          update: (context, player, previous) =>
-              GameService(
-                player: player,
-                contentService: context.read<ContentService>(),
-                exerciseManager: context.read<ExerciseManager>(),
-              ),
+          update: (context, player, contentService, exerciseManager, previous) {
+            final service = previous ?? GameService(
+              player: player,
+              contentService: contentService,
+              exerciseManager: exerciseManager,
+            );
+
+            // Inizializza il servizio se necessario
+            if (!service.isInitialized) {
+              // Usiamo microtask per evitare problemi durante il build
+              Future.microtask(() => service.initialize());
+            }
+
+            return service;
+          },
         ),
+
+        // Provider per il servizio delle sfide
         ChangeNotifierProxyProvider<Player, ChallengeService>(
           create: (context) => ChallengeService(prefs, context.read<Player>()),
           update: (context, player, previous) =>
-              ChallengeService(prefs, player),
+          previous ?? ChallengeService(prefs, player),
         ),
+
+        // Provider per il servizio del negozio
         ChangeNotifierProxyProvider<Player, StoreService>(
           create: (context) => StoreService(prefs, context.read<Player>()),
           update: (context, player, previous) =>
-              StoreService(prefs, player),
+          previous ?? StoreService(prefs, player),
         ),
       ],
-      child: const MyApp(),
+      child: const OpenDSAApp(),
     ),
   );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+/// Widget principale dell'applicazione
+class OpenDSAApp extends StatelessWidget {
+  const OpenDSAApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Dyslexia App',
+      title: 'OpenDSA: Reading',
       theme: ThemeConfig.lightTheme,
+      debugShowCheckedModeBanner: false, // Rimuove il banner di debug
       initialRoute: '/',
       routes: {
+        // Rotte principali dell'applicazione
         '/': (context) => const SplashScreenWidget(),
-        '/game': (context) => GameScreen(),
-        '/challenges': (context) => ChallengesScreen(),
-        //'/options': (context) => OptionsScreen(),
-        '/store': (context) => StoreScreen(),
+        '/game': (context) => const GameScreen(),
+        '/challenges': (context) => const ChallengesScreen(),
+        '/store': (context) => const StoreScreen(),
         '/profile_selection': (context) => const ProfileSelectionScreen(),
-        '/profile_creation': (context) => ProfileCreationScreen(),
-        '/reading_exercise': (context) => ReadingExerciseScreen(),
+        '/profile_creation': (context) => const ProfileCreationScreen(),
+        '/reading_exercise': (context) => const ReadingExerciseScreen(),
       },
       onUnknownRoute: (settings) {
+        // Gestione delle rotte non trovate
         return MaterialPageRoute(
           builder: (context) => Scaffold(
-            appBar: AppBar(title: const Text('Errore')),
+            appBar: AppBar(
+              title: const Text(
+                'Errore',
+                style: TextStyle(fontFamily: 'OpenDyslexic'),
+              ),
+            ),
             body: Center(
-              child: Text('Route ${settings.name} non trovata'),
+              child: Text(
+                'Route ${settings.name} non trovata',
+                style: const TextStyle(fontFamily: 'OpenDyslexic'),
+              ),
             ),
           ),
         );

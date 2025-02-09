@@ -7,6 +7,8 @@ import '../models/player.dart';
 import '../models/level.dart';
 import '../models/enums.dart';
 
+/// Widget che mostra la mappa di progressione del giocatore, inclusi il livello corrente,
+/// i sottolivelli, e i vari indicatori di progresso.
 class ProgressionMap extends StatelessWidget {
   const ProgressionMap({Key? key}) : super(key: key);
 
@@ -26,7 +28,7 @@ class ProgressionMap extends StatelessWidget {
         _buildLevelDetails(gameService, currentSubLevel),
         if (gameService.hasActiveStreak) ...[
           const SizedBox(height: 8),
-          _buildStreakIndicator(gameService.currentStreak),
+          _buildStreakIndicator(gameService.streak),
         ],
       ],
     );
@@ -85,7 +87,7 @@ class ProgressionMap extends StatelessWidget {
   }
 
   Widget _buildProgressBar(GameService gameService) {
-    final levelProgress = gameService.levelProgress;
+    double progress = gameService.getLevelUpProgress();
     final averageAccuracy = gameService.getAverageAccuracy();
 
     return Column(
@@ -103,7 +105,7 @@ class ProgressionMap extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 child: TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 500),
-                  tween: Tween<double>(begin: 0, end: levelProgress),
+                  tween: Tween<double>(begin: 0, end: progress),
                   builder: (context, value, _) {
                     return FractionallySizedBox(
                       widthFactor: value,
@@ -127,7 +129,9 @@ class ProgressionMap extends StatelessWidget {
         Text(
           '${(averageAccuracy * 100).toStringAsFixed(1)}% Accuratezza',
           style: TextStyle(
-            color: averageAccuracy >= GameService.requiredAccuracy ? Colors.green : Colors.orange,
+            color: averageAccuracy >= GameService.requiredAccuracy
+                ? Colors.green
+                : Colors.orange,
             fontSize: 12,
             fontFamily: 'OpenDyslexic',
           ),
@@ -150,7 +154,11 @@ class ProgressionMap extends StatelessWidget {
         children: [
           _buildCompactDetailRow('Fase:', currentSubLevel.name, Icons.flag),
           const SizedBox(height: 6),
-          _buildCompactDetailRow('Obiettivo:', '${(GameService.requiredAccuracy * 100).toInt()}%', Icons.track_changes),
+          _buildCompactDetailRow(
+              'Obiettivo:',
+              '${(GameService.requiredAccuracy * 100).toInt()}%',
+              Icons.track_changes
+          ),
           const SizedBox(height: 6),
           _buildCompactDetailRow('Giorni:', '$daysWithGoodAccuracy/$targetDays', Icons.calendar_today),
         ],

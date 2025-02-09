@@ -37,7 +37,8 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.lightBlue.shade800, Colors.lightBlue.shade500],
+            // Utilizzo di contrasti elevati per il background
+            colors: [Colors.blue.shade900, Colors.blue.shade700],
           ),
         ),
         child: SafeArea(
@@ -46,10 +47,10 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               _buildHeader(),
               TabBar(
                 controller: _tabController,
-                labelColor: Colors.white,                     // Colore del testo del tab selezionato
-                unselectedLabelColor: Colors.white70,           // Colore del testo per i tab non selezionati
-                indicatorColor: Colors.white,                   // Colore dell'indicatore (linea sottostante)
-                indicatorWeight: 3,                             // Spessore dell'indicatore
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
                 tabs: const [
                   Tab(text: 'Disponibili'),
                   Tab(text: 'Ottenuti'),
@@ -101,7 +102,8 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.2),
+                      // Contrasto elevato per il container dei cristalli
+                      color: Colors.black87,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -203,6 +205,8 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(fontFamily: 'OpenDyslexic'),
               ),
               selected: _currentFilter == filter,
+              selectedColor: Colors.amber,  // Contrasto elevato per il filtro selezionato
+              checkmarkColor: Colors.black,
               onSelected: (selected) {
                 setState(() {
                   _currentFilter = selected ? filter : 'Tutti';
@@ -220,10 +224,10 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // Aumentiamo il numero di colonne per compattare la griglia
-        childAspectRatio: 0.7, // Riduciamo l'aspect ratio per rendere le card più piccole
-        crossAxisSpacing: 8, // Riduciamo lo spazio tra le colonne
-        mainAxisSpacing: 8, // Riduciamo lo spazio tra le righe
+        crossAxisCount: 2,
+        childAspectRatio: 0.8,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
       itemCount: trophies.length,
       itemBuilder: (context, index) => _buildTrophyCard(trophies[index], store, player),
@@ -235,6 +239,8 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
 
     return Card(
       elevation: trophy.isOwned ? 8 : 4,
+      // Contrasto elevato per le card
+      color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
@@ -262,6 +268,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'OpenDyslexic',
+                  color: Colors.black87,  // Contrasto elevato per il testo
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -269,7 +276,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               Text(
                 trophy.rarity,
                 style: TextStyle(
-                  color: Colors.grey[600],
+                  color: Colors.grey[800],  // Contrasto elevato per il testo secondario
                   fontSize: 12,
                   fontFamily: 'OpenDyslexic',
                 ),
@@ -301,7 +308,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   padding: const EdgeInsets.only(top: 8),
                   child: Icon(
                     Icons.check_circle,
-                    color: Colors.green,
+                    color: Colors.green[700],  // Contrasto elevato per l'icona di conferma
                     size: 20,
                   ),
                 ),
@@ -326,6 +333,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontFamily: 'OpenDyslexic',
                   fontSize: 20,
+                  color: Colors.black87,  // Contrasto elevato per il titolo
                 ),
               ),
             ),
@@ -341,6 +349,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontSize: 16,
                   fontFamily: 'OpenDyslexic',
+                  color: Colors.black87,  // Contrasto elevato per la descrizione
                 ),
               ),
               const SizedBox(height: 16),
@@ -353,6 +362,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontFamily: 'OpenDyslexic',
+                      color: Colors.black87,  // Contrasto elevato
                     ),
                   ),
                 ],
@@ -363,6 +373,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontFamily: 'OpenDyslexic',
                   fontWeight: FontWeight.bold,
+                  color: Colors.black87,  // Contrasto elevato
                 ),
               ),
               if (!trophy.isOwned && player != null) ...[
@@ -376,6 +387,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontFamily: 'OpenDyslexic',
+                        color: Colors.black87,  // Contrasto elevato
                       ),
                     ),
                   ],
@@ -398,7 +410,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         'Trofeo acquistato con successo!',
                         style: TextStyle(fontFamily: 'OpenDyslexic'),
                       ),
-                      backgroundColor: Colors.green,
+                      backgroundColor: Colors.green,  // Contrasto elevato per il feedback
                     ),
                   );
                 } else {
@@ -408,7 +420,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         'Impossibile acquistare il trofeo',
                         style: TextStyle(fontFamily: 'OpenDyslexic'),
                       ),
-                      backgroundColor: Colors.red,
+                      backgroundColor: Colors.red,  // Contrasto elevato per l'errore
                     ),
                   );
                 }
@@ -416,14 +428,20 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   : null,
               child: const Text(
                 'Acquista',
-                style: TextStyle(fontFamily: 'OpenDyslexic'),
+                style: TextStyle(
+                  fontFamily: 'OpenDyslexic',
+                  color: Colors.blue,  // Contrasto elevato per il pulsante
+                ),
               ),
             ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
               'Chiudi',
-              style: TextStyle(fontFamily: 'OpenDyslexic'),
+              style: TextStyle(
+                fontFamily: 'OpenDyslexic',
+                color: Colors.red,  // Contrasto elevato per il pulsante di chiusura
+              ),
             ),
           ),
         ],

@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import '../models/recognition_result.dart';
 
+/// Widget che mostra un popup animato per i cristalli guadagnati,
+/// supporta sia il feedback degli esercizi singoli che il riepilogo della sessione
 class CrystalPopup extends StatefulWidget {
   final int earnedCrystals;
   final int level;
   final double progress;
   final RecognitionResult? recognitionResult;
+  final bool isSessionSummary;
+  final bool isStreakBonus;
+  final int? consecutiveDays;
+  final VoidCallback? onContinue;
+  final VoidCallback? onEnd;
 
   const CrystalPopup({
     Key? key,
@@ -13,6 +20,11 @@ class CrystalPopup extends StatefulWidget {
     required this.level,
     required this.progress,
     this.recognitionResult,
+    this.isSessionSummary = false,
+    this.isStreakBonus = false,
+    this.consecutiveDays,
+    this.onContinue,
+    this.onEnd,
   }) : super(key: key);
 
   @override
@@ -78,6 +90,7 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
     super.dispose();
   }
 
+  /// Determina il colore del cristallo in base al livello
   Color getCrystalColor() {
     double opacity = 0.5 + (widget.progress * 0.5);
     opacity = opacity.clamp(0.0, 1.0);
@@ -107,13 +120,31 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Titolo del popup
+            Text(
+              widget.isStreakBonus
+                  ? 'Bravo! Continua ad Esercitarti e ti regaleremo altri Cristalli'
+                  : widget.isSessionSummary
+                  ? 'Riepilogo Sessione'
+                  : 'Cristalli Guadagnati!',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+                fontFamily: 'OpenDyslexic',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+
+            // Animazione del cristallo
             AnimatedBuilder(
               animation: _controller,
               builder: (context, child) {
                 return Transform.scale(
                   scale: _scaleAnimation.value,
                   child: Transform.rotate(
-                    angle: _rotateAnimation.value * 0.2 - 0.1, // Rotate between -0.1 and 0.1 radians
+                    angle: _rotateAnimation.value * 0.2 - 0.1,
                     child: Container(
                       decoration: BoxDecoration(
                         boxShadow: [
@@ -134,17 +165,35 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
                 );
               },
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
+
+            // Cristalli guadagnati
             Text(
-              '${widget.earnedCrystals} Cristalli',
+              '+${widget.earnedCrystals} Cristalli',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[800],
+                fontFamily: 'OpenDyslexic',
               ),
             ),
+
+            // Giorni consecutivi (se applicabile)
+            if (widget.consecutiveDays != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Giorni consecutivi: ${widget.consecutiveDays}',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  fontFamily: 'OpenDyslexic',
+                ),
+              ),
+            ],
+
+            // Risultato del riconoscimento (se presente)
             if (widget.recognitionResult != null) ...[
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               LinearProgressIndicator(
                 value: widget.recognitionResult!.similarity,
                 backgroundColor: Colors.grey[200],
@@ -155,13 +204,14 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
                 ),
                 minHeight: 8,
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
                 widget.recognitionResult!.getFeedbackMessage(),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
+                  fontFamily: 'OpenDyslexic',
                 ),
               ),
             ],
@@ -169,14 +219,45 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
         ),
       ),
       actions: [
-        TextButton(
-          child: Text('Continua'),
-          onPressed: () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(
-            foregroundColor: getCrystalColor(),
-            textStyle: TextStyle(fontWeight: FontWeight.bold),
+        // Pulsanti di azione
+        if (widget.isSessionSummary) ...[
+          TextButton(
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: widget.onEnd ?? () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Fine',
+              style: TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
           ),
-        ),
+          TextButton(
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: widget.onContinue ?? () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Continua',
+              style: TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
+          ),
+        ] else ...[
+          TextButton(
+            child: const Text(
+              'Continua',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontFamily: 'OpenDyslexic',
+              ),
+            ),
+            onPressed: widget.onContinue ?? () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(
+              foregroundColor: getCrystalColor(),
+            ),
+          ),
+        ],
       ],
     );
   }

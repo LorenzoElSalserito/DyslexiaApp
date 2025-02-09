@@ -32,9 +32,10 @@ enum ExerciseType {
 
 /// Stati dell'audio
 enum AudioState {
-  stopped,
-  recording,
-  paused,
+  stopped,     // Registrazione ferma
+  recording,   // Registrazione in corso
+  paused,      // Registrazione in pausa
+  waitingNext  // In attesa della prossima registrazione
 }
 
 /// Tipi di feedback
