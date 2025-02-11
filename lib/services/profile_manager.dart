@@ -92,13 +92,13 @@ class ProfileManager extends ChangeNotifier {
       if (profilesJson != null) {
         final List<dynamic> profilesList = json.decode(profilesJson);
         _profiles = profilesList
-            .map((data) => PlayerProfile.fromJson(data as Map<String, dynamic>))
+            .map((data) =>
+            PlayerProfile.fromJson(data as Map<String, dynamic>))
             .toList();
         notifyListeners();
       }
     } catch (e) {
       print('Errore nel caricamento dei profili: $e');
-      // In caso di errore, inizializza con una lista vuota
       _profiles = [];
       notifyListeners();
     }
@@ -107,7 +107,8 @@ class ProfileManager extends ChangeNotifier {
   /// Salva i profili nel sistema
   Future<void> _saveProfiles() async {
     try {
-      final profilesJson = json.encode(_profiles.map((p) => p.toJson()).toList());
+      final profilesJson =
+      json.encode(_profiles.map((p) => p.toJson()).toList());
       await _prefs.setString(_profilesKey, profilesJson);
     } catch (e) {
       print('Errore nel salvataggio dei profili: $e');

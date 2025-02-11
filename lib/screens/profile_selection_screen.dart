@@ -50,7 +50,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   }
 
   // Gestione eliminazione profili
-  Future<void> _deleteSelectedProfiles(BuildContext context, PlayerManager playerManager) async {
+  Future<void> _deleteSelectedProfiles(
+      BuildContext context, PlayerManager playerManager) async {
     if (_selectedProfiles.isEmpty) return;
 
     final shouldDelete = await showDialog<bool>(
@@ -149,7 +150,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Colors.lightBlue.shade800, Colors.lightBlue.shade500],
+                colors: [Colors.blue.shade800, Colors.blue.shade600],
               ),
             ),
             child: SafeArea(
@@ -374,12 +375,12 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     return Hero(
       tag: 'profile_avatar_${profile.id}',
       child: CircleAvatar(
-        radius: 30, // Ridotto da 40 a 30
-        backgroundColor: Colors.lightBlue.shade200,
+        radius: 35,
+        backgroundColor: Colors.blue,
         child: Text(
-          profile.name[0].toUpperCase(),
+          profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '',
           style: const TextStyle(
-            fontSize: 24, // Ridotto da 36 a 24
+            fontSize: 36,
             fontWeight: FontWeight.bold,
             color: Colors.white,
             fontFamily: 'OpenDyslexic',
@@ -397,7 +398,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
         Text(
           profile.name,
           style: const TextStyle(
-            fontSize: 14, // Ridotto da 20 a 14
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'OpenDyslexic',
           ),
@@ -409,21 +410,21 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
           Text(
             'Liv. ${profile.currentLevel}',
             style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
+              fontSize: 16,
+              color: Colors.grey[900],
               fontFamily: 'OpenDyslexic',
             ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.diamond, size: 12, color: Colors.amber),
+              const Icon(Icons.diamond, size: 16, color: Colors.deepOrange),
               const SizedBox(width: 2),
               Text(
                 '${profile.totalCrystals}',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+                  fontSize: 16,
+                  color: Colors.grey[900],
                   fontFamily: 'OpenDyslexic',
                 ),
               ),
@@ -442,7 +443,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: Colors.lightBlue.shade200,
+            color: Colors.white,
             width: 2,
           ),
         ),
@@ -457,7 +458,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             children: [
               CircleAvatar(
                 radius: 30, // Dimensione ridotta per corrispondere agli altri profili
-                backgroundColor: Colors.lightBlue.shade100,
+                backgroundColor: Colors.greenAccent,
                 child: Icon(
                   Icons.add,
                   size: 30,
@@ -466,7 +467,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               ),
               const SizedBox(height: 8),
               const Text(
-                'Nuovo\nProfilo', // Testo su due righe per mantenere il layout compatto
+                'Nuovo\nProfilo',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -486,8 +487,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     final playerManager = Provider.of<PlayerManager>(context, listen: false);
     try {
       await playerManager.selectProfile(profile);
-      final globalPlayer = Provider.of<Player>(context, listen: false);
-      await globalPlayer.loadProgress();
+      // Non usiamo più Provider.of<Player>, poiché il profilo attivo è gestito da PlayerManager.
+      // Una volta selezionato il profilo, passiamo alla schermata di gioco.
       if (context.mounted) {
         Navigator.pushReplacement(
           context,

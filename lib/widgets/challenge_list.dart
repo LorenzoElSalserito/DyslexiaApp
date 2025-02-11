@@ -188,14 +188,14 @@ class ChallengeCard extends StatelessWidget {
       children: [
         const Icon(
           Icons.diamond,
-          color: Colors.amber,
+          color: Colors.deepOrange,
           size: 16,
         ),
         const SizedBox(width: 4),
         Text(
           '+${challenge.crystalReward}',
           style: const TextStyle(
-            color: Colors.amber,
+            color: Colors.deepOrange,
             fontWeight: FontWeight.bold,
             fontFamily: 'OpenDyslexic',
           ),

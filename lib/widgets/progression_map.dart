@@ -3,85 +3,128 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/game_service.dart';
+import '../services/player_manager.dart';
 import '../models/player.dart';
 import '../models/level.dart';
 import '../models/enums.dart';
 
 /// Widget che mostra la mappa di progressione del giocatore, inclusi il livello corrente,
-/// i sottolivelli, e i vari indicatori di progresso.
+/// i sottolivelli e gli indicatori di progresso. La disposizione è responsive e ancorata.
 class ProgressionMap extends StatelessWidget {
   const ProgressionMap({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final player = Provider.of<Player>(context);
+    // Otteniamo il profilo attivo dal PlayerManager
+    final playerManager = Provider.of<PlayerManager>(context);
+    final Player? player = playerManager.currentProfile;
     final gameService = Provider.of<GameService>(context);
     final currentSubLevel = gameService.getCurrentSubLevel();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildLevelHeader(player),
-        const SizedBox(height: 8),
-        _buildProgressBar(gameService),
-        const SizedBox(height: 8),
-        _buildLevelDetails(gameService, currentSubLevel),
-        if (gameService.hasActiveStreak) ...[
-          const SizedBox(height: 8),
-          _buildStreakIndicator(gameService.streak),
-        ],
-      ],
+    if (player == null) {
+      return const Center(
+        child: Text(
+          'Nessun profilo selezionato',
+          style: TextStyle(fontFamily: 'OpenDyslexic', fontSize: 18),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          height: constraints.maxHeight,
+          width: constraints.maxWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Flexible(
+                flex: 2,
+                child: _buildLevelHeader(player),
+              ),
+              const SizedBox(height: 4),
+              Flexible(
+                flex: 2,
+                child: _buildProgressBar(gameService),
+              ),
+              const SizedBox(height: 4),
+              // Utilizzo di FittedBox per scalare i dettagli se lo spazio è insufficiente
+              Flexible(
+                flex: 3,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topCenter,
+                  child: _buildLevelDetails(gameService, currentSubLevel),
+                ),
+              ),
+              if (gameService.hasActiveStreak) ...[
+                const SizedBox(height: 4),
+                Flexible(
+                  flex: 1,
+                  child: _buildStreakIndicator(gameService.streak),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildLevelHeader(Player player) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.pink.shade500, Colors.pink.shade900],
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                _getLevelIcon(player.currentLevel),
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Livello ${player.currentLevel}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontFamily: 'OpenDyslexic',
-                ),
-              ),
-            ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.pink.shade500, Colors.pink.shade900],
           ),
-          if (player.newGamePlusCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'NG+${player.newGamePlusCount}',
-                style: const TextStyle(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getLevelIcon(player.currentLevel),
                   color: Colors.white,
-                  fontSize: 12,
-                  fontFamily: 'OpenDyslexic',
+                  size: 20,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Livello ${player.currentLevel}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'OpenDyslexic',
+                  ),
+                ),
+              ],
+            ),
+            if (player.newGamePlusCount > 0)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'NG+${player.newGamePlusCount}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontFamily: 'OpenDyslexic',
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -89,8 +132,10 @@ class ProgressionMap extends StatelessWidget {
   Widget _buildProgressBar(GameService gameService) {
     double progress = gameService.getLevelUpProgress();
     final averageAccuracy = gameService.getAverageAccuracy();
+    final isGoodAccuracy = averageAccuracy >= GameService.requiredAccuracy;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 240,
@@ -112,7 +157,7 @@ class ProgressionMap extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: averageAccuracy >= GameService.requiredAccuracy
+                            colors: isGoodAccuracy
                                 ? [Colors.green.shade400, Colors.green.shade600]
                                 : [Colors.orange.shade400, Colors.orange.shade600],
                           ),
@@ -126,14 +171,15 @@ class ProgressionMap extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          '${(averageAccuracy * 100).toStringAsFixed(1)}% Accuratezza',
-          style: TextStyle(
-            color: averageAccuracy >= GameService.requiredAccuracy
-                ? Colors.green
-                : Colors.orange,
-            fontSize: 12,
-            fontFamily: 'OpenDyslexic',
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '${(averageAccuracy * 100).toStringAsFixed(1)}% Accuratezza',
+            style: TextStyle(
+              color: isGoodAccuracy ? Colors.green : Colors.orange,
+              fontSize: 12,
+              fontFamily: 'OpenDyslexic',
+            ),
           ),
         ),
       ],
@@ -151,16 +197,21 @@ class ProgressionMap extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           _buildCompactDetailRow('Fase:', currentSubLevel.name, Icons.flag),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           _buildCompactDetailRow(
-              'Obiettivo:',
-              '${(GameService.requiredAccuracy * 100).toInt()}%',
-              Icons.track_changes
+            'Obiettivo:',
+            '${(GameService.requiredAccuracy * 100).toInt()}%',
+            Icons.track_changes,
           ),
-          const SizedBox(height: 6),
-          _buildCompactDetailRow('Giorni:', '$daysWithGoodAccuracy/$targetDays', Icons.calendar_today),
+          const SizedBox(height: 2),
+          _buildCompactDetailRow(
+            'Giorni:',
+            '$daysWithGoodAccuracy/$targetDays',
+            Icons.calendar_today,
+          ),
         ],
       ),
     );
@@ -168,25 +219,31 @@ class ProgressionMap extends StatelessWidget {
 
   Widget _buildCompactDetailRow(String label, String value, IconData icon) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: Colors.white, size: 14),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 12,
-            fontFamily: 'OpenDyslexic',
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 12,
+              fontFamily: 'OpenDyslexic',
+            ),
           ),
         ),
         const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'OpenDyslexic',
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'OpenDyslexic',
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -220,10 +277,10 @@ class ProgressionMap extends StatelessWidget {
 
   IconData _getLevelIcon(int level) {
     return switch (level) {
-      1 => Icons.text_fields,
-      2 => Icons.short_text,
-      3 => Icons.article,
-      4 => Icons.menu_book,
+      1 => Icons.text_fields,    // Livello parole
+      2 => Icons.short_text,     // Livello frasi
+      3 => Icons.article,        // Livello paragrafi
+      4 => Icons.menu_book,      // Livello pagine
       _ => Icons.help,
     };
   }

@@ -3,104 +3,38 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'package:flutter_sound/flutter_sound.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../models/enums.dart';
 
-/// Stato interno del servizio audio
-class _AudioServiceState {
-  bool isInitialized = false;
-  bool isSimulatedMode = false;
-  bool isReady = false;
-  AudioState currentState = AudioState.stopped;
-  int currentAttempt = 0;
-  int maxAttempts = 5;
-  bool isSessionComplete = false;
-  Duration delayBetweenRecordings = const Duration(seconds: 3);
-  double currentVolume = 0.0;
-  Timer? volumeTimer;
-
-  void reset() {
-    volumeTimer?.cancel();
-    isInitialized = false;
-    isReady = false;
-    currentState = AudioState.stopped;
-    currentAttempt = 0;
-    isSessionComplete = false;
-    currentVolume = 0.0;
-  }
-}
-
-/// Controller per gli stream di eventi audio
-class _StreamControllers {
-  StreamController<double>? _volume;
-  StreamController<AudioState>? _state;
-  StreamController<int>? _progress;
-
-  // Inizializzazione lazy degli stream
-  StreamController<double> get volume {
-    _volume ??= StreamController<double>.broadcast();
-    return _volume!;
-  }
-
-  StreamController<AudioState> get state {
-    _state ??= StreamController<AudioState>.broadcast();
-    return _state!;
-  }
-
-  StreamController<int> get progress {
-    _progress ??= StreamController<int>.broadcast();
-    return _progress!;
-  }
-
-  // Verifica se gli stream sono chiusi
-  bool get isClosed {
-    bool volumeClosed = _volume?.isClosed ?? false;
-    bool stateClosed = _state?.isClosed ?? false;
-    bool progressClosed = _progress?.isClosed ?? false;
-    return volumeClosed || stateClosed || progressClosed;
-  }
-
-  // Reinizializza gli stream se necessario
-  void reset() {
-    if (_volume?.isClosed ?? false) {
-      _volume = StreamController<double>.broadcast();
-    }
-    if (_state?.isClosed ?? false) {
-      _state = StreamController<AudioState>.broadcast();
-    }
-    if (_progress?.isClosed ?? false) {
-      _progress = StreamController<int>.broadcast();
-    }
-  }
-
-  // Chiude gli stream in modo sicuro
-  Future<void> dispose() async {
-    if (!(_volume?.isClosed ?? true)) await _volume?.close();
-    if (!(_state?.isClosed ?? true)) await _state?.close();
-    if (!(_progress?.isClosed ?? true)) await _progress?.close();
-    _volume = null;
-    _state = null;
-    _progress = null;
-  }
-}
-
-/// Servizio per la gestione delle registrazioni audio
+/// Servizio che gestisce tutti gli aspetti delle registrazioni audio nell'applicazione.
+/// Si occupa della registrazione, della gestione del volume e del ciclo di vita
+/// delle sessioni audio.
 class AudioService {
-  static const Duration recordingDuration = Duration(seconds: 5);
+  // Costanti per la gestione della registrazione
+  static const Duration _recordingDuration = Duration(seconds: 5);
+  static const Duration _delayBetweenRecordings = Duration(seconds: 3);
+  static const int _maxAttempts = 5;
+
+  // Singleton pattern
   static final AudioService _instance = AudioService._internal();
   factory AudioService() => _instance;
 
-  final _streamControllers = _StreamControllers();
-  final _state = _AudioServiceState();
+  // Stato interno del servizio
+  final _AudioServiceState _state = _AudioServiceState();
+  final _StreamControllers _streamControllers = _StreamControllers();
+
+  // Componenti audio
   FlutterSoundRecorder? _recorder;
   String? _recordingPath;
   Timer? _recordingTimer;
+  Timer? _volumeUpdateTimer;
   bool _processingResult = false;
-  final _random = Random();
+  final Random _random = Random();
 
+  /// Costruttore privato per il singleton
   AudioService._internal() {
     debugPrint('AudioService inizializzato per ${Platform.operatingSystem}');
   }
@@ -225,14 +159,14 @@ class AudioService {
   /// Avvia il timer di registrazione
   void _startRecordingTimer() {
     _recordingTimer?.cancel();
-    _recordingTimer = Timer(recordingDuration, () {
+    _recordingTimer = Timer(_recordingDuration, () {
       if (_state.currentState == AudioState.recording) {
         stopRecording();
       }
     });
   }
 
-  /// Ferma la registrazione
+  /// Ferma la registrazione corrente
   Future<String> stopRecording() async {
     if (_state.currentState != AudioState.recording || _processingResult) {
       return '';
@@ -243,12 +177,12 @@ class AudioService {
       final path = await _stopCurrentRecording();
       _processingResult = false;
 
-      if (_state.currentAttempt >= _state.maxAttempts) {
+      if (_state.currentAttempt >= _state._maxAttempts) {
         _state.isSessionComplete = true;
         _updateState(AudioState.stopped);
       } else {
         _updateState(AudioState.waitingNext);
-        Timer(_state.delayBetweenRecordings, () {
+        Timer(_state._delayBetweenRecordings, () {
           if (_state.currentState == AudioState.waitingNext) {
             _updateState(AudioState.stopped);
           }
@@ -264,12 +198,12 @@ class AudioService {
     }
   }
 
-  /// Ferma la registrazione corrente
+  /// Ferma l'attuale registrazione e restituisce il path del file
   Future<String> _stopCurrentRecording() async {
     _recordingTimer?.cancel();
     _state.volumeTimer?.cancel();
 
-    if (!_state.isSimulatedMode) {
+    if (!_state.isSimulatedMode && _recorder != null) {
       try {
         await _recorder?.stopRecorder();
       } catch (e) {
@@ -296,7 +230,7 @@ class AudioService {
     return true;
   }
 
-  /// Rilascia le risorse
+  /// Rilascia le risorse utilizzate
   Future<void> dispose() async {
     _recordingTimer?.cancel();
     _state.volumeTimer?.cancel();
@@ -308,13 +242,110 @@ class AudioService {
     _state.reset();
   }
 
-  // Stream e getters pubblici
+  // Getters pubblici
+
+  /// Stream del livello di volume aggiornato
   Stream<double> get volumeLevel => _streamControllers.volume.stream;
+
+  /// Stream dello stato audio
   Stream<AudioState> get audioState => _streamControllers.state.stream;
+
+  /// Stream del progresso della registrazione (tentativi)
   Stream<int> get recordingProgress => _streamControllers.progress.stream;
+
+  /// Ritorna true se è in corso una registrazione
   bool get isRecording => _state.currentState == AudioState.recording;
+
+  /// Stato corrente del servizio audio
   AudioState get currentState => _state.currentState;
+
+  /// Ritorna true se la sessione di registrazione è completa
   bool get isSessionComplete => _state.isSessionComplete;
-  int get maxAttempts => _state.maxAttempts;
-  Duration get delayBetweenRecordings => _state.delayBetweenRecordings;
+
+  /// (Getter esistente) Numero massimo di tentativi
+  int get attemptCount => _state._maxAttempts;
+
+  /// (Getter esistente) Ritardo tra una registrazione e l'altra
+  Duration get recordingDelay => _state._delayBetweenRecordings;
+
+  /// **Nuovi Getters** aggiunti per correzione:
+  int get maxAttempts => _state._maxAttempts;
+  Duration get delayBetweenRecordings => _state._delayBetweenRecordings;
+}
+
+/// Stato interno del servizio audio
+class _AudioServiceState {
+  bool isInitialized = false;
+  bool isSimulatedMode = false;
+  bool isReady = false;
+  AudioState currentState = AudioState.stopped;
+  int currentAttempt = 0;
+  final int _maxAttempts = AudioService._maxAttempts;
+  bool isSessionComplete = false;
+  final Duration _delayBetweenRecordings = AudioService._delayBetweenRecordings;
+  double currentVolume = 0.0;
+  Timer? volumeTimer;
+
+  void reset() {
+    volumeTimer?.cancel();
+    isInitialized = false;
+    isReady = false;
+    currentState = AudioState.stopped;
+    currentAttempt = 0;
+    isSessionComplete = false;
+    currentVolume = 0.0;
+  }
+}
+
+/// Controller per gli stream di eventi audio
+class _StreamControllers {
+  StreamController<double>? _volume;
+  StreamController<AudioState>? _state;
+  StreamController<int>? _progress;
+
+  // Inizializzazione lazy degli stream
+  StreamController<double> get volume {
+    _volume ??= StreamController<double>.broadcast();
+    return _volume!;
+  }
+
+  StreamController<AudioState> get state {
+    _state ??= StreamController<AudioState>.broadcast();
+    return _state!;
+  }
+
+  StreamController<int> get progress {
+    _progress ??= StreamController<int>.broadcast();
+    return _progress!;
+  }
+
+  // Verifica se gli stream sono chiusi
+  bool get isClosed {
+    return (_volume?.isClosed ?? false) ||
+        (_state?.isClosed ?? false) ||
+        (_progress?.isClosed ?? false);
+  }
+
+  // Reinizializza gli stream se necessario
+  void reset() {
+    if (_volume?.isClosed ?? false) {
+      _volume = StreamController<double>.broadcast();
+    }
+    if (_state?.isClosed ?? false) {
+      _state = StreamController<AudioState>.broadcast();
+    }
+    if (_progress?.isClosed ?? false) {
+      _progress = StreamController<int>.broadcast();
+    }
+  }
+
+  // Chiude gli stream in modo sicuro
+  Future<void> dispose() async {
+    if (!(_volume?.isClosed ?? true)) await _volume?.close();
+    if (!(_state?.isClosed ?? true)) await _state?.close();
+    if (!(_progress?.isClosed ?? true)) await _progress?.close();
+    _volume = null;
+    _state = null;
+    _progress = null;
+  }
 }

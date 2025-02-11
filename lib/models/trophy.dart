@@ -1,19 +1,16 @@
-// lib/models/trophy.dart
-
 import 'package:flutter/material.dart';
 
-/// Un trofeo acquistabile che sblocca un titolo per il giocatore
 class Trophy {
   final String id;
-  final String title;  // Il titolo che verrà visualizzato accanto al nome del giocatore
-  final String name;   // Il nome del trofeo nello store
+  final String title; // Titolo visualizzato accanto al nome del giocatore
+  final String name;  // Nome del trofeo nello store
   final String description;
-  final int baseCost;  // Costo base del trofeo
+  final int baseCost;
   final IconData icon;
   final Color color;
   final String rarity;
   bool isOwned;
-  final int sequenceNumber;  // Numero di sequenza per calcolare il costo reale
+  final int sequenceNumber;
 
   Trophy({
     required this.id,
@@ -28,16 +25,13 @@ class Trophy {
     this.isOwned = false,
   });
 
-  /// Calcola il costo reale del trofeo basato sul numero di sequenza
   int get cost => (baseCost * (1 + (2 * sequenceNumber))).round();
 
-  // Converte il trofeo in formato JSON per il salvataggio
   Map<String, dynamic> toJson() => {
     'id': id,
     'isOwned': isOwned,
   };
 
-  // Crea un trofeo da JSON
   factory Trophy.fromJson(Map<String, dynamic> json, Trophy template) {
     return Trophy(
       id: template.id,
@@ -53,7 +47,6 @@ class Trophy {
     );
   }
 
-  // Lista predefinita di trofei disponibili
   static List<Trophy> defaultTrophies = [
     Trophy(
       id: 'amateur_reader',

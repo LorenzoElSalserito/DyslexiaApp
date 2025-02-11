@@ -47,7 +47,7 @@ class VoiceRecognitionFeedback extends StatelessWidget {
                     backgroundColor: isCompleted
                         ? Colors.green
                         : isCurrent
-                        ? Colors.blue
+                        ? Colors.yellowAccent
                         : Colors.grey[300],
                     child: isCompleted
                         ? const Icon(Icons.check, size: 12, color: Colors.white)
@@ -86,7 +86,7 @@ class VoiceRecognitionFeedback extends StatelessWidget {
             child: Text(
               'Sto ascoltando...',
               style: TextStyle(
-                color: Colors.blue,
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),

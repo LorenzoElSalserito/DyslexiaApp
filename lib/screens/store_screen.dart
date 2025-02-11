@@ -1,8 +1,7 @@
-// lib/screens/store_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/store_service.dart';
+import '../services/player_manager.dart';
 import '../models/trophy.dart';
 import '../models/player.dart';
 
@@ -37,7 +36,6 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            // Utilizzo di contrasti elevati per il background
             colors: [Colors.blue.shade900, Colors.blue.shade700],
           ),
         ),
@@ -73,56 +71,53 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
   }
 
   Widget _buildHeader() {
-    return Consumer<Player>(
-      builder: (context, player, child) {
+    return Consumer<PlayerManager>(
+      builder: (context, playerManager, child) {
+        final Player? player = playerManager.currentProfile;
+        final String crystals = player != null ? player.totalCrystals.toString() : '0';
         return Container(
           padding: const EdgeInsets.all(16),
-          child: Column(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                      const Text(
-                        'Negozio Trofei',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontFamily: 'OpenDyslexic',
-                        ),
-                      ),
-                    ],
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      // Contrasto elevato per il container dei cristalli
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.diamond, color: Colors.amber, size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${player.totalCrystals}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'OpenDyslexic',
-                          ),
-                        ),
-                      ],
+                  const Text(
+                    'Negozio Trofei',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'OpenDyslexic',
                     ),
                   ),
                 ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.diamond, color: Colors.amber, size: 24),
+                    const SizedBox(width: 8),
+                    Text(
+                      crystals,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'OpenDyslexic',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -136,16 +131,13 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
       children: [
         _buildFilters(),
         Expanded(
-          child: Consumer2<StoreService, Player>(
-            builder: (context, store, player, child) {
-              var trophies = store.availableTrophies
-                  .where((t) => !t.isOwned)
-                  .toList();
-
+          child: Consumer2<StoreService, PlayerManager>(
+            builder: (context, store, playerManager, child) {
+              final Player? player = playerManager.currentProfile;
+              var trophies = store.availableTrophies.where((t) => !t.isOwned).toList();
               if (_currentFilter != 'Tutti') {
                 trophies = trophies.where((t) => t.rarity == _currentFilter).toList();
               }
-
               if (trophies.isEmpty) {
                 return const Center(
                   child: Text(
@@ -158,7 +150,6 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   ),
                 );
               }
-
               return _buildTrophyGrid(trophies, store, player);
             },
           ),
@@ -171,7 +162,6 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
     return Consumer<StoreService>(
       builder: (context, store, child) {
         final trophies = store.ownedTrophies;
-
         if (trophies.isEmpty) {
           return const Center(
             child: Text(
@@ -184,7 +174,6 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
             ),
           );
         }
-
         return _buildTrophyGrid(trophies, store, null);
       },
     );
@@ -205,7 +194,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(fontFamily: 'OpenDyslexic'),
               ),
               selected: _currentFilter == filter,
-              selectedColor: Colors.amber,  // Contrasto elevato per il filtro selezionato
+              selectedColor: Colors.amber,
               checkmarkColor: Colors.black,
               onSelected: (selected) {
                 setState(() {
@@ -223,11 +212,11 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
   Widget _buildTrophyGrid(List<Trophy> trophies, StoreService store, Player? player) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 250,
+        childAspectRatio: 0.65,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
       ),
       itemCount: trophies.length,
       itemBuilder: (context, index) => _buildTrophyCard(trophies[index], store, player),
@@ -236,10 +225,8 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
 
   Widget _buildTrophyCard(Trophy trophy, StoreService store, Player? player) {
     final bool canBuy = player != null && store.canPurchaseTrophy(trophy);
-
     return Card(
-      elevation: trophy.isOwned ? 8 : 4,
-      // Contrasto elevato per le card
+      margin: const EdgeInsets.only(bottom: 8),
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -254,6 +241,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
@@ -261,14 +249,14 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 size: 48,
                 color: trophy.color,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 trophy.name,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'OpenDyslexic',
-                  color: Colors.black87,  // Contrasto elevato per il testo
+                  color: Colors.black87,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -276,7 +264,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               Text(
                 trophy.rarity,
                 style: TextStyle(
-                  color: Colors.grey[800],  // Contrasto elevato per il testo secondario
+                  color: Colors.grey[800],
                   fontSize: 12,
                   fontFamily: 'OpenDyslexic',
                 ),
@@ -298,6 +286,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         color: canBuy ? Colors.black : Colors.grey,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'OpenDyslexic',
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -308,7 +297,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   padding: const EdgeInsets.only(top: 8),
                   child: Icon(
                     Icons.check_circle,
-                    color: Colors.green[700],  // Contrasto elevato per l'icona di conferma
+                    color: Colors.green[700],
                     size: 20,
                   ),
                 ),
@@ -333,7 +322,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontFamily: 'OpenDyslexic',
                   fontSize: 20,
-                  color: Colors.black87,  // Contrasto elevato per il titolo
+                  color: Colors.black87,
                 ),
               ),
             ),
@@ -349,7 +338,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontSize: 16,
                   fontFamily: 'OpenDyslexic',
-                  color: Colors.black87,  // Contrasto elevato per la descrizione
+                  color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 16),
@@ -362,7 +351,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontFamily: 'OpenDyslexic',
-                      color: Colors.black87,  // Contrasto elevato
+                      color: Colors.black87,
                     ),
                   ),
                 ],
@@ -373,7 +362,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontFamily: 'OpenDyslexic',
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,  // Contrasto elevato
+                  color: Colors.black87,
                 ),
               ),
               if (!trophy.isOwned && player != null) ...[
@@ -387,7 +376,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontFamily: 'OpenDyslexic',
-                        color: Colors.black87,  // Contrasto elevato
+                        color: Colors.black87,
                       ),
                     ),
                   ],
@@ -410,7 +399,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         'Trofeo acquistato con successo!',
                         style: TextStyle(fontFamily: 'OpenDyslexic'),
                       ),
-                      backgroundColor: Colors.green,  // Contrasto elevato per il feedback
+                      backgroundColor: Colors.green,
                     ),
                   );
                 } else {
@@ -420,7 +409,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         'Impossibile acquistare il trofeo',
                         style: TextStyle(fontFamily: 'OpenDyslexic'),
                       ),
-                      backgroundColor: Colors.red,  // Contrasto elevato per l'errore
+                      backgroundColor: Colors.red,
                     ),
                   );
                 }
@@ -430,7 +419,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 'Acquista',
                 style: TextStyle(
                   fontFamily: 'OpenDyslexic',
-                  color: Colors.blue,  // Contrasto elevato per il pulsante
+                  color: Colors.blue,
                 ),
               ),
             ),
@@ -440,7 +429,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               'Chiudi',
               style: TextStyle(
                 fontFamily: 'OpenDyslexic',
-                color: Colors.red,  // Contrasto elevato per il pulsante di chiusura
+                color: Colors.red,
               ),
             ),
           ),

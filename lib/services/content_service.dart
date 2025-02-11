@@ -7,21 +7,28 @@ import '../models/content_models.dart';
 import '../models/enums.dart';
 import '../config/app_config.dart';
 
-/// ContentService gestisce il caricamento e la gestione di tutto il contenuto testuale
-/// dell'applicazione, inclusi parole, frasi, paragrafi e pagine.
+/// Servizio responsabile per il caricamento, la gestione e la distribuzione
+/// di tutti i contenuti testuali dell'applicazione (parole, frasi, paragrafi, pagine).
+/// Implementa anche meccanismi di cache e tracking dell'utilizzo.
 class ContentService extends ChangeNotifier {
   // Cache per i contenuti caricati
   late ContentSet _contentSet;
   final Map<String, List<String>> _cachedContent = {};
 
-  // Tracciamento delle parole usate
+  // Tracking delle parole usate per evitare ripetizioni
   final Set<String> _usedWords = {};
-  static const int _maxUsedWords = 20; // Reset dopo 20 parole usate
+  final Set<String> _usedSentences = {};
+  static const int _maxUsedItems = 20;
   int _exerciseCounter = 0;
 
   // Gestione dello stato
   bool _isInitialized = false;
   final Random _random = Random();
+  String? _lastError;
+
+  // Statistiche di utilizzo
+  final Map<String, int> _wordUsageStats = {};
+  final Map<Difficulty, int> _difficultyStats = {};
 
   /// Inizializza il servizio caricando tutti i contenuti necessari
   Future<void> initialize() async {
@@ -68,9 +75,11 @@ class ContentService extends ChangeNotifier {
       );
 
       _isInitialized = true;
+      _lastError = null;
       notifyListeners();
     } catch (e) {
-      print('Errore nell\'inizializzazione di ContentService: $e');
+      _lastError = 'Errore nell\'inizializzazione: $e';
+      print(_lastError);
       rethrow;
     }
   }
@@ -89,7 +98,8 @@ class ContentService extends ChangeNotifier {
 
       return content;
     } catch (e) {
-      print('Errore nel caricamento del file $path: $e');
+      _lastError = 'Errore nel caricamento del file $path: $e';
+      print(_lastError);
       return '';
     }
   }
@@ -100,10 +110,11 @@ class ContentService extends ChangeNotifier {
       final content = await loadAsset(path);
       return content.split('\n')
           .where((word) => word.trim().isNotEmpty)
-          .map((word) => word.trim().toLowerCase()) // Normalizziamo le parole
+          .map((word) => _normalizeWord(word))
           .toList();
     } catch (e) {
-      print('Errore nel caricamento delle parole da $path: $e');
+      _lastError = 'Errore nel caricamento delle parole da $path: $e';
+      print(_lastError);
       return [];
     }
   }
@@ -117,7 +128,8 @@ class ContentService extends ChangeNotifier {
           .map((sentence) => _normalizeSentence(sentence))
           .toList();
     } catch (e) {
-      print('Errore nel caricamento delle frasi da $path: $e');
+      _lastError = 'Errore nel caricamento delle frasi da $path: $e';
+      print(_lastError);
       return [];
     }
   }
@@ -131,7 +143,8 @@ class ContentService extends ChangeNotifier {
           .map((paragraph) => _normalizeParagraph(paragraph))
           .toList();
     } catch (e) {
-      print('Errore nel caricamento dei paragrafi da $path: $e');
+      _lastError = 'Errore nel caricamento dei paragrafi da $path: $e';
+      print(_lastError);
       return [];
     }
   }
@@ -145,16 +158,22 @@ class ContentService extends ChangeNotifier {
           .map((page) => _normalizePage(page))
           .toList();
     } catch (e) {
-      print('Errore nel caricamento delle pagine da $path: $e');
+      _lastError = 'Errore nel caricamento delle pagine da $path: $e';
+      print(_lastError);
       return [];
     }
+  }
+
+  /// Normalizza una parola
+  String _normalizeWord(String word) {
+    return word.trim().toLowerCase();
   }
 
   /// Normalizza una frase
   String _normalizeSentence(String sentence) {
     return sentence.trim()
-        .replaceAll(RegExp(r'\s+'), ' ') // Rimuove spazi multipli
-        .replaceAll(RegExp(r'[^\w\s\.,!?]'), '') // Mantiene solo punteggiatura base
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[^\w\s\.,!?]'), '')
         .trim();
   }
 
@@ -178,8 +197,8 @@ class ContentService extends ChangeNotifier {
   Word getRandomWordForLevel(int level, Difficulty difficulty) {
     _exerciseCounter++;
 
-    // Reset delle parole usate ogni 20 esercizi
-    if (_exerciseCounter >= _maxUsedWords) {
+    // Reset delle parole usate ogni _maxUsedItems esercizi
+    if (_exerciseCounter >= _maxUsedItems) {
       _usedWords.clear();
       _exerciseCounter = 0;
       notifyListeners();
@@ -199,6 +218,7 @@ class ContentService extends ChangeNotifier {
     // Seleziona una parola casuale
     final word = availableWords[_random.nextInt(availableWords.length)];
     _usedWords.add(word.text);
+    _updateUsageStats(word.text, difficulty);
     notifyListeners();
     return word;
   }
@@ -252,6 +272,22 @@ class ContentService extends ChangeNotifier {
     return complexGroups.hasMatch(word);
   }
 
+  /// Aggiorna le statistiche di utilizzo
+  void _updateUsageStats(String word, Difficulty difficulty) {
+    _wordUsageStats[word] = (_wordUsageStats[word] ?? 0) + 1;
+    _difficultyStats[difficulty] = (_difficultyStats[difficulty] ?? 0) + 1;
+  }
+
+  /// Ottiene le statistiche di utilizzo
+  Map<String, dynamic> getUsageStats() {
+    return {
+      'totalExercises': _exerciseCounter,
+      'uniqueWordsUsed': _usedWords.length,
+      'wordUsage': Map<String, int>.from(_wordUsageStats),
+      'difficultyStats': Map<Difficulty, int>.from(_difficultyStats),
+    };
+  }
+
   /// Pulisce la cache dei contenuti
   void clearCache() {
     _cachedContent.clear();
@@ -265,9 +301,11 @@ class ContentService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Getters
+  // Getters pubblici
   bool get isInitialized => _isInitialized;
   ContentSet get contentSet => _contentSet;
   int get exerciseCounter => _exerciseCounter;
   Set<String> get usedWords => Set.unmodifiable(_usedWords);
+  Set<String> get usedSentences => Set.unmodifiable(_usedSentences);
+  String? get lastError => _lastError;
 }

@@ -32,10 +32,21 @@ class _ChallengesScreenState extends State<ChallengesScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sfide'),
+        title: const Text(
+          'Sfide',
+          style: TextStyle(
+            fontFamily: 'OpenDyslexic',
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.blue.shade900,
         bottom: TabBar(
           controller: _tabController,
-          tabs: [
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          tabs: const [
             Tab(
               icon: Icon(Icons.calendar_today),
               text: 'Giornaliere',
@@ -47,34 +58,48 @@ class _ChallengesScreenState extends State<ChallengesScreen>
           ],
         ),
       ),
-      body: Consumer<ChallengeService>(
-        builder: (context, challengeService, child) {
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildDailyChallenges(challengeService),
-              _buildWeeklyChallenges(challengeService),
-            ],
-          );
-        },
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue.shade900, Colors.blue.shade700],
+          ),
+        ),
+        child: Consumer<ChallengeService>(
+          builder: (context, challengeService, child) {
+            return TabBarView(
+              controller: _tabController,
+              children: [
+                _buildDailyChallenges(challengeService),
+                _buildWeeklyChallenges(challengeService),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
   Widget _buildDailyChallenges(ChallengeService challengeService) {
     return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
-            child: _buildSectionHeader(
-              'Sfide Giornaliere',
-              'Completa queste sfide entro la fine della giornata!',
+            child: Text(
+              'Sfide Giornaliere\nCompleta queste sfide entro la fine della giornata!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'OpenDyslexic',
+              ),
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           ChallengeList(
             challenges: challengeService.activeChallenges,
             showDaily: true,
@@ -87,18 +112,23 @@ class _ChallengesScreenState extends State<ChallengesScreen>
 
   Widget _buildWeeklyChallenges(ChallengeService challengeService) {
     return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
-            child: _buildSectionHeader(
-              'Sfide Settimanali',
-              'Sfide più impegnative con ricompense maggiori!',
+            child: Text(
+              'Sfide Settimanali\nSfide più impegnative con ricompense maggiori!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'OpenDyslexic',
+              ),
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           ChallengeList(
             challenges: challengeService.activeChallenges,
             showDaily: false,
@@ -106,29 +136,6 @@ class _ChallengesScreenState extends State<ChallengesScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, String subtitle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
     );
   }
 }

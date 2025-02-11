@@ -1,226 +1,339 @@
-// lib/services/game_service.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../models/player.dart';
 import '../models/level.dart';
 import '../models/enums.dart';
 import '../services/content_service.dart';
 import '../services/exercise_manager.dart';
 import '../models/recognition_result.dart';
+import '../services/game_notification_manager.dart';
 
-/// GameService gestisce la logica principale del gioco, coordinando
-/// l'interazione tra il Player, il sistema di livelli e gli esercizi.
+/// Servizio che gestisce la logica principale del gioco, inclusa la progressione,
+/// il salvataggio dei dati e il calcolo delle statistiche.
 class GameService extends ChangeNotifier {
-  // Dipendenze fondamentali
-  final Player player;
+  // Invece di 'final', ora la variabile player è modificabile
+  Player player;
   final ContentService contentService;
   final ExerciseManager exerciseManager;
+  final GameNotificationManager _notificationManager;
 
   // Stato dell'inizializzazione
   bool _isInitialized = false;
 
   // Costanti per il sistema di progressione
-  static const int requiredDaysForLevelUp = 5; // Giorni di pratica necessari
-  static const double requiredAccuracy = 0.80; // Accuratezza minima (80%)
-  static const int baseLoginBonus = 10; // Bonus base per login consecutivi
-  static const double bonusMultiplierIncrease = 0.5; // Incremento giornaliero del bonus
+  static const int requiredDaysForLevelUp = 5;
+  static const double requiredAccuracy = 0.75;
+  static const int baseLoginBonus = 10;
+  static const double bonusMultiplierIncrease = 0.5;
 
   // Stato del gioco e progressione
-  final List<DateTime> _accuracyDates = []; // Date con accuratezza >= 80%
-  final List<double> _accuracyHistory = []; // Storico accuratezza per data
-  int _currentStreak = 0; // Streak corrente
-  double _averageAccuracy = 0.0; // Accuratezza media
-  DateTime? _lastExerciseDate; // Data ultimo esercizio
-  int _consecutiveDaysOver80 = 0; // Giorni consecutivi con accuratezza >= 80%
+  final List<DateTime> _accuracyDates = [];
+  final List<double> _accuracyHistory = [];
+  int _currentStreak = 0;
+  double _averageAccuracy = 0.0;
+  int _consecutiveDaysOver75 = 0;
+  bool _dailyBonusGiven = false;
+  DateTime? _lastBonusDate;
+  SubLevel _currentSubLevel;
 
-  /// Costruttore del servizio
+  /// Costruttore del servizio.
+  /// La variabile player viene inizialmente passata, ma potrà essere aggiornata
+  /// tramite updatePlayer() per usare sempre l'istanza attiva.
   GameService({
     required this.player,
     required this.contentService,
     required this.exerciseManager,
-  });
+  })  : _notificationManager = GameNotificationManager(),
+        _currentSubLevel = Level.allLevels[0].subLevels[0] {
+    debugPrint('[GameService] Costruttore: Inizializzo i dati di gioco...');
+    _loadGameData();
+  }
 
-  /// Inizializza il servizio e prepara le risorse necessarie
-  Future<void> initialize() async {
-    if (_isInitialized) return;
+  /// Aggiorna l'istanza di player usata dal GameService
+  void updatePlayer(Player newPlayer) {
+    player = newPlayer;
+    debugPrint('[GameService] updatePlayer: nuovo player = ${player.toJson()}');
+  }
 
+  /// Carica i dati salvati dal profilo del giocatore.
+  Future<void> _loadGameData() async {
+    debugPrint('[GameService] _loadGameData: Avvio caricamento dati di gioco...');
     try {
-      // Inizializza i servizi dipendenti
-      if (!contentService.isInitialized) {
-        await contentService.initialize();
+      // Carica il progresso dal file: questo aggiorna player.gameData
+      await player.loadProgress();
+      final gameData = player.gameData;
+      debugPrint('[GameService] Dati letti dal profilo: $gameData');
+
+      _averageAccuracy = (gameData['averageAccuracy'] is num)
+          ? (gameData['averageAccuracy'] as num).toDouble()
+          : 0.0;
+      _dailyBonusGiven = gameData['dailyBonusGiven'] as bool? ?? false;
+
+      // Carica la data dell'ultimo bonus
+      final lastBonusDateStr = gameData['lastBonusDate'] as String?;
+      if (lastBonusDateStr != null) {
+        _lastBonusDate = DateTime.parse(lastBonusDateStr);
       }
 
-      // Carica i dati di progressione
-      _loadProgressionData();
+      final accuracyDatesList = gameData['accuracyDates'] as List?;
+      final accuracyHistoryList = gameData['accuracyHistory'] as List?;
 
-      // Verifica il bonus giornaliero
-      await _checkDailyLogin();
+      if (accuracyDatesList != null && accuracyHistoryList != null) {
+        _accuracyDates
+          ..clear()
+          ..addAll(accuracyDatesList.map((date) {
+            final d = DateTime.parse(date as String);
+            debugPrint('[GameService] Data aggiunta: $d');
+            return d;
+          }));
+        _accuracyHistory
+          ..clear()
+          ..addAll(accuracyHistoryList.map((acc) {
+            final a = (acc as num).toDouble();
+            debugPrint('[GameService] Accuratezza aggiunta: $a');
+            return a;
+          }));
+      } else {
+        debugPrint('[GameService] Nessun dato di accuratezza trovato.');
+      }
 
-      _isInitialized = true;
-      notifyListeners();
+      _currentStreak = gameData['currentStreak'] as int? ?? 0;
+      debugPrint('[GameService] Current streak: $_currentStreak');
+
+      _updateConsecutiveDays();
+      _loadCurrentSubLevel();
+      _checkAndResetDailyBonus(); // Controlla e resetta il bonus giornaliero se necessario
+      debugPrint('[GameService] _loadGameData completato.');
     } catch (e) {
-      debugPrint('Errore nell\'inizializzazione di GameService: $e');
+      debugPrint('[GameService] Errore in _loadGameData: $e');
       rethrow;
     }
   }
 
-  /// Carica i dati di progressione salvati
-  void _loadProgressionData() {
-    // Qui potremmo aggiungere in futuro il caricamento da SharedPreferences
-    _updateConsecutiveDays();
+  /// Controlla e resetta il bonus giornaliero se necessario
+  Future<void> _checkAndResetDailyBonus() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Se non c'è una data dell'ultimo bonus o è un giorno diverso
+    if (_lastBonusDate == null || !_isSameDay(_lastBonusDate!, today)) {
+      _dailyBonusGiven = false;
+      player.gameData['dailyBonusGiven'] = false;
+      await player.saveProgress();
+    }
   }
 
-  /// Verifica se è necessario assegnare un bonus per login consecutivi
-  Future<void> _checkDailyLogin() async {
-    final now = DateTime.now();
-    final lastLogin = player.lastPlayDate;
-
-    if (lastLogin == null) {
-      // Primo login assoluto
-      await _awardLoginBonus(1);
-      return;
+  /// Carica il sottolivello corrente basato sul livello del giocatore.
+  void _loadCurrentSubLevel() {
+    final currentLevel = player.currentLevel;
+    final levelIndex = currentLevel - 1;
+    if (levelIndex >= 0 && levelIndex < Level.allLevels.length) {
+      final level = Level.allLevels[levelIndex];
+      final subLevelIndex = (player.currentStep ~/ 3).clamp(0, level.subLevels.length - 1);
+      _currentSubLevel = level.subLevels[subLevelIndex];
+      debugPrint('[GameService] Sottolivello corrente impostato: $_currentSubLevel');
     }
+  }
 
-    // Verifica se è un nuovo giorno
-    if (!_isSameDay(now, lastLogin)) {
-      // Verifica se è un giorno consecutivo
-      final yesterday = now.subtract(const Duration(days: 1));
-      if (_isSameDay(lastLogin, yesterday)) {
-        // Incrementa i giorni consecutivi e assegna il bonus
-        player.currentConsecutiveDays++;
-        await _awardLoginBonus(player.currentConsecutiveDays);
-      } else {
-        // Reset dei giorni consecutivi
-        player.currentConsecutiveDays = 1;
-        await _awardLoginBonus(1);
+  /// Inizializza il servizio.
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+    debugPrint('[GameService] initialize: Inizializzazione in corso...');
+    try {
+      if (!contentService.isInitialized) {
+        debugPrint('[GameService] Inizializzo contentService...');
+        await contentService.initialize();
+      }
+      await _loadGameData();
+      await _checkDailyLoginBonus();
+
+      _isInitialized = true;
+      debugPrint('[GameService] Inizializzazione completata.');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[GameService] Errore nell\'inizializzazione: $e');
+      rethrow;
+    }
+  }
+
+  /// Verifica e assegna il bonus di login giornaliero.
+  Future<void> _checkDailyLoginBonus() async {
+    debugPrint('[GameService] _checkDailyLoginBonus: Verifica bonus giornaliero...');
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Se il bonus è già stato dato oggi, verifichiamo con la data salvata
+    if (_dailyBonusGiven) {
+      if (_lastBonusDate != null && _isSameDay(_lastBonusDate!, today)) {
+        debugPrint('[GameService] Bonus già assegnato per oggi.');
+        return;
       }
     }
+
+    // Se arriviamo qui, il bonus non è stato ancora dato oggi
+    final bonus = _calculateDailyBonus(player.currentConsecutiveDays);
+    debugPrint('[GameService] Bonus giornaliero calcolato: $bonus');
+    player.addCrystals(bonus);
+
+    // Aggiorniamo lo stato e salviamo
+    _dailyBonusGiven = true;
+    _lastBonusDate = today;
+    player.gameData['lastBonusDate'] = today.toIso8601String();
+    player.gameData['dailyBonusGiven'] = true;
+
+    await player.saveProgress();
+    debugPrint('[GameService] Bonus giornaliero assegnato.');
   }
 
-  /// Controlla se due date sono nello stesso giorno
+  /// Mostra il popup del bonus giornaliero.
+  Future<void> showDailyLoginBonus(BuildContext context) async {
+    if (_dailyBonusGiven && _lastBonusDate != null &&
+        _isSameDay(_lastBonusDate!, DateTime.now())) {
+      return; // Non mostrare il popup se il bonus è già stato dato oggi
+    }
+
+    debugPrint('[GameService] showDailyLoginBonus: Mostro il popup bonus...');
+    await _notificationManager.showDailyLoginBonus(
+      context,
+      player.currentConsecutiveDays,
+    );
+  }
+
+  /// Calcola il bonus giornaliero basato sui giorni consecutivi.
+  int _calculateDailyBonus(int consecutiveDays) {
+    final bonus = (baseLoginBonus + ((consecutiveDays - 1) * bonusMultiplierIncrease)).round();
+    debugPrint('[GameService] _calculateDailyBonus: consecutiveDays=$consecutiveDays, bonus=$bonus');
+    return bonus;
+  }
+
+  /// Verifica se due date sono nello stesso giorno.
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
         date1.month == date2.month &&
         date1.day == date2.day;
   }
 
-  /// Assegna il bonus per i login consecutivi
-  Future<void> _awardLoginBonus(int consecutiveDays) async {
-    final bonus = (baseLoginBonus +
-        ((consecutiveDays - 1) * bonusMultiplierIncrease)).round();
-
-    if (bonus > 0) {
-      player.addCrystals(bonus);
-      // Il popup verrà gestito dal GameScreen
-    }
-  }
-
-  /// Processa il risultato di un esercizio
+  /// Processa il risultato di un esercizio.
   Future<void> processExerciseResult(RecognitionResult result) async {
-    // Aggiorna accuratezza e streak
+    debugPrint('[GameService] processExerciseResult: Risultato=${result.toJson()}');
     if (result.isCorrect) {
       _currentStreak++;
     } else {
       _currentStreak = 0;
     }
+    debugPrint('[GameService] Nuovo currentStreak: $_currentStreak');
 
-    // Aggiorna l'accuratezza media
     _updateAccuracy(result.similarity);
-
-    // Controlla la progressione del livello
     _checkLevelProgression();
-
-    // Aggiorna data ultimo esercizio
-    _lastExerciseDate = DateTime.now();
-    player.updateConsecutiveDays();
+    await _saveGameData();
 
     notifyListeners();
   }
 
-  /// Aggiorna l'accuratezza media e il conteggio dei giorni con buona accuratezza
+  /// Aggiorna l'accuratezza media e il conteggio dei giorni consecutivi.
   void _updateAccuracy(double accuracy) {
     final now = DateTime.now();
+    debugPrint('[GameService] _updateAccuracy: accuracy=$accuracy, now=$now');
 
-    // Se è un nuovo giorno o il primo risultato
-    if (_accuracyHistory.isEmpty ||
-        !_isSameDay(now, _lastExerciseDate ?? now)) {
+    if (_accuracyHistory.isEmpty || !_isSameDay(now, _accuracyDates.last)) {
       _accuracyHistory.add(accuracy);
       _accuracyDates.add(now);
-
-      // Mantieni solo gli ultimi 30 giorni
+      debugPrint('[GameService] Valori aggiunti: _accuracyHistory=$_accuracyHistory');
       if (_accuracyHistory.length > 30) {
         _accuracyHistory.removeAt(0);
         _accuracyDates.removeAt(0);
       }
     } else {
-      // Aggiorna l'accuratezza del giorno corrente
       final lastIndex = _accuracyHistory.length - 1;
       final currentAverage = _accuracyHistory[lastIndex];
       _accuracyHistory[lastIndex] = (currentAverage + accuracy) / 2;
+      debugPrint('[GameService] Valore aggiornato: ${_accuracyHistory[lastIndex]}');
     }
 
-    // Aggiorna l'accuratezza media
-    _averageAccuracy = _accuracyHistory.isNotEmpty
-        ? _accuracyHistory.reduce((a, b) => a + b) / _accuracyHistory.length
-        : 0.0;
+    _averageAccuracy = _accuracyHistory.isEmpty
+        ? 0.0
+        : _accuracyHistory.reduce((a, b) => a + b) / _accuracyHistory.length;
+    debugPrint('[GameService] Nuova media accuracy: $_averageAccuracy');
 
     _updateConsecutiveDays();
   }
 
-  /// Aggiorna il conteggio dei giorni consecutivi con accuratezza >= 80%
+  /// Aggiorna il conteggio dei giorni consecutivi con accuratezza >= 75%.
   void _updateConsecutiveDays() {
-    _consecutiveDaysOver80 = 0;
-
-    // Conta i giorni consecutivi partendo dal più recente
+    _consecutiveDaysOver75 = 0;
     for (int i = _accuracyHistory.length - 1; i >= 0; i--) {
       if (_accuracyHistory[i] >= requiredAccuracy) {
-        _consecutiveDaysOver80++;
+        _consecutiveDaysOver75++;
       } else {
-        break; // Interrompe al primo giorno sotto l'80%
+        break;
       }
     }
+    debugPrint('[GameService] ConsecutiveDaysOver75: $_consecutiveDaysOver75');
   }
 
-  /// Controlla se è possibile avanzare di livello
+  /// Salva i dati del gioco nel profilo.
+  Future<void> _saveGameData() async {
+    debugPrint('[GameService] _saveGameData: Salvataggio dati gioco...');
+    final gameData = Map<String, dynamic>.from(player.gameData);
+
+    gameData['averageAccuracy'] = _averageAccuracy;
+    gameData['accuracyDates'] =
+        _accuracyDates.map((date) => date.toIso8601String()).toList();
+    gameData['accuracyHistory'] = _accuracyHistory;
+    gameData['currentStreak'] = _currentStreak;
+    gameData['dailyBonusGiven'] = _dailyBonusGiven;
+    if (_lastBonusDate != null) {
+      gameData['lastBonusDate'] = _lastBonusDate!.toIso8601String();
+    }
+
+    debugPrint('[GameService] GameData aggiornato: $gameData');
+
+    player.updateGameData(gameData);
+    await player.saveProgress();
+    debugPrint('[GameService] Dati di gioco salvati.');
+  }
+
+  /// Controlla la progressione del livello.
   void _checkLevelProgression() {
-    if (_consecutiveDaysOver80 >= requiredDaysForLevelUp) {
-      if (player.currentLevel < 4 && player.canLevelUp()) {
-        // L'utente ha mantenuto un'accuratezza >= 80% per 5 giorni
+    debugPrint('[GameService] _checkLevelProgression: _consecutiveDaysOver75=$_consecutiveDaysOver75');
+    if (_consecutiveDaysOver75 >= requiredDaysForLevelUp) {
+      if (player.currentLevel < 4 && canAdvanceLevel()) {
+        debugPrint('[GameService] Il giocatore può salire di livello. Procedo con levelUp.');
         player.levelUp();
-        _consecutiveDaysOver80 = 0; // Reset per il nuovo livello
+        _consecutiveDaysOver75 = 0;
+        _loadCurrentSubLevel();
         notifyListeners();
       }
     }
   }
 
-  /// Ottiene il livello corrente
-  Level getCurrentLevel() {
-    return Level.allLevels.firstWhere(
-          (level) => level.number == player.currentLevel,
-      orElse: () => Level.allLevels.first,
-    );
+  /// Resetta il bonus giornaliero.
+  Future<void> resetDailyBonus() async {
+    debugPrint('[GameService] resetDailyBonus: Reset bonus giornaliero...');
+    _dailyBonusGiven = false;
+    player.gameData['dailyBonusGiven'] = false;
+    await player.saveProgress();
+    debugPrint('[GameService] Bonus giornaliero resettato.');
   }
 
-  /// Ottiene il sottolivello corrente
+  /// Ottiene il sottolivello corrente.
   SubLevel getCurrentSubLevel() {
-    final level = getCurrentLevel();
-    final progress = getLevelUpProgress();
-
-    if (progress < 0.33) return level.subLevels[0];
-    if (progress < 0.66) return level.subLevels[1];
-    return level.subLevels[2];
+    return _currentSubLevel;
   }
 
-  /// Calcola il progresso verso il prossimo livello (0.0 - 1.0)
+  /// Calcola il progresso verso il prossimo livello (0.0 - 1.0).
+  /// @returns double Il progresso normalizzato tra 0 e 1
   double getLevelUpProgress() {
-    if (_consecutiveDaysOver80 == 0) return 0.0;
-    return _consecutiveDaysOver80 / requiredDaysForLevelUp;
+    if (_accuracyHistory.isEmpty) return 0.0;
+    final progress = _consecutiveDaysOver75 / requiredDaysForLevelUp;
+    debugPrint('[GameService] getLevelUpProgress: $progress');
+    return progress;
   }
 
-  /// Verifica se il giocatore può avanzare di livello
+  /// Verifica se il giocatore può avanzare di livello.
+  /// @returns bool True se il giocatore ha raggiunto i requisiti per il livello successivo
   bool canAdvanceLevel() {
-    return _consecutiveDaysOver80 >= requiredDaysForLevelUp &&
-        player.canLevelUp();
+    return _consecutiveDaysOver75 >= requiredDaysForLevelUp;
   }
 
   // Getters pubblici
@@ -229,26 +342,9 @@ class GameService extends ChangeNotifier {
   int get streak => _currentStreak;
   int get currentStreak => _currentStreak;
   bool get hasActiveStreak => _currentStreak >= 3;
-  int get consecutiveDaysOver80 => _consecutiveDaysOver80;
+  int get consecutiveDaysOver75 => _consecutiveDaysOver75;
   List<DateTime> get accuracyDates => List.unmodifiable(_accuracyDates);
   List<double> get accuracyHistory => List.unmodifiable(_accuracyHistory);
-
-  /// Calcola il progresso del livello corrente (0.0 - 1.0)
-  double get levelProgress {
-    if (_accuracyHistory.isEmpty) return 0.0;
-    return _calculateLevelProgress();
-  }
-
-  /// Calcola il progresso effettivo del livello
-  double _calculateLevelProgress() {
-    // Calcola la media delle ultime accuratezze
-    double averageAccuracy = _accuracyHistory.isEmpty ? 0.0 :
-    _accuracyHistory.reduce((a, b) => a + b) / _accuracyHistory.length;
-
-    // Se l'accuratezza media è sotto la soglia minima, il progresso è 0
-    if (averageAccuracy < requiredAccuracy) return 0.0;
-
-    // Altrimenti il progresso è basato sui giorni consecutivi
-    return _consecutiveDaysOver80 / requiredDaysForLevelUp;
-  }
+  bool get isDailyBonusAvailable => !_dailyBonusGiven ||
+      (_lastBonusDate != null && !_isSameDay(_lastBonusDate!, DateTime.now()));
 }

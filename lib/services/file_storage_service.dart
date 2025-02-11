@@ -1,227 +1,265 @@
-// lib/services/file_storage_service.dart
-
-import 'dart:io';
+import 'dart:io' show Directory, File, Platform;
 import 'dart:convert';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 class FileStorageService {
-  // Costanti per la gestione dei file
   static const String _savesDirectoryName = 'saves';
   static const String _profileExtension = '.profile';
+  static const String _tempExtension = '.tmp';
+  static const String _backupExtension = '.bak';
 
-  // Metodo privato per ottenere la directory di base per i salvataggi
-  Future<String> get _basePath async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final savePath = path.join(appDir.path, _savesDirectoryName);
+  Directory? _baseDirectory;
 
-    // Crea la directory se non esiste
-    final directory = Directory(savePath);
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
+  Future<Directory> get _baseDir async {
+    if (_baseDirectory != null) {
+      return _baseDirectory!;
     }
-
-    return savePath;
-  }
-
-  // Genera il nome del file per un profilo
-  String _getProfileFileName(String profileId) {
-    return 'profile_$profileId$_profileExtension';
-  }
-
-  // Ottiene il percorso completo del file per un profilo
-  Future<String> _getProfilePath(String profileId) async {
-    final basePath = await _basePath;
-    return path.join(basePath, _getProfileFileName(profileId));
-  }
-
-  // Scrive i dati di un profilo su file
-  Future<void> writeProfile(String profileId, Map<String, dynamic> data) async {
     try {
-      final filePath = await _getProfilePath(profileId);
-      final file = File(filePath);
-      final jsonString = json.encode(data);
-      await file.writeAsString(jsonString, flush: true);
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final appDir = Directory(path.join(appDocDir.path, 'OpenDSA'));
+      if (!await appDir.exists()) {
+        await appDir.create(recursive: true);
+      }
+      final saveDir = Directory(path.join(appDir.path, _savesDirectoryName));
+      if (!await saveDir.exists()) {
+        await saveDir.create(recursive: true);
+      }
+      _baseDirectory = saveDir;
+      return _baseDirectory!;
     } catch (e) {
-      print('Error writing profile to file: $e');
+      _logError('Errore nell\'inizializzazione della directory di base', e);
       rethrow;
     }
   }
 
-  // Legge i dati di un profilo da file
-  Future<Map<String, dynamic>> readProfile(String profileId) async {
-    try {
-      final filePath = await _getProfilePath(profileId);
-      final file = File(filePath);
+  String _getProfileFileName(String profileId) {
+    if (profileId.isEmpty) {
+      throw ArgumentError('ProfileId non può essere vuoto');
+    }
+    return 'profile_$profileId$_profileExtension';
+  }
 
-      if (!await file.exists()) {
+  Future<File> _getProfileFile(String profileId) async {
+    if (profileId.isEmpty) {
+      throw ArgumentError('ProfileId non può essere vuoto');
+    }
+    final baseDir = await _baseDir;
+    final fileName = _getProfileFileName(profileId);
+    return File(path.join(baseDir.path, fileName));
+  }
+
+  Future<void> writeProfile(String profileId, Map<String, dynamic> data) async {
+    if (profileId.isEmpty) {
+      throw ArgumentError('ProfileId non può essere vuoto');
+    }
+    if (data.isEmpty) {
+      throw ArgumentError('I dati del profilo non possono essere vuoti');
+    }
+    final profileFile = await _getProfileFile(profileId);
+    // Assicuriamoci che la directory esista
+    await profileFile.parent.create(recursive: true);
+    final tempFile = File('${profileFile.path}$_tempExtension');
+    final backupFile = File('${profileFile.path}$_backupExtension');
+
+    try {
+      final dir = profileFile.parent;
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final jsonString = json.encode(data);
+      await tempFile.writeAsString(jsonString, flush: true);
+      if (await profileFile.exists()) {
+        await profileFile.copy(backupFile.path);
+      }
+      if (await tempFile.exists()) {
+        await tempFile.rename(profileFile.path);
+      }
+      if (await backupFile.exists()) {
+        await backupFile.delete();
+      }
+    } catch (e) {
+      _logError('Errore nella scrittura del profilo $profileId', e);
+      try {
+        if (await backupFile.exists()) {
+          await backupFile.copy(profileFile.path);
+          await backupFile.delete();
+        }
+      } catch (backupError) {
+        _logError('Errore nel ripristino del backup per $profileId', backupError);
+      }
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (cleanupError) {
+        _logError('Errore nella pulizia dei file temporanei per $profileId', cleanupError);
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> readProfile(String profileId) async {
+    if (profileId.isEmpty) {
+      throw ArgumentError('ProfileId non può essere vuoto');
+    }
+    try {
+      final profileFile = await _getProfileFile(profileId);
+      final backupFile = File('${profileFile.path}$_backupExtension');
+
+      if (!await profileFile.exists()) {
+        if (await backupFile.exists()) {
+          final backupData = await backupFile.readAsString();
+          return json.decode(backupData) as Map<String, dynamic>;
+        }
         return {};
       }
-
-      final jsonString = await file.readAsString();
+      final jsonString = await profileFile.readAsString();
       return json.decode(jsonString) as Map<String, dynamic>;
     } catch (e) {
-      print('Error reading profile from file: $e');
+      _logError('Errore nella lettura del profilo $profileId', e);
       return {};
     }
   }
 
-  // Verifica se esiste un profilo
   Future<bool> profileExists(String profileId) async {
+    if (profileId.isEmpty) return false;
     try {
-      final filePath = await _getProfilePath(profileId);
-      return await File(filePath).exists();
+      final profileFile = await _getProfileFile(profileId);
+      return await profileFile.exists();
     } catch (e) {
-      print('Error checking profile existence: $e');
+      _logError('Errore nel controllo esistenza profilo $profileId', e);
       return false;
     }
   }
 
-  // Elimina un profilo
   Future<void> deleteProfile(String profileId) async {
+    if (profileId.isEmpty) {
+      throw ArgumentError('ProfileId non può essere vuoto');
+    }
     try {
-      final filePath = await _getProfilePath(profileId);
-      final file = File(filePath);
-      if (await file.exists()) {
-        await file.delete();
+      final profileFile = await _getProfileFile(profileId);
+      final tempFile = File('${profileFile.path}$_tempExtension');
+      final backupFile = File('${profileFile.path}$_backupExtension');
+      for (final file in [profileFile, tempFile, backupFile]) {
+        if (await file.exists()) {
+          await file.delete();
+        }
       }
     } catch (e) {
-      print('Error deleting profile file: $e');
+      _logError('Errore nell\'eliminazione del profilo $profileId', e);
       rethrow;
     }
   }
 
-  // Ottiene la lista di tutti i profili salvati
   Future<List<String>> getAllProfileIds() async {
     try {
-      final basePath = await _basePath;
-      final directory = Directory(basePath);
-
-      if (!await directory.exists()) {
+      final baseDir = await _baseDir;
+      if (!await baseDir.exists()) {
         return [];
       }
-
-      final files = await directory
+      final files = await baseDir
           .list()
-          .where((entity) => entity is File &&
-          entity.path.endsWith(_profileExtension))
+          .where((entity) =>
+      entity is File && path.extension(entity.path) == _profileExtension)
           .map((file) {
         final fileName = path.basename(file.path);
-        final profileId = fileName
-            .replaceFirst('profile_', '')
-            .replaceFirst(_profileExtension, '');
-        return profileId;
-      })
-          .toList();
-
+        return fileName.replaceFirst('profile_', '').replaceFirst(_profileExtension, '');
+      }).toList();
       return files;
     } catch (e) {
-      print('Error getting profile list: $e');
+      _logError('Errore nel recupero lista profili', e);
       return [];
     }
   }
 
-  // Elimina tutti i dati salvati
   Future<void> deleteAllData() async {
     try {
-      final basePath = await _basePath;
-      final directory = Directory(basePath);
-
-      if (await directory.exists()) {
-        await directory.delete(recursive: true);
+      final baseDir = await _baseDir;
+      if (await baseDir.exists()) {
+        await baseDir.delete(recursive: true);
       }
+      _baseDirectory = null;
     } catch (e) {
-      print('Error deleting all data: $e');
+      _logError('Errore nell\'eliminazione di tutti i dati', e);
       rethrow;
     }
   }
 
-  // Ottiene la dimensione totale dei dati salvati
   Future<int> getTotalStorageSize() async {
     try {
-      final basePath = await _basePath;
-      final directory = Directory(basePath);
-
-      if (!await directory.exists()) {
+      final baseDir = await _baseDir;
+      if (!await baseDir.exists()) {
         return 0;
       }
-
       int totalSize = 0;
-      await for (final file in directory.list(recursive: true)) {
+      await for (final file in baseDir.list(recursive: true)) {
         if (file is File) {
           totalSize += await file.length();
         }
       }
-
       return totalSize;
     } catch (e) {
-      print('Error calculating storage size: $e');
+      _logError('Errore nel calcolo dimensione storage', e);
       return 0;
     }
   }
 
-  // Esporta un profilo come stringa JSON
   Future<String?> exportProfile(String profileId) async {
     try {
       final data = await readProfile(profileId);
       if (data.isEmpty) return null;
       return json.encode(data);
     } catch (e) {
-      print('Error exporting profile: $e');
+      _logError('Errore nell\'esportazione del profilo $profileId', e);
       return null;
     }
   }
 
-  // Importa un profilo da stringa JSON
   Future<bool> importProfile(String profileId, String jsonString) async {
     try {
       final data = json.decode(jsonString) as Map<String, dynamic>;
       await writeProfile(profileId, data);
       return true;
     } catch (e) {
-      print('Error importing profile: $e');
+      _logError('Errore nell\'importazione del profilo $profileId', e);
       return false;
     }
   }
 
-  // Backup di tutti i profili in una singola stringa JSON
   Future<String?> backupAllProfiles() async {
     try {
       final profiles = await getAllProfileIds();
       final backupData = <String, Map<String, dynamic>>{};
-
       for (final profileId in profiles) {
         final profileData = await readProfile(profileId);
         if (profileData.isNotEmpty) {
           backupData[profileId] = profileData;
         }
       }
-
       return json.encode(backupData);
     } catch (e) {
-      print('Error creating backup: $e');
+      _logError('Errore nella creazione del backup', e);
       return null;
     }
   }
 
-  // Ripristina tutti i profili da un backup
   Future<bool> restoreFromBackup(String backupJson) async {
     try {
-      // Prima elimina tutti i dati esistenti
       await deleteAllData();
-
       final backupData = json.decode(backupJson) as Map<String, dynamic>;
       for (final entry in backupData.entries) {
-        await writeProfile(
-            entry.key,
-            entry.value as Map<String, dynamic>
-        );
+        await writeProfile(entry.key, entry.value as Map<String, dynamic>);
       }
-
       return true;
     } catch (e) {
-      print('Error restoring from backup: $e');
+      _logError('Errore nel ripristino dal backup', e);
       return false;
     }
+  }
+
+  void _logError(String message, Object error) {
+    final timestamp = DateTime.now().toIso8601String();
+    print('[$timestamp] FileStorageService - $message: $error');
   }
 }

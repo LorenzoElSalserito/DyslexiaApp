@@ -13,7 +13,7 @@ import 'services/store_service.dart';
 import 'models/player.dart';
 import 'screens/splash_screen.dart';
 import 'screens/game_screen.dart';
-import 'screens/challenges_screen.dart';
+import 'screens/challenges_screen.dart'; // Assicurati che il percorso e il nome corrispondano
 import 'screens/profile_selection_screen.dart';
 import 'screens/profile_creation_screen.dart';
 import 'screens/store_screen.dart';
@@ -28,10 +28,6 @@ void main() async {
   // Inizializzazione delle SharedPreferences
   final prefs = await SharedPreferences.getInstance();
 
-  // Configurazione del percorso per la libreria VOSK
-  const String voskLibPath = String.fromEnvironment('VOSK_LIB_PATH');
-  debugPrint("VOSK_LIB_PATH: $voskLibPath");
-
   // Avvio dell'applicazione con la gestione dello stato tramite Provider
   runApp(
     MultiProvider(
@@ -40,23 +36,19 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => PlayerManager(prefs),
         ),
-
         // Provider per il giocatore corrente
         ChangeNotifierProvider(
           create: (_) => Player(),
         ),
-
         // Provider per il servizio dei contenuti
         ChangeNotifierProvider(
           create: (_) => ContentService(),
           lazy: false, // Inizializza immediatamente per caricare i contenuti
         ),
-
         // Provider per il servizio di analytics
         Provider(
           create: (_) => LearningAnalyticsService(prefs),
         ),
-
         // Provider per il gestore degli esercizi
         ChangeNotifierProxyProvider2<Player, ContentService, ExerciseManager>(
           create: (context) => ExerciseManager(
@@ -65,13 +57,13 @@ void main() async {
             analyticsService: context.read<LearningAnalyticsService>(),
           ),
           update: (context, player, contentService, previous) =>
-          previous ?? ExerciseManager(
-            player: player,
-            contentService: contentService,
-            analyticsService: context.read<LearningAnalyticsService>(),
-          ),
+          previous ??
+              ExerciseManager(
+                player: player,
+                contentService: contentService,
+                analyticsService: context.read<LearningAnalyticsService>(),
+              ),
         ),
-
         // Provider per il servizio di gioco
         ChangeNotifierProxyProvider3<Player, ContentService, ExerciseManager, GameService>(
           create: (context) => GameService(
@@ -80,32 +72,34 @@ void main() async {
             exerciseManager: context.read<ExerciseManager>(),
           ),
           update: (context, player, contentService, exerciseManager, previous) {
-            final service = previous ?? GameService(
-              player: player,
-              contentService: contentService,
-              exerciseManager: exerciseManager,
-            );
-
-            // Inizializza il servizio se necessario
+            final service = previous ??
+                GameService(
+                  player: player,
+                  contentService: contentService,
+                  exerciseManager: exerciseManager,
+                );
             if (!service.isInitialized) {
               // Usiamo microtask per evitare problemi durante il build
               Future.microtask(() => service.initialize());
             }
-
             return service;
           },
         ),
-
         // Provider per il servizio delle sfide
         ChangeNotifierProxyProvider<Player, ChallengeService>(
-          create: (context) => ChallengeService(prefs, context.read<Player>()),
+          create: (context) => ChallengeService(
+            prefs,
+            context.read<Player>(),
+          ),
           update: (context, player, previous) =>
           previous ?? ChallengeService(prefs, player),
         ),
-
         // Provider per il servizio del negozio
         ChangeNotifierProxyProvider<Player, StoreService>(
-          create: (context) => StoreService(prefs, context.read<Player>()),
+          create: (context) => StoreService(
+            prefs,
+            context.read<Player>(),
+          ),
           update: (context, player, previous) =>
           previous ?? StoreService(prefs, player),
         ),
@@ -127,10 +121,9 @@ class OpenDSAApp extends StatelessWidget {
       debugShowCheckedModeBanner: false, // Rimuove il banner di debug
       initialRoute: '/',
       routes: {
-        // Rotte principali dell'applicazione
         '/': (context) => const SplashScreenWidget(),
         '/game': (context) => const GameScreen(),
-        '/challenges': (context) => const ChallengesScreen(),
+        '/challenges': (context) => const ChallengesScreen(), // Usa esattamente il nome "ChallengesScreen"
         '/store': (context) => const StoreScreen(),
         '/profile_selection': (context) => const ProfileSelectionScreen(),
         '/profile_creation': (context) => const ProfileCreationScreen(),

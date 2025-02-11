@@ -1,4 +1,3 @@
-// streak_notification.dart
 import 'package:flutter/material.dart';
 
 class StreakNotification extends StatefulWidget {
@@ -28,7 +27,7 @@ class _StreakNotificationState extends State<StreakNotification>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
 
@@ -43,7 +42,7 @@ class _StreakNotificationState extends State<StreakNotification>
       ),
     ]).animate(CurvedAnimation(
       parent: _controller,
-      curve: Interval(0.0, 0.6, curve: Curves.elasticOut),
+      curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
     ));
 
     _slideAnimation = Tween<double>(
@@ -51,7 +50,7 @@ class _StreakNotificationState extends State<StreakNotification>
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Interval(0.0, 0.6, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     ));
 
     _fireAnimation = Tween<double>(
@@ -59,12 +58,12 @@ class _StreakNotificationState extends State<StreakNotification>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Interval(0.3, 1.0, curve: Curves.easeOut),
+      curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
     ));
 
     _controller.forward().then((_) {
       if (widget.onDismiss != null) {
-        Future.delayed(Duration(seconds: 2), widget.onDismiss!);
+        Future.delayed(const Duration(seconds: 2), widget.onDismiss!);
       }
     });
   }
@@ -85,7 +84,7 @@ class _StreakNotificationState extends State<StreakNotification>
           child: Transform.scale(
             scale: _scaleAnimation.value,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -106,25 +105,25 @@ class _StreakNotificationState extends State<StreakNotification>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildFireIcon(),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
                     'Streak x${widget.streak}',
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '+${((widget.multiplier - 1) * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -142,7 +141,7 @@ class _StreakNotificationState extends State<StreakNotification>
   Widget _buildFireIcon() {
     return Stack(
       children: [
-        Icon(
+        const Icon(
           Icons.local_fire_department,
           color: Colors.white,
           size: 24,
@@ -158,7 +157,7 @@ class _StreakNotificationState extends State<StreakNotification>
                   end: Alignment.bottomCenter,
                 ).createShader(bounds);
               },
-              child: Icon(
+              child: const Icon(
                 Icons.local_fire_department,
                 color: Colors.white,
                 size: 24,
