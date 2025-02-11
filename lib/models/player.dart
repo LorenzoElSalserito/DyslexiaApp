@@ -1,4 +1,7 @@
-import 'package:flutter/foundation.dart';
+// lib/models/player.dart
+
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import '../services/file_storage_service.dart';
 import 'dart:convert';
 
@@ -6,7 +9,6 @@ import 'dart:convert';
 /// Gestisce tutti i dati del profilo, il loro salvataggio persistente,
 /// e il tracking dei giorni consecutivi di gioco.
 class Player with ChangeNotifier {
-  /// Costruttore predefinito esplicito
   Player();
 
   // Service per il salvataggio dei dati
@@ -25,7 +27,7 @@ class Player with ChangeNotifier {
 
   // Proprietà per il tracking temporale
   DateTime? _lastPlayDate;
-  DateTime? _lastLoginDate;  // Nuovo campo per tracciare l'ultimo login
+  DateTime? _lastLoginDate;
   int _maxConsecutiveDays = 0;
   int _currentConsecutiveDays = 0;
   Map<String, dynamic> _gameData = {};
@@ -127,7 +129,10 @@ class Player with ChangeNotifier {
   void updateGameData(Map<String, dynamic> newData) {
     _gameData = Map<String, dynamic>.from(newData);
     saveProgress();
-    notifyListeners();
+    // Posticipa notifyListeners al termine del frame per evitare errori durante il build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   /// Inizializza le informazioni del giocatore
@@ -149,7 +154,6 @@ class Player with ChangeNotifier {
       shouldSave = true;
     }
 
-    // Se è un nuovo profilo, resetta i dati
     if (_totalCrystals == 0 && _currentLevel == 1) {
       _totalCrystals = 0;
       _currentLevel = 1;
@@ -158,7 +162,7 @@ class Player with ChangeNotifier {
       _maxConsecutiveDays = 0;
       _currentConsecutiveDays = 0;
       _lastPlayDate = DateTime.now();
-      _lastLoginDate = DateTime.now();  // Inizializza la data di login
+      _lastLoginDate = DateTime.now();
       _usedWords.clear();
       _usedSentences.clear();
       _gameData.clear();
@@ -172,13 +176,10 @@ class Player with ChangeNotifier {
   }
 
   /// Aggiorna i giorni consecutivi di gioco
-  /// Questa funzione viene chiamata ogni volta che il giocatore effettua il login
-  /// o completa un'azione significativa nel gioco
   void updateConsecutiveDays() {
     final now = DateTime.now();
     final yesterday = now.subtract(const Duration(days: 1));
 
-    // Se è il primo login, inizializza le date
     if (_lastLoginDate == null) {
       _lastLoginDate = now;
       _currentConsecutiveDays = 1;
@@ -186,26 +187,19 @@ class Player with ChangeNotifier {
       return;
     }
 
-    // Verifica se è passato più di un giorno dall'ultimo login
     if (_lastLoginDate != null) {
-      // Se l'ultimo login è stato ieri, incrementa i giorni consecutivi
       if (_isSameDay(_lastLoginDate!, yesterday)) {
         _currentConsecutiveDays++;
         if (_currentConsecutiveDays > _maxConsecutiveDays) {
           maxConsecutiveDays = _currentConsecutiveDays;
         }
-      }
-      // Se l'ultimo login non è stato ieri ma è oggi, non fare nulla
-      else if (_isSameDay(_lastLoginDate!, now)) {
+      } else if (_isSameDay(_lastLoginDate!, now)) {
         return;
-      }
-      // Se sono passati più giorni, resetta il conteggio
-      else {
+      } else {
         _currentConsecutiveDays = 1;
       }
     }
 
-    // Aggiorna la data dell'ultimo login
     _lastLoginDate = now;
     _gameData['lastLoginDate'] = now.toIso8601String();
 
@@ -213,14 +207,12 @@ class Player with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Verifica se due date sono lo stesso giorno
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
         date1.month == date2.month &&
         date1.day == date2.day;
   }
 
-  /// Aggiunge cristalli al totale
   void addCrystals(int amount) {
     if (amount != 0) {
       totalCrystals += amount;
@@ -228,10 +220,8 @@ class Player with ChangeNotifier {
     }
   }
 
-  /// Verifica se il giocatore può salire di livello
   bool canLevelUp() => totalCrystals >= levelCrystalCost;
 
-  /// Sale di livello se possibile
   void levelUp() {
     if (canLevelUp() || isAdmin) {
       if (!isAdmin) {
@@ -243,14 +233,12 @@ class Player with ChangeNotifier {
     }
   }
 
-  /// Incrementa lo step corrente
   void incrementStep() {
     currentStep++;
     updateConsecutiveDays();
     saveProgress();
   }
 
-  /// Avvia un nuovo ciclo New Game+
   void startNewGamePlus() {
     _newGamePlusCount++;
     currentLevel = 1;
@@ -262,7 +250,6 @@ class Player with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Converte il giocatore in formato JSON (Map)
   Map<String, dynamic> toJson() {
     return {
       'id': _id,
@@ -275,14 +262,13 @@ class Player with ChangeNotifier {
       'maxConsecutiveDays': _maxConsecutiveDays,
       'currentConsecutiveDays': _currentConsecutiveDays,
       'lastPlayDate': _lastPlayDate?.toIso8601String(),
-      'lastLoginDate': _lastLoginDate?.toIso8601String(),  // Salva la data dell'ultimo login
+      'lastLoginDate': _lastLoginDate?.toIso8601String(),
       'usedWords': _usedWords.toList(),
       'usedSentences': _usedSentences.toList(),
       'gameData': _gameData,
     };
   }
 
-  /// Carica il giocatore da formato JSON (Map)
   void fromJson(Map<String, dynamic> json) {
     _id = json['id']?.toString() ?? '';
     _name = json['name']?.toString() ?? '';
@@ -310,10 +296,11 @@ class Player with ChangeNotifier {
         (json['usedSentences'] as List?)?.map((e) => e.toString()).toSet() ?? {};
     _gameData = (json['gameData'] as Map?)?.cast<String, dynamic>() ?? {};
 
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
-  /// Converte in modo sicuro un valore in intero
   int _parseIntSafely(dynamic value, {int defaultValue = 0}) {
     if (value == null) return defaultValue;
     if (value is int) return value;
@@ -323,7 +310,6 @@ class Player with ChangeNotifier {
     return defaultValue;
   }
 
-  /// Salva il progresso del giocatore
   Future<void> saveProgress() async {
     if (_id.isEmpty) return;
     try {
@@ -334,7 +320,6 @@ class Player with ChangeNotifier {
     }
   }
 
-  /// Carica il progresso del giocatore
   Future<bool> loadProgress() async {
     if (_id.isEmpty) return false;
     try {
@@ -350,7 +335,6 @@ class Player with ChangeNotifier {
     }
   }
 
-  /// Resetta il progresso del giocatore
   Future<void> resetProgress() async {
     if (_id.isNotEmpty) {
       await _storageService.deleteProfile(_id);
@@ -370,7 +354,6 @@ class Player with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Verifica se esiste un profilo per questo giocatore
   Future<bool> hasProfile() async {
     if (_id.isEmpty) return false;
     return await _storageService.profileExists(_id);

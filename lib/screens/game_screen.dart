@@ -1,6 +1,8 @@
+// lib/screens/game_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/player.dart';
+import '../models/player.dart';  // Import aggiunto per la classe Player
 import '../services/game_service.dart';
 import '../services/store_service.dart';
 import '../services/challenge_service.dart';
@@ -23,7 +25,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Utilizziamo addPostFrameCallback per assicurarci che il context sia disponibile
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeScreen();
     });
@@ -42,7 +43,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         await gameService.initialize();
       }
 
-      // Controlliamo il bonus giornaliero solo se non l'abbiamo già fatto
       if (!_hasCheckedDailyBonus) {
         await _checkDailyBonus();
       }
@@ -71,13 +71,9 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 
     try {
       final gameService = Provider.of<GameService>(context, listen: false);
-
-      // Verifichiamo se il bonus giornaliero è disponibile
       if (gameService.isDailyBonusAvailable) {
         debugPrint('[GameScreen] Bonus giornaliero disponibile');
-        // Prima resettiamo il bonus per il nuovo giorno
         await gameService.resetDailyBonus();
-        // Poi mostriamo il popup, che assegnerà il nuovo bonus
         if (mounted) {
           await gameService.showDailyLoginBonus(context);
         }
@@ -123,22 +119,18 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 child: SafeArea(
                   child: Column(
                     children: [
-                      // Header Section (flex: 2)
                       Expanded(
                         flex: 2,
                         child: _buildTopSection(player),
                       ),
-                      // Mappa di Progressione (flex: 3)
                       const Expanded(
                         flex: 3,
                         child: ProgressionMap(),
                       ),
-                      // Sfide Attive (flex: 4)
                       Expanded(
                         flex: 4,
                         child: _buildActiveChallenges(),
                       ),
-                      // Sezione Bottoni (flex: 3)
                       Expanded(
                         flex: 3,
                         child: _buildButtonsSection(player),
@@ -320,7 +312,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       color: Colors.white.withOpacity(0.1),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.white24),
+        side: const BorderSide(color: Colors.white24),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),

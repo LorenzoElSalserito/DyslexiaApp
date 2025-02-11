@@ -69,7 +69,5 @@ flutter:
         - asset: lib/assets/fonts/OpenDyslexic-Bold-Italic.otf
           weight: 700
 
-#TODO: Ricordarsi di far si che la barra delle sfide avanzi man mano che la sfida viene intrapresa e continuata correttamente (bisogna tenere traccia di quanto fatto)
-#TODO: ricordarsi di far si che il popup dei cristalli di log giornalieri compaia una sola volta per giorno, poi si disabilita
 #TODO: assicurarsi che tutti i files .dart siano utili
 #TODO: assicurarsi che il profilo "admin" abbia i pulsanti per poter avanzare di livello senza dover fare gli esercizi fino al NG+

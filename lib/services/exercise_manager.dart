@@ -13,8 +13,8 @@ import '../services/audio_service.dart';
 /// Gestisce la creazione, esecuzione e tracciamento degli esercizi di lettura.
 /// Si occupa anche del salvataggio dei progressi e della gestione delle sessioni audio.
 class ExerciseManager extends ChangeNotifier {
-  // La variabile player è modificabile (non final) per poter essere aggiornata
-  Player player;
+  // Stato interno del manager
+  late Player _player;
   final ContentService _contentService;
   final LearningAnalyticsService _analyticsService;
   final AudioService _audioService = AudioService();
@@ -46,17 +46,18 @@ class ExerciseManager extends ChangeNotifier {
     required Player player,
     required ContentService contentService,
     required LearningAnalyticsService analyticsService,
-  })  : player = player,
-        _contentService = contentService,
+  })  : _contentService = contentService,
         _analyticsService = analyticsService {
     debugPrint('[ExerciseManager] Costruttore: Inizializzo ExerciseManager con player: ${player.toJson()}');
+    _player = player; // Memorizza l'istanza del player
     _initialize();
   }
 
   /// Metodo per aggiornare l'istanza di Player
-  void updatePlayer(Player newPlayer) {
-    player = newPlayer;
-    debugPrint('[ExerciseManager] updatePlayer: nuovo player = ${player.toJson()}');
+  void updatePlayer(Player newPlayer) async {
+    _player = newPlayer;  // Aggiorna l'istanza del player
+    await _player.loadProgress(); // Carica il progresso dal file
+    debugPrint('[ExerciseManager] updatePlayer: nuovo player = ${_player.toJson()}');
     notifyListeners();
   }
 
@@ -65,6 +66,7 @@ class ExerciseManager extends ChangeNotifier {
     try {
       debugPrint('[ExerciseManager] _initialize: Inizializzo l\'audioService...');
       await _audioService.initialize();
+      await _player.loadProgress(); // Carica il progresso dal file
       _isInitialized = true;
       debugPrint('[ExerciseManager] _initialize: Completato.');
       notifyListeners();
@@ -105,15 +107,14 @@ class ExerciseManager extends ChangeNotifier {
       throw Exception('Sessione non attiva. Chiamare startNewSession() prima.');
     }
 
-    // Per semplicità, utilizziamo un esercizio di livello 1.
-    // (Puoi estendere la logica in base al livello del giocatore.)
+    // Ottiene una parola casuale dal content service
     String content = _contentService.getRandomWordForLevel(1, _currentDifficulty).text;
     int syllables = _countSyllables(content);
     int baseValue = syllables * 5;
 
     _currentExercise = Exercise(
       content: content,
-      type: _getExerciseTypeForLevel(player.currentLevel),
+      type: _getExerciseTypeForLevel(_player.currentLevel),
       difficulty: _currentDifficulty,
       crystalValue: baseValue,
       isBonus: _sessionResults.length >= 3 && _sessionResults.every((r) => r.isCorrect),
@@ -137,9 +138,10 @@ class ExerciseManager extends ChangeNotifier {
     _currentSessionIndex++;
     _totalCrystals += crystals;
     _sessionCrystals += crystals;
-    player.addCrystals(crystals);
+    _player.addCrystals(crystals);
 
     await _analyticsService.addResult(result);
+    await _player.saveProgress();  // Salva il progresso dopo ogni esercizio
 
     if (isSessionComplete) {
       await _completeSession();
@@ -206,7 +208,7 @@ class ExerciseManager extends ChangeNotifier {
         multiplier *= 2.0;
     }
 
-    multiplier *= (1.0 + (player.newGamePlusCount * 0.5));
+    multiplier *= (1.0 + (_player.newGamePlusCount * 0.5));
 
     int finalCrystals = (_currentExercise!.crystalValue * multiplier).round();
     debugPrint('[ExerciseManager] _calculateFinalCrystals: multiplier=$multiplier, finalCrystals=$finalCrystals');
@@ -252,6 +254,8 @@ class ExerciseManager extends ChangeNotifier {
           ? 0.0
           : _sessionAccuracies.reduce((a, b) => a + b) / _sessionAccuracies.length;
       debugPrint('[ExerciseManager] Overall session accuracy: $_overallAccuracy');
+
+      await _player.saveProgress(); // Salva il progresso alla fine della sessione
     }
 
     _isSessionActive = false;

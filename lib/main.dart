@@ -13,43 +13,47 @@ import 'services/store_service.dart';
 import 'models/player.dart';
 import 'screens/splash_screen.dart';
 import 'screens/game_screen.dart';
-import 'screens/challenges_screen.dart'; // Assicurati che il percorso e il nome corrispondano
+import 'screens/challenges_screen.dart';
 import 'screens/profile_selection_screen.dart';
 import 'screens/profile_creation_screen.dart';
 import 'screens/store_screen.dart';
 import 'screens/reading_exercise_screen.dart';
 import 'config/theme_config.dart';
 
-/// Punto di ingresso principale dell'applicazione
+/// Punto di ingresso principale dell'applicazione.
 void main() async {
-  // Assicuriamoci che Flutter sia inizializzato correttamente
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inizializzazione delle SharedPreferences
+  // Inizializzazione delle SharedPreferences.
   final prefs = await SharedPreferences.getInstance();
 
-  // Avvio dell'applicazione con la gestione dello stato tramite Provider
   runApp(
     MultiProvider(
       providers: [
-        // Provider per la gestione dei profili utente
-        ChangeNotifierProvider(
+        // Provider per la gestione dei profili utente.
+        ChangeNotifierProvider<PlayerManager>(
           create: (_) => PlayerManager(prefs),
         ),
-        // Provider per il giocatore corrente
-        ChangeNotifierProvider(
-          create: (_) => Player(),
+        // ProxyProvider per il giocatore corrente, sincronizzato con il profilo
+        // corrente gestito dal PlayerManager.
+        ChangeNotifierProxyProvider<PlayerManager, Player>(
+          create: (_) => Player(), // istanza iniziale (dummy)
+          update: (context, playerManager, player) {
+            // Se currentProfile è disponibile nel PlayerManager, restituisce quell'istanza;
+            // altrimenti, mantiene l'istanza attuale.
+            return playerManager.currentProfile ?? player!;
+          },
         ),
-        // Provider per il servizio dei contenuti
-        ChangeNotifierProvider(
+        // Provider per il servizio dei contenuti.
+        ChangeNotifierProvider<ContentService>(
           create: (_) => ContentService(),
-          lazy: false, // Inizializza immediatamente per caricare i contenuti
+          lazy: false, // Inizializza subito per caricare i contenuti.
         ),
-        // Provider per il servizio di analytics
-        Provider(
+        // Provider per il servizio di analytics.
+        Provider<LearningAnalyticsService>(
           create: (_) => LearningAnalyticsService(prefs),
         ),
-        // Provider per il gestore degli esercizi
+        // Provider per il gestore degli esercizi.
         ChangeNotifierProxyProvider2<Player, ContentService, ExerciseManager>(
           create: (context) => ExerciseManager(
             player: context.read<Player>(),
@@ -64,7 +68,7 @@ void main() async {
                 analyticsService: context.read<LearningAnalyticsService>(),
               ),
         ),
-        // Provider per il servizio di gioco
+        // Provider per il servizio di gioco.
         ChangeNotifierProxyProvider3<Player, ContentService, ExerciseManager, GameService>(
           create: (context) => GameService(
             player: context.read<Player>(),
@@ -79,13 +83,13 @@ void main() async {
                   exerciseManager: exerciseManager,
                 );
             if (!service.isInitialized) {
-              // Usiamo microtask per evitare problemi durante il build
+              // Avvia l'inizializzazione in una microtask per evitare conflitti durante il build.
               Future.microtask(() => service.initialize());
             }
             return service;
           },
         ),
-        // Provider per il servizio delle sfide
+        // Provider per il servizio delle sfide.
         ChangeNotifierProxyProvider<Player, ChallengeService>(
           create: (context) => ChallengeService(
             prefs,
@@ -94,7 +98,7 @@ void main() async {
           update: (context, player, previous) =>
           previous ?? ChallengeService(prefs, player),
         ),
-        // Provider per il servizio del negozio
+        // Provider per il servizio del negozio.
         ChangeNotifierProxyProvider<Player, StoreService>(
           create: (context) => StoreService(
             prefs,
@@ -109,7 +113,7 @@ void main() async {
   );
 }
 
-/// Widget principale dell'applicazione
+/// Widget principale dell'applicazione.
 class OpenDSAApp extends StatelessWidget {
   const OpenDSAApp({Key? key}) : super(key: key);
 
@@ -118,19 +122,18 @@ class OpenDSAApp extends StatelessWidget {
     return MaterialApp(
       title: 'OpenDSA: Reading',
       theme: ThemeConfig.lightTheme,
-      debugShowCheckedModeBanner: false, // Rimuove il banner di debug
+      debugShowCheckedModeBanner: false, // Rimuove il banner di debug.
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashScreenWidget(),
         '/game': (context) => const GameScreen(),
-        '/challenges': (context) => const ChallengesScreen(), // Usa esattamente il nome "ChallengesScreen"
+        '/challenges': (context) => ChallengesScreen(), // Senza "const" per garantire l'aggiornamento.
         '/store': (context) => const StoreScreen(),
         '/profile_selection': (context) => const ProfileSelectionScreen(),
         '/profile_creation': (context) => const ProfileCreationScreen(),
         '/reading_exercise': (context) => const ReadingExerciseScreen(),
       },
       onUnknownRoute: (settings) {
-        // Gestione delle rotte non trovate
         return MaterialPageRoute(
           builder: (context) => Scaffold(
             appBar: AppBar(

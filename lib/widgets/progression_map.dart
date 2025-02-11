@@ -15,7 +15,6 @@ class ProgressionMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Otteniamo il profilo attivo dal PlayerManager
     final playerManager = Provider.of<PlayerManager>(context);
     final Player? player = playerManager.currentProfile;
     final gameService = Provider.of<GameService>(context);
@@ -49,7 +48,6 @@ class ProgressionMap extends StatelessWidget {
                 child: _buildProgressBar(gameService),
               ),
               const SizedBox(height: 4),
-              // Utilizzo di FittedBox per scalare i dettagli se lo spazio è insufficiente
               Flexible(
                 flex: 3,
                 child: FittedBox(

@@ -2,7 +2,6 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/player.dart';
 import '../services/file_storage_service.dart';
 
@@ -20,7 +19,15 @@ class PlayerManager extends ChangeNotifier {
   Player? _currentProfile;
   bool _isInitialized = false;
 
-  PlayerManager(this._prefs);
+  // Singleton pattern per mantenere una singola istanza
+  static PlayerManager? _instance;
+
+  factory PlayerManager(SharedPreferences prefs) {
+    _instance ??= PlayerManager._internal(prefs);
+    return _instance!;
+  }
+
+  PlayerManager._internal(this._prefs);
 
   // Getters pubblici
   List<Player> get profiles => List.unmodifiable(_profiles);
@@ -34,40 +41,51 @@ class PlayerManager extends ChangeNotifier {
     if (_isInitialized) return;
 
     try {
+      debugPrint('Inizializzazione PlayerManager...');
+
       // Carica tutti i profili dal FileStorageService
       final profileIds = await _fileStorage.getAllProfileIds();
       _profiles = [];
+
       for (final id in profileIds) {
         final profileData = await _fileStorage.readProfile(id);
         if (profileData.isNotEmpty) {
           final player = Player();
           player.fromJson(profileData);
           _profiles.add(player);
+          debugPrint('Caricato profilo: ${player.toJson()}');
         }
       }
 
       // Imposta il profilo corrente basandosi sull'ultimo usato
+      final lastProfileId = _prefs.getString(_lastProfileKey);
+      debugPrint('Ultimo profilo usato: $lastProfileId');
+
       if (_profiles.isNotEmpty) {
-        final lastProfileId = _prefs.getString(_lastProfileKey);
         if (lastProfileId != null) {
           try {
-            _currentProfile =
-                _profiles.firstWhere((p) => p.id == lastProfileId);
+            _currentProfile = _profiles.firstWhere((p) => p.id == lastProfileId);
+            await _currentProfile!.loadProgress();
+            debugPrint('Profilo corrente impostato: ${_currentProfile!.toJson()}');
           } catch (e) {
-            // Se non viene trovato il profilo con l'ID salvato, usa il primo della lista.
             _currentProfile = _profiles.first;
+            await _currentProfile!.loadProgress();
+            debugPrint('Profilo di fallback impostato: ${_currentProfile!.toJson()}');
           }
         } else {
           _currentProfile = _profiles.first;
+          await _currentProfile!.loadProgress();
+          debugPrint('Primo profilo impostato: ${_currentProfile!.toJson()}');
         }
       } else {
         _currentProfile = null;
+        debugPrint('Nessun profilo trovato');
       }
 
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
-      print('Error initializing PlayerManager: $e');
+      debugPrint('Errore nell\'inizializzazione di PlayerManager: $e');
       rethrow;
     }
   }
@@ -78,23 +96,30 @@ class PlayerManager extends ChangeNotifier {
     if (!_isInitialized) await initialize();
 
     try {
+      debugPrint('Selezione profilo: ${profile.id}');
+
       // Cerca il profilo con lo stesso id nella lista
       final selected = _profiles.firstWhere(
             (p) => p.id == profile.id,
         orElse: () => profile,
       );
+
       // Rileggi i dati dal file per aggiornare l'istanza
       final profileData = await _fileStorage.readProfile(selected.id);
       if (profileData.isNotEmpty) {
         selected.fromJson(profileData);
+        debugPrint('Dati profilo caricati: ${selected.toJson()}');
       } else {
-        print('Nessun dato letto per il profilo ${selected.id}');
+        debugPrint('Nessun dato trovato per il profilo ${selected.id}');
       }
+
       _currentProfile = selected;
       await _prefs.setString(_lastProfileKey, selected.id);
       notifyListeners();
+
+      debugPrint('Profilo selezionato con successo');
     } catch (e) {
-      print('Errore nella selezione del profilo: $e');
+      debugPrint('Errore nella selezione del profilo: $e');
       rethrow;
     }
   }
@@ -104,6 +129,8 @@ class PlayerManager extends ChangeNotifier {
     if (!_isInitialized) await initialize();
 
     try {
+      debugPrint('Eliminazione profili: $profileIds');
+
       for (final profileId in profileIds) {
         // Elimina il file del profilo
         await _fileStorage.deleteProfile(profileId);
@@ -123,8 +150,9 @@ class PlayerManager extends ChangeNotifier {
       }
 
       notifyListeners();
+      debugPrint('Profili eliminati con successo');
     } catch (e) {
-      print('Error deleting profiles: $e');
+      debugPrint('Errore nell\'eliminazione dei profili: $e');
       rethrow;
     }
   }
@@ -137,7 +165,7 @@ class PlayerManager extends ChangeNotifier {
       await deleteProfiles([profileId]);
       return true;
     } catch (e) {
-      print('Error deleting profile: $e');
+      debugPrint('Errore nell\'eliminazione del profilo: $e');
       return false;
     }
   }
@@ -147,6 +175,8 @@ class PlayerManager extends ChangeNotifier {
     if (!_isInitialized) await initialize();
 
     try {
+      debugPrint('Caricamento stato giocatore: ${player.id}');
+
       if (player.id.isEmpty && _profiles.isNotEmpty) {
         player.id = _profiles.first.id;
       }
@@ -154,11 +184,12 @@ class PlayerManager extends ChangeNotifier {
       final profileData = await _fileStorage.readProfile(player.id);
       if (profileData.isNotEmpty) {
         player.fromJson(profileData);
+        debugPrint('Stato giocatore caricato: ${player.toJson()}');
         return true;
       }
       return false;
     } catch (e) {
-      print('Error loading player state: $e');
+      debugPrint('Errore nel caricamento dello stato del giocatore: $e');
       return false;
     }
   }
@@ -168,8 +199,10 @@ class PlayerManager extends ChangeNotifier {
     if (!_isInitialized) await initialize();
 
     try {
+      debugPrint('Aggiornamento profilo: ${player.id} con nome: $name');
+
       if (_profiles.any((p) => p.name == name && p.id != player.id)) {
-        throw Exception('Profile name already exists');
+        throw Exception('Il nome del profilo esiste già');
       }
 
       // Genera un nuovo ID se necessario
@@ -189,8 +222,10 @@ class PlayerManager extends ChangeNotifier {
       await _fileStorage.writeProfile(player.id, profileData);
       await _prefs.setString(_lastProfileKey, player.id);
       notifyListeners();
+
+      debugPrint('Profilo aggiornato con successo: ${player.toJson()}');
     } catch (e) {
-      print('Error updating player profile: $e');
+      debugPrint('Errore nell\'aggiornamento del profilo: $e');
       rethrow;
     }
   }
@@ -200,11 +235,13 @@ class PlayerManager extends ChangeNotifier {
     if (!_isInitialized) await initialize();
 
     if (_profiles.length >= maxProfiles) {
-      throw Exception('Maximum number of profiles reached');
+      throw Exception('Numero massimo di profili raggiunto');
     }
     if (_profiles.any((p) => p.name == name)) {
-      throw Exception('Profile name already exists');
+      throw Exception('Il nome del profilo esiste già');
     }
+
+    debugPrint('Creazione nuovo profilo con nome: $name');
 
     late Player newPlayer;
     try {
@@ -220,13 +257,15 @@ class PlayerManager extends ChangeNotifier {
       final profileData = newPlayer.toJson();
       await _fileStorage.writeProfile(newPlayer.id, profileData);
       notifyListeners();
+
+      debugPrint('Nuovo profilo creato: ${newPlayer.toJson()}');
       return newPlayer;
     } catch (e) {
       _profiles.removeWhere((p) => p.id == newPlayer.id);
       if (_currentProfile?.id == newPlayer.id) {
         _currentProfile = _profiles.isNotEmpty ? _profiles.first : null;
       }
-      print('Error creating profile: $e');
+      debugPrint('Errore nella creazione del profilo: $e');
       rethrow;
     }
   }

@@ -150,7 +150,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Colors.blue.shade800, Colors.blue.shade600],
+                colors: [Colors.blue.shade900, Colors.blue.shade800],
               ),
             ),
             child: SafeArea(
@@ -376,7 +376,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       tag: 'profile_avatar_${profile.id}',
       child: CircleAvatar(
         radius: 35,
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.blue.shade800,
         child: Text(
           profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '',
           style: const TextStyle(
@@ -462,7 +462,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                 child: Icon(
                   Icons.add,
                   size: 30,
-                  color: Colors.lightBlue.shade800,
+                  color: Colors.blue.shade800,
                 ),
               ),
               const SizedBox(height: 8),
@@ -472,7 +472,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+                  color: Colors.black87,
                   fontFamily: 'OpenDyslexic',
                 ),
               ),
