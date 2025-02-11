@@ -115,8 +115,8 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.lightBlue.shade900,
-                      Colors.lightBlue.shade700,
+                      Colors.blue.shade900,
+                      Colors.blue.shade800,
                     ],
                   ),
                 ),

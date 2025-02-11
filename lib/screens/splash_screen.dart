@@ -78,7 +78,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.lightBlue.shade800, Colors.lightBlue.shade500],
+            colors: [Colors.blue.shade900, Colors.blue.shade800],
           ),
         ),
         child: SafeArea(
@@ -151,7 +151,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
                             ElevatedButton(
                               onPressed: _initializeApp,
                               style: ElevatedButton.styleFrom(
-                                foregroundColor: Colors.lightBlue[800],
+                                foregroundColor: Colors.blue[900],
                                 backgroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 32, vertical: 16),

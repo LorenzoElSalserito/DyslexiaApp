@@ -57,16 +57,20 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
     // Animazione di scala principale
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.2),
-        weight: 30.0,
+        tween: Tween<double>(begin: 0.0, end: 1.0),
+        weight: 60.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.2),
+        weight: 20.0,
       ),
       TweenSequenceItem(
         tween: Tween<double>(begin: 1.2, end: 1.0),
-        weight: 70.0,
+        weight: 20.0,
       ),
     ]).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.elasticOut,
+      curve: Curves.easeInOut,
     ));
 
     // Animazione di rotazione del cristallo
@@ -75,17 +79,17 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOut,
+      curve: const Interval(0.0, 0.8, curve: Curves.easeInOut),
     ));
 
     // Animazione di scala per il bonus
     _bonusScaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.2),
+        tween: Tween<double>(begin: 1.0, end: 1.1),
         weight: 40.0,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.2, end: 1.0),
+        tween: Tween<double>(begin: 1.1, end: 1.0),
         weight: 60.0,
       ),
     ]).animate(CurvedAnimation(

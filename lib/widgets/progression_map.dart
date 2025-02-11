@@ -176,7 +176,7 @@ class ProgressionMap extends StatelessWidget {
           child: Text(
             '${(averageAccuracy * 100).toStringAsFixed(1)}% Accuratezza',
             style: TextStyle(
-              color: isGoodAccuracy ? Colors.green : Colors.orange,
+              color: isGoodAccuracy ? Colors.green.shade400 : Colors.orange,
               fontSize: 12,
               fontFamily: 'OpenDyslexic',
             ),

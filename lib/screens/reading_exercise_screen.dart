@@ -298,7 +298,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Colors.blue.shade800, Colors.blue.shade500],
+              colors: [Colors.blue.shade700, Colors.blue.shade500],
             ),
           ),
           child: SafeArea(
@@ -319,7 +319,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                             value: _currentExercise / _totalExercises,
                             backgroundColor: Colors.grey[300],
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              _isRecording ? Colors.red[700]! : Colors.blue[700]!,
+                              _isRecording ? Colors.red[700]! : Colors.green[500]!,
                             ),
                           ),
                           Text(
