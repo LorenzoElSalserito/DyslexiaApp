@@ -1,0 +1,2 @@
+/home/lorenzo/IdeaProjects/DislexiaApp/android/app/.cxx/RelWithDebInfo/4v244j36/armeabi-v7a/CMakeFiles/edit_cache.dir
+/home/lorenzo/IdeaProjects/DislexiaApp/android/app/.cxx/RelWithDebInfo/4v244j36/armeabi-v7a/CMakeFiles/rebuild_cache.dir
