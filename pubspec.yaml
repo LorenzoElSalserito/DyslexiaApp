@@ -24,9 +24,9 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # VOSK and Audio related
-  flutter_sound: ^9.2.13
-  permission_handler: ^10.2.0
-  permission_handler_platform_interface: ^3.12.0
+  flutter_sound: ^9.23.1
+  permission_handler: ^11.3.1
+  permission_handler_platform_interface: ^4.2.0
   path_provider: ^2.1.2
 
   # Utilities
@@ -39,7 +39,7 @@ dependencies:
   # Packaging dependencies
   msix: ^3.16.7
   flutter_launcher_icons: ^0.13.1
-  package_info_plus: ^5.0.1
+  package_info_plus: ^8.2.1
 
 dev_dependencies:
   flutter_test:
@@ -49,6 +49,7 @@ dev_dependencies:
   build_runner: ^2.4.7
 
 dependency_overrides:
+  web: ^1.0.0
   vosk_flutter:
     path: ./local_vosk_flutter
 
@@ -56,16 +57,16 @@ dependency_overrides:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/icon/app_icon.png"
+  image_path: "lib/assets/icon/app_icon.png"
   windows:
     generate: true
-    image_path: "assets/icon/app_icon.png"
+    image_path: "lib/assets/icon/app_icon.png"
   macos:
     generate: true
-    image_path: "assets/icon/app_icon.png"
+    image_path: "lib/assets/icon/app_icon.png"
   linux:
     generate: true
-    image_path: "assets/icon/app_icon.png"
+    image_path: "lib/assets/icon/app_icon.png"
 
 # Configurazione Windows
 msix_config:
@@ -88,6 +89,8 @@ flutter:
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
     - lib/assets/icon/
+    - lib/assets/icon/ios_icon.png
+    - lib/assets/icon/macos_icon.png
 
   fonts:
     - family: OpenDyslexic

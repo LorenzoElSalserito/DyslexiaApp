@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=OpenDSA Reading
+Comment=OpenDSA Reading - Dyslexia Helper App
+Icon=app_icon
+Exec=thesis_project
+Terminal=false
+Categories=Education;
+Keywords=reading;dyslexia;learning;education;
+StartupWMClass=OpenDSA Reading

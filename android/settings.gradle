@@ -10,9 +10,14 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
+        gradlePluginPortal()
         google()
         mavenCentral()
-        gradlePluginPortal()
+    }
+    plugins {
+        id("com.android.application") version "8.2.1"
+        id("com.android.library") version "8.2.1"
+        id("org.jetbrains.kotlin.android") version "1.8.10"
     }
 }
 

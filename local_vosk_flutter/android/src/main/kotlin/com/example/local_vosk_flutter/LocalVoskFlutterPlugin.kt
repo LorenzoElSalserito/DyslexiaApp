@@ -10,20 +10,19 @@ import io.flutter.plugin.common.EventChannel
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import java.io.File
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
 import org.vosk.android.SpeechService
-import org.json.JSONObject
 
 /** LocalVoskFlutterPlugin */
-public class LocalVoskFlutterPlugin: FlutterPlugin, MethodCallHandler {
+public class LocalVoskFlutterPlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
     private var model: Model? = null
     private var recognizer: Recognizer? = null
     private var speechService: SpeechService? = null
+    private var recognitionListener: RecognitionListener? = null
 
     private var resultEventSink: EventChannel.EventSink? = null
     private var partialEventSink: EventChannel.EventSink? = null
@@ -79,46 +78,54 @@ public class LocalVoskFlutterPlugin: FlutterPlugin, MethodCallHandler {
             }
             "recognizer.create" -> {
                 try {
-                    val sampleRate = (call.argument("sampleRate") as Number).toFloat()
+                    val sampleRateArg = call.argument<Number>("sampleRate")
+                    if (sampleRateArg == null) {
+                        result.error("RECOGNIZER_ERROR", "sampleRate argument is missing", null)
+                        return
+                    }
+                    val sampleRate = sampleRateArg.toFloat()
                     recognizer = Recognizer(model, sampleRate)
 
-                    // Handle grammar if provided
+                    // Il supporto per il grammar non è disponibile nella versione attuale dell'API.
                     call.argument<String>("grammar")?.let { grammar ->
-                        recognizer?.setGrammar(grammar)
+                        // Se necessario, gestisci il parametro "grammar" qui.
                     }
 
-                    result.success(0) // Return a dummy ID since we only support one recognizer
+                    result.success(0) // ID dummy, in quanto si supporta un solo recognizer
                 } catch (e: Exception) {
                     result.error("RECOGNIZER_ERROR", "Error creating recognizer: ${e.message}", null)
                 }
             }
             "speechService.init" -> {
                 try {
-                    speechService = SpeechService(recognizer, 16000.0f)
-                    speechService?.startListening(object : RecognitionListener {
+                    recognitionListener = object : RecognitionListener {
                         override fun onResult(hypothesis: String?) {
                             Handler(Looper.getMainLooper()).post {
                                 hypothesis?.let { resultEventSink?.success(it) }
                             }
                         }
-
                         override fun onPartialResult(hypothesis: String?) {
                             Handler(Looper.getMainLooper()).post {
                                 hypothesis?.let { partialEventSink?.success(it) }
                             }
                         }
-
+                        override fun onFinalResult(hypothesis: String?) {
+                            Handler(Looper.getMainLooper()).post {
+                                hypothesis?.let { resultEventSink?.success(it) }
+                            }
+                        }
                         override fun onError(exception: Exception?) {
                             Handler(Looper.getMainLooper()).post {
                                 errorEventSink?.error("RECOGNITION_ERROR",
                                     exception?.message ?: "Unknown error", null)
                             }
                         }
-
                         override fun onTimeout() {
-                            // Implement if needed
+                            // Implementa se necessario
                         }
-                    })
+                    }
+                    speechService = SpeechService(recognizer, 16000.0f)
+                    speechService?.startListening(recognitionListener)
                     result.success(true)
                 } catch (e: Exception) {
                     result.error("SERVICE_ERROR", "Error initializing speech service: ${e.message}", null)
@@ -135,9 +142,12 @@ public class LocalVoskFlutterPlugin: FlutterPlugin, MethodCallHandler {
             "speechService.setPause" -> {
                 val paused = call.arguments as Boolean
                 if (paused) {
-                    speechService?.pause()
+                    // Utilizza cancel() per "pausare" in quanto pause() non esiste
+                    speechService?.cancel()
                 } else {
-                    speechService?.startListening()
+                    recognitionListener?.let { listener ->
+                        speechService?.startListening(listener)
+                    }
                 }
                 result.success(true)
             }

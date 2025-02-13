@@ -16,7 +16,7 @@ dependencies:
   archive: ^3.4.9
   http: ^0.13.5
   json_annotation: ^4.8.1
-  permission_handler: ^10.2.0
+  permission_handler: ^11.3.1
   # Aggiungiamo queste dipendenze per il CLI
   args: ^2.4.2
   build_cli_annotations: ^2.1.0

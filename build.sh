@@ -1,96 +1,204 @@
 #!/bin/bash
+set -e
 
-# Colori per output
+# Definizione dei colori per l'output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo "OpenDSA: Reading - Build Script"
 echo "=============================="
 
-# Funzione per il check degli errori
-check_error() {
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Errore durante $1${NC}"
+# Controllo prerequisiti
+echo "Controllo prerequisiti..."
+
+if ! command -v flutter &> /dev/null; then
+    echo -e "${RED}Flutter non trovato. Assicurati che Flutter sia installato e nel PATH.${NC}"
+    exit 1
+fi
+
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if ! command -v wget &> /dev/null; then
+        echo -e "${RED}wget non trovato. Installalo con: sudo apt-get install wget${NC}"
         exit 1
     fi
-}
+fi
 
-# Directory di output
-OUTPUT_DIR="build/releases"
-mkdir -p $OUTPUT_DIR
-
-# Clean build
+# Pulizia della build precedente
 echo "Pulizia build precedente..."
+rm -rf build/
 flutter clean
-check_error "pulizia"
 
-# Get dependencies
+# Installazione delle dipendenze
 echo "Installazione dipendenze..."
 flutter pub get
-check_error "installazione dipendenze"
 
-# Android Build
-if [[ "$OSTYPE" == "darwin"* || "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "Building Android..."
-    flutter build apk --release
-    check_error "build Android APK"
-    cp build/app/outputs/flutter-apk/app-release.apk $OUTPUT_DIR/OpenDSA-Reading.apk
+# Preparazione directory di output
+echo "Preparazione directory di output..."
+OUTPUT_DIR="build/releases"
+mkdir -p "$OUTPUT_DIR"
 
-    flutter build appbundle --release
-    check_error "build Android Bundle"
-    cp build/app/outputs/bundle/release/app-release.aab $OUTPUT_DIR/OpenDSA-Reading.aab
-fi
+# Build per Android
+echo -e "${YELLOW}Building Android...${NC}"
+echo "Building APK..."
+flutter build apk --release || {
+    echo -e "${RED}Errore durante la build Android APK${NC}"
+    exit 1
+}
+cp build/app/outputs/flutter-apk/app-release.apk "$OUTPUT_DIR/OpenDSA-Reading.apk"
 
-# iOS Build (solo su macOS)
+echo "Building App Bundle..."
+flutter build appbundle --release || {
+    echo -e "${RED}Errore durante la build Android App Bundle${NC}"
+    exit 1
+}
+cp build/app/outputs/bundle/release/app-release.aab "$OUTPUT_DIR/OpenDSA-Reading.aab"
+echo -e "${GREEN}Build Android completata${NC}"
+
+# Build per iOS/iPadOS
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "Building iOS..."
-    flutter build ios --release --no-codesign
-    check_error "build iOS"
-    cd ios
-    xcodebuild -workspace Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release archive -archivePath $PWD/build/Runner.xcarchive
-    check_error "archive iOS"
-    xcodebuild -exportArchive -archivePath $PWD/build/Runner.xcarchive -exportOptionsPlist exportOptions.plist -exportPath $PWD/build/ios
-    check_error "export iOS"
-    cd ..
-    cp ios/build/ios/OpenDSA-Reading.ipa $OUTPUT_DIR/
+    echo -e "${YELLOW}Building iOS/iPadOS...${NC}"
+
+    if ! command -v xcodebuild &> /dev/null; then
+        echo -e "${RED}xcodebuild non trovato. Installa Xcode e gli strumenti da riga di comando.${NC}"
+    else
+        flutter build ios --release --no-codesign || {
+            echo -e "${RED}Errore durante la build iOS${NC}"
+            exit 1
+        }
+        mkdir -p "$OUTPUT_DIR/iOS"
+        cp -r build/ios/iphoneos/Runner.app "$OUTPUT_DIR/iOS/"
+        echo -e "${GREEN}Build iOS completata${NC}"
+    fi
+else
+    echo -e "${YELLOW}Skipping iOS build - richiede macOS${NC}"
 fi
 
-# Windows Build
+# Build per Windows
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    echo "Building Windows..."
-    flutter build windows --release
-    check_error "build Windows"
-    flutter pub run msix:create
-    check_error "create MSIX"
-    cp build/windows/runner/Release/OpenDSA-Reading.msix $OUTPUT_DIR/
+    echo -e "${YELLOW}Building Windows...${NC}"
+
+    flutter build windows --release || {
+        echo -e "${RED}Errore durante la build Windows${NC}"
+        exit 1
+    }
+
+    # Copia l'exe
+    mkdir -p "$OUTPUT_DIR/windows"
+    cp -r build/windows/runner/Release/* "$OUTPUT_DIR/windows/"
+
+    # Genera MSIX
+    flutter pub run msix:create || {
+        echo -e "${RED}Errore durante la creazione MSIX${NC}"
+        exit 1
+    }
+
+    # Copia MSIX
+    if [ -f build/windows/runner/Release/*.msix ]; then
+        cp build/windows/runner/Release/*.msix "$OUTPUT_DIR/"
+    fi
+
+    echo -e "${GREEN}Build Windows completata${NC}"
+else
+    echo -e "${YELLOW}Skipping Windows build - richiede Windows${NC}"
 fi
 
-# macOS Build
+# Build per macOS
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "Building macOS..."
-    flutter build macos --release
-    check_error "build macOS"
-    cd macos
-    xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release archive -archivePath $PWD/build/Runner.xcarchive
-    check_error "archive macOS"
-    cd ..
-    cp build/macos/Build/Products/Release/OpenDSA-Reading.app $OUTPUT_DIR/
+    echo -e "${YELLOW}Building macOS...${NC}"
+
+    flutter build macos --release || {
+        echo -e "${RED}Errore durante la build macOS${NC}"
+        exit 1
+    }
+
+    DMG_DIR="build/macos/Build/Products/Release/"
+    hdiutil create -volname "OpenDSA: Reading" \
+                  -srcfolder "$DMG_DIR" \
+                  -ov -format UDZO \
+                  "$OUTPUT_DIR/OpenDSA-Reading.dmg" || {
+        echo -e "${RED}Errore durante la creazione DMG${NC}"
+        exit 1
+    }
+
+    echo -e "${GREEN}Build macOS completata${NC}"
+else
+    echo -e "${YELLOW}Skipping macOS build - richiede macOS${NC}"
 fi
 
-# Linux Build
+# Build per Linux
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "Building Linux..."
-    flutter build linux --release
-    check_error "build Linux"
+    echo -e "${YELLOW}Building Linux...${NC}"
 
-    # Create AppImage
-    wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-    chmod +x linuxdeploy-x86_64.AppImage
-    ./linuxdeploy-x86_64.AppImage --appdir build/linux/x64/release/bundle -e build/linux/x64/release/bundle/thesis_project -i assets/icon/app_icon.png --output appimage
-    check_error "create AppImage"
-    cp OpenDSA-Reading*.AppImage $OUTPUT_DIR/
+    flutter build linux --release || {
+        echo -e "${RED}Errore durante la build Linux${NC}"
+        exit 1
+    }
+
+    # Creazione file .desktop
+    DESKTOP_DIR="build/linux/x64/release/bundle/usr/share/applications"
+    mkdir -p "$DESKTOP_DIR"
+    cat > "$DESKTOP_DIR/thesis_project.desktop" << EOL
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=OpenDSA: Reading
+Comment=OpenDSA: Reading - Dyslexia Helper App
+Icon=app_icon
+Exec=thesis_project
+Terminal=false
+Categories=Education;
+Keywords=reading;dyslexia;learning;education;
+StartupWMClass=thesis_project
+EOL
+
+    # Download linuxdeploy
+    LINUXDEPLOY="linuxdeploy-x86_64.AppImage"
+    if [ ! -f "$LINUXDEPLOY" ]; then
+        wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage" -O "$LINUXDEPLOY" || {
+            echo -e "${RED}Errore durante il download di linuxdeploy${NC}"
+            exit 1
+        }
+        chmod +x "$LINUXDEPLOY"
+    fi
+
+    # Creazione AppImage
+    APPIMAGE_TMP="build/linux-appimage"
+    mkdir -p "$APPIMAGE_TMP"
+
+    ./$LINUXDEPLOY \
+        --appdir="$APPIMAGE_TMP" \
+        -e build/linux/x64/release/bundle/thesis_project \
+        -i lib/assets/icon/app_icon.png \
+        -d "$DESKTOP_DIR/thesis_project.desktop" \
+        --output appimage || {
+            echo -e "${RED}Errore durante la creazione AppImage${NC}"
+            exit 1
+        }
+
+    # Trova e sposta l'AppImage generato
+    GENERATED_APPIMAGE=$(ls -t OpenDSA*AppImage | head -1)
+    if [ -f "$GENERATED_APPIMAGE" ]; then
+        mv "$GENERATED_APPIMAGE" "$OUTPUT_DIR/"
+        echo -e "${GREEN}AppImage creata con successo${NC}"
+    else
+        echo -e "${RED}Errore: AppImage non generata${NC}"
+        exit 1
+    fi
+
+    # Copia la versione non-AppImage
+    mkdir -p "$OUTPUT_DIR/linux"
+    cp -r build/linux/x64/release/bundle/* "$OUTPUT_DIR/linux/"
+
+    echo -e "${GREEN}Build Linux completata${NC}"
+else
+    echo -e "${YELLOW}Skipping Linux build - richiede Linux${NC}"
 fi
 
-echo -e "${GREEN}Build completata con successo!${NC}"
+echo -e "\n${GREEN}Build completata con successo!${NC}"
 echo "Gli installer si trovano in: $OUTPUT_DIR"
+
+# Lista i file generati
+echo -e "\nFile generati:"
+ls -la "$OUTPUT_DIR"
