@@ -87,7 +87,7 @@ flutter:
     - lib/assets/exercises/paragraphs.txt
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
-    - assets/icon/
+    - lib/assets/icon/
 
   fonts:
     - family: OpenDyslexic

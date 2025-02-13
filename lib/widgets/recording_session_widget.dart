@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/audio_service.dart';
-import '../models/enums.dart';  // Aggiunto import per AudioState
 
 class RecordingSessionWidget extends StatefulWidget {
   final VoidCallback? onSessionComplete;
@@ -36,13 +35,11 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
   }
 
   void _setupListeners() {
-    // Ascolta il volume del microfono
+    // Listen for volume updates.
     _audioService.volumeLevel.listen(_handleVolumeUpdate);
-
-    // Ascolta il progresso della registrazione
+    // Listen for recording progress updates.
     _audioService.recordingProgress.listen(_handleProgressUpdate);
-
-    // Ascolta i cambiamenti di stato
+    // Listen for audio state changes.
     _audioService.audioState.listen(_handleStateChange);
   }
 
@@ -71,14 +68,14 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
   }
 
   void _updateStatusMessage(AudioState state) {
+    // Removed the AudioState.paused case because it doesn't exist.
     setState(() {
       _statusMessage = switch (state) {
-        AudioState.recording => 'Registrazione ${_currentAttempt} di ${_audioService.maxAttempts} in corso...',
+        AudioState.recording => 'Registrazione $_currentAttempt di ${_audioService.maxAttempts} in corso...',
         AudioState.waitingNext => 'Preparati per la prossima registrazione...',
         AudioState.stopped => _audioService.isSessionComplete
             ? 'Sessione completata!'
             : 'Premi il pulsante per registrare',
-        AudioState.paused => 'Registrazione in pausa',
       };
     });
   }
@@ -86,23 +83,19 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
   void _startCountdown() {
     _countdown = _audioService.delayBetweenRecordings.inSeconds;
     _countdownTimer?.cancel();
-    _countdownTimer = Timer.periodic(
-      const Duration(seconds: 1),
-          (timer) {
-        setState(() {
-          if (_countdown > 0) {
-            _countdown--;
-          } else {
-            timer.cancel();
-          }
-        });
-      },
-    );
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+        } else {
+          timer.cancel();
+        }
+      });
+    });
   }
 
   Future<void> _toggleRecording() async {
     if (_isProcessing) return;
-
     setState(() => _isProcessing = true);
     try {
       if (_isRecording) {
@@ -121,21 +114,12 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          title,
-          style: const TextStyle(fontFamily: 'OpenDyslexic'),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'OpenDyslexic'),
-        ),
+        title: Text(title, style: const TextStyle(fontFamily: 'OpenDyslexic')),
+        content: Text(message, style: const TextStyle(fontFamily: 'OpenDyslexic')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'OpenDyslexic'),
-            ),
+            child: const Text('OK', style: TextStyle(fontFamily: 'OpenDyslexic')),
           ),
         ],
       ),
@@ -147,7 +131,7 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Indicatore di progresso
+        // Progress indicator.
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: LinearProgressIndicator(
@@ -158,32 +142,24 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
             ),
           ),
         ),
-
         Text(
-          'Registrazione ${_currentAttempt} di ${_audioService.maxAttempts}',
+          'Registrazione $_currentAttempt di ${_audioService.maxAttempts}',
           style: const TextStyle(
             fontSize: 18,
             fontFamily: 'OpenDyslexic',
             color: Colors.black87,
           ),
         ),
-
         const SizedBox(height: 20),
-
         Text(
           _countdown > 0
               ? '$_statusMessage\nProssima registrazione tra $_countdown secondi'
               : _statusMessage,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 16,
-            fontFamily: 'OpenDyslexic',
-          ),
+          style: const TextStyle(fontSize: 16, fontFamily: 'OpenDyslexic'),
         ),
-
         const SizedBox(height: 30),
-
-        // Indicatore del volume durante la registrazione
+        // Volume indicator during recording.
         if (_isRecording)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32.0),
@@ -205,10 +181,8 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
               ),
             ),
           ),
-
         const SizedBox(height: 30),
-
-        // Pulsante di registrazione
+        // Recording button.
         if (!_audioService.isSessionComplete)
           Stack(
             alignment: Alignment.center,
@@ -218,27 +192,18 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isRecording ? Colors.red : Colors.green,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                   disabledBackgroundColor: Colors.grey,
                 ),
                 child: Text(
-                  _isRecording ? 'Stop' :
-                  _isWaiting ? 'Preparati...' :
-                  'Registra',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontFamily: 'OpenDyslexic',
-                  ),
+                  _isRecording ? 'Stop' : _isWaiting ? 'Preparati...' : 'Registra',
+                  style: const TextStyle(fontSize: 18, fontFamily: 'OpenDyslexic'),
                 ),
               ),
-              if (_isProcessing)
-                const CircularProgressIndicator(),
+              if (_isProcessing) const CircularProgressIndicator(),
             ],
           ),
       ],

@@ -1,5 +1,4 @@
 // recognition_result.dart
-import '../utils/text_similarity.dart';
 import '../config/app_config.dart';
 
 class RecognitionResult {
@@ -24,19 +23,26 @@ class RecognitionResult {
       Map<String, dynamic> json,
       String targetText,
       ) {
-    final recognizedText = json['text'] as String;
-    final conf = json['confidence'] as double? ?? 0.0;
-    final dur = Duration(milliseconds: (json['duration'] as num? ?? 0).toInt());
+    final recognizedText = json['text'] as String? ?? '';
+    final List<dynamic> words = json['result'] as List<dynamic>? ?? [];
 
-    // Calcola la similarità con il testo target
-    final sim = TextSimilarity.calculateSimilarity(recognizedText, targetText);
+    // Calcola la confidenza media dalle parole riconosciute
+    double totalConfidence = 0.0;
+    if (words.isNotEmpty) {
+      for (var word in words) {
+        totalConfidence += (word['conf'] as num).toDouble();
+      }
+      totalConfidence /= words.length;
+    }
+
+    final dur = Duration(milliseconds: (json['duration'] as num? ?? 0).toInt());
 
     return RecognitionResult(
       text: recognizedText,
-      confidence: conf,
-      similarity: sim,
+      confidence: totalConfidence,
+      similarity: totalConfidence, // Usiamo la confidenza di VOSK come similarità
       duration: dur,
-      isCorrect: sim >= AppConfig.minSimilarityScore,
+      isCorrect: totalConfidence >= AppConfig.minSimilarityScore,
     );
   }
 

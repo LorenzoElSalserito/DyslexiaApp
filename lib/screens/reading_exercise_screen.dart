@@ -12,6 +12,7 @@ import '../services/exercise_manager.dart';
 import '../models/recognition_result.dart';
 import '../widgets/voice_recognition_feedback.dart';
 import '../widgets/crystal_popup.dart';
+import '../models/enums.dart';
 
 class ReadingExerciseScreen extends StatefulWidget {
   const ReadingExerciseScreen({Key? key}) : super(key: key);
@@ -72,12 +73,11 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       }
       debugPrint('[ReadingExerciseScreen] Sessione inizializzata.');
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isInitialized = false;
-          _errorMessage = 'Errore nell\'inizializzazione: $e';
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _isInitialized = false;
+        _errorMessage = 'Errore nell\'inizializzazione: $e';
+      });
     }
   }
 
@@ -92,6 +92,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         _isProcessing = false;
         _currentExercise++;
       });
+      debugPrint('[ReadingExerciseScreen] Nuovo esercizio caricato: $_currentWord');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -110,6 +111,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         _isRecording = true;
         _errorMessage = null;
       });
+      debugPrint('[ReadingExerciseScreen] Registrazione avviata.');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -122,15 +124,13 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   Future<void> _stopRecording() async {
     if (!_isRecording || !mounted) return;
     try {
-      if (mounted) {
-        setState(() => _isProcessing = true);
-      }
+      setState(() => _isProcessing = true);
       final audioPath = await _audioService.stopRecording();
       if (!mounted) return;
       setState(() => _isRecording = false);
       if (audioPath.isNotEmpty) {
+        // Utilizzo il flusso unificato per processare il risultato
         final result = await _voskService.startRecognition(_currentWord);
-        if (!mounted) return;
         await _handleRecognitionResult(result);
       }
     } catch (e) {
@@ -142,11 +142,10 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
-  /// Gestisce il risultato del riconoscimento vocale.
+  /// Gestisce il risultato del riconoscimento vocale e procede con il caricamento del prossimo esercizio
   Future<void> _handleRecognitionResult(RecognitionResult result) async {
     if (!mounted) return;
     try {
-      // Ottieni il profilo attivo dal PlayerManager
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
       final Player? player = playerManager.currentProfile;
       if (player == null) {
@@ -154,25 +153,19 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       }
       final gameService = Provider.of<GameService>(context, listen: false);
 
-      final syllables = _countSyllables(_currentWord);
-      final crystalsEarned = syllables * 5;
-      if (!mounted) return;
+      // Processa il risultato tramite ExerciseManager e ottiene i cristalli guadagnati
+      final crystalsEarned = await _exerciseManager.processExerciseResult(result);
       setState(() => _totalCrystals += crystalsEarned);
+      debugPrint('[ReadingExerciseScreen] Risultato processato. Cristalli guadagnati: $crystalsEarned');
 
-      final newAccuracy = ((_sessionAccuracy * (_currentExercise - 1)) + result.similarity) / _currentExercise;
-      if (!mounted) return;
-      setState(() => _sessionAccuracy = newAccuracy);
+      // Mostra il popup di feedback
+      await _showFeedbackPopup(result, crystalsEarned,
+          player.currentLevel);
 
-      await _showFeedbackPopup(result, crystalsEarned, player.currentLevel);
-
-      await _exerciseManager.processExerciseResult(result);
-      await gameService.processExerciseResult(result);
-
+      // Se la sessione è completa, mostra il riepilogo, altrimenti carica un nuovo esercizio
       if (_currentExercise >= _totalExercises) {
-        if (!mounted) return;
         await _showSessionSummary();
       } else {
-        if (!mounted) return;
         await _loadNewExercise();
       }
     } catch (e) {
@@ -187,7 +180,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   /// Mostra il popup di feedback dopo ogni esercizio
   Future<void> _showFeedbackPopup(RecognitionResult result, int crystalsEarned, int level) async {
     if (!mounted) return;
-    return showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => CrystalPopup(
@@ -199,15 +192,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     );
   }
 
-  /// Conta le sillabe in una parola italiana
-  int _countSyllables(String word) {
-    final vowels = RegExp('[aeiouAEIOU]');
-    final diphthongs = RegExp('(ai|au|ei|eu|oi|ou|ia|ie|io|iu|ua|ue|ui|uo)');
-    int count = vowels.allMatches(word).length;
-    count -= diphthongs.allMatches(word).length;
-    return count > 0 ? count : 1;
-  }
-
   /// Mostra il riepilogo della sessione
   Future<void> _showSessionSummary() async {
     if (!mounted) return;
@@ -216,7 +200,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         context: context,
         barrierDismissible: false,
         builder: (context) {
-          // Usa il PlayerManager per ottenere il livello attivo
           final playerManager = Provider.of<PlayerManager>(context, listen: false);
           final int currentLevel = playerManager.currentProfile?.currentLevel ?? 1;
           return CrystalPopup(
@@ -252,6 +235,15 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         _errorMessage = 'Errore nel mostrare il riepilogo: $e';
       });
     }
+  }
+
+  /// Conta le sillabe in una parola italiana
+  int _countSyllables(String word) {
+    final vowels = RegExp('[aeiouAEIOU]');
+    final diphthongs = RegExp('(ai|au|ei|eu|oi|ou|ia|ie|io|iu|ua|ue|ui|uo)');
+    int count = vowels.allMatches(word).length;
+    count -= diphthongs.allMatches(word).length;
+    return count > 0 ? count : 1;
   }
 
   @override
@@ -319,7 +311,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                             value: _currentExercise / _totalExercises,
                             backgroundColor: Colors.grey[300],
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              _isRecording ? Colors.red[700]! : Colors.green[500]!,
+                              _isRecording ? Colors.red.shade700! : Colors.green.shade500!,
                             ),
                           ),
                           Text(
@@ -367,7 +359,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                               onPressed: _isRecording ? _stopRecording : _startRecording,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
-                                _isRecording ? Colors.red[700] : Colors.green[700],
+                                _isRecording ? Colors.red.shade700 : Colors.green.shade700,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 48,
@@ -385,14 +377,14 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                             )
                           else
                             CircularProgressIndicator(
-                              valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.yellowAccent[700]!),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.yellowAccent.shade700),
                             ),
                           if (_errorMessage != null)
                             Text(
                               _errorMessage!,
                               style: TextStyle(
-                                color: Colors.red[700],
+                                color: Colors.red.shade700,
                                 fontFamily: 'OpenDyslexic',
                               ),
                             ),
@@ -419,4 +411,23 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     _voskService.dispose();
     super.dispose();
   }
+}
+
+/// Classe che rappresenta un singolo esercizio
+class Exercise {
+  final String content;
+  final ExerciseType type;
+  final Difficulty difficulty;
+  final int crystalValue;
+  final bool isBonus;
+  final Map<String, dynamic>? metadata;
+
+  Exercise({
+    required this.content,
+    required this.type,
+    required this.difficulty,
+    required this.crystalValue,
+    this.isBonus = false,
+    this.metadata,
+  });
 }

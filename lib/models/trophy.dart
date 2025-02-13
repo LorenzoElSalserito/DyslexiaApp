@@ -153,7 +153,7 @@ class Trophy {
       name: 'Trofeo del Gran Maestro Supremo Della Lettura',
       description: 'La Consacrazione nella Leggenda per un lettore',
       baseCost: 1000000,
-      icon: Icons.stars_rounded,
+      icon: Icons.stadium_rounded,
       color: Colors.amber.shade800,
       rarity: 'Leggendario',
       sequenceNumber: 10,

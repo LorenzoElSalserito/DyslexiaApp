@@ -132,7 +132,7 @@ class _CrystalPopupState extends State<CrystalPopup>
     if (widget.isDailyLoginBonus) {
       titleText = 'Bonus Giornaliero!';
       messageText = widget.consecutiveDays != null && widget.consecutiveDays! > 1
-          ? 'Hai effettuato il login per ${widget.consecutiveDays} giorni consecutivi!\nBravo! Continua ad Esercitarti e ti regaleremo altri Cristalli'
+          ? 'Hai effettuato il login per ${widget.consecutiveDays} giorni consecutivi!\nBravo! Continua ad esercitarti e ti regaleremo altri cristalli'
           : 'Benvenuto di nuovo!\nContinua ad esercitarti ogni giorno per ottenere più bonus!';
     } else if (widget.isSessionSummary) {
       titleText = 'Riepilogo Sessione';
@@ -247,44 +247,51 @@ class _CrystalPopupState extends State<CrystalPopup>
     );
   }
 
-  /// Nuovo metodo: mostra un indicatore emoji in base al progresso (accuratezza)
+
   Widget _buildRecognitionResult() {
     if (widget.recognitionResult == null) return const SizedBox.shrink();
 
     final emoji = _getEmojiForProgress(widget.recognitionResult!.similarity);
     final similarity = (widget.recognitionResult!.similarity * 100).toStringAsFixed(1);
-    final color = widget.recognitionResult!.isCorrect ? Colors.green : Colors.orange;
+    final textColor = widget.recognitionResult!.isCorrect ? Colors.green.shade700 : Colors.orange.shade700;
+    final bgColor = widget.recognitionResult!.similarity > 0.75
+        ? Colors.green.shade100
+        : (widget.recognitionResult!.similarity < 0.45)
+        ? Colors.red.shade100
+        : Colors.orange.shade100;
 
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 8.0),
+      color: bgColor, // Use the computed background color
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Mostra l'emoji come indicatore principale
+            // Display the emoji as the main indicator.
             Text(
               emoji,
               style: const TextStyle(fontSize: 64),
             ),
             const SizedBox(height: 8),
-            // Mostra la percentuale di accuratezza
+            // Display the accuracy percentage.
             Text(
               'Accuratezza: $similarity%',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: textColor,
                 fontFamily: 'OpenDyslexic',
               ),
             ),
             const SizedBox(height: 8),
-            // Testo riconosciuto e messaggio di feedback
+            // Header for recognized text.
             Text(
               'Testo riconosciuto:',
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 4),
+            // Recognized text.
             Text(
               widget.recognitionResult!.text,
               style: const TextStyle(
@@ -293,6 +300,7 @@ class _CrystalPopupState extends State<CrystalPopup>
               ),
             ),
             const SizedBox(height: 8),
+            // Feedback message.
             Text(
               widget.recognitionResult!.getFeedbackMessage(),
               style: const TextStyle(fontFamily: 'OpenDyslexic'),

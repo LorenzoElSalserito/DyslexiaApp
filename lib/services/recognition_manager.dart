@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import '../models/recognition_result.dart';
 import '../services/speech_recognition_service.dart';
 import '../models/enums.dart';
-import '../utils/text_similarity.dart';
+import '../config/app_config.dart';
+
 
 /// Il RecognitionManager è responsabile di coordinare il processo di riconoscimento vocale,
 /// gestire i risultati e mantenere le statistiche della sessione corrente.
@@ -87,27 +88,34 @@ class RecognitionManager extends ChangeNotifier {
     }
   }
 
-  /// Gestisce l'elaborazione di un nuovo risultato di riconoscimento
-  void _handleRecognitionResult(RecognitionResult result) {
-    _lastResult = result;
-    _sessionResults.add(result);
+  /// Gestisce il risultato del riconoscimento vocale.
+  Future<void> _handleRecognitionResult(RecognitionResult result) async {
+    if (_currentText == null || _targetText == null) return;
 
-    if (result.isCorrect) {
-      _successfulAttempts++;
-      _processSuccessfulAttempt(result);
+    try {
+      // Usiamo direttamente la similarity calcolata da VOSK che è già presente nel result
+      final similarity = result.similarity;
+
+      if (similarity >= AppConfig.minSimilarityScore) {
+        _successfulAttempts++;
+        _resetForNextAttempt();
+      }
+
+      _lastResult = result;
+      _sessionResults.add(result);
+
+      notifyListeners();
+    } catch (e) {
+      _lastError = 'Errore nel processare il risultato: $e';
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   /// Elabora un tentativo riuscito di riconoscimento
   void _processSuccessfulAttempt(RecognitionResult result) {
     try {
       if (_targetText != null) {
-        double similarity = TextSimilarity.calculateSimilarity(
-            result.text,
-            _targetText!
-        );
+        double similarity = result.similarity;
 
         // Verifica se il risultato supera la soglia di successo
         if (similarity >= 0.85) {

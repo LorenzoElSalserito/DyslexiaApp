@@ -8,9 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:vosk_flutter/vosk_flutter.dart';
 import '../models/recognition_result.dart';
-import '../utils/text_similarity.dart';
 import '../config/app_config.dart';
 import 'permission_service.dart';
+import 'audio_service.dart';
 
 /// VoskService gestisce l'interazione con il motore di riconoscimento vocale VOSK.
 /// Implementa il pattern Singleton per garantire un'unica istanza del servizio e
@@ -27,6 +27,7 @@ class VoskService {
 
   // Servizi di supporto
   final PermissionService _permissionService = PermissionService();
+  final AudioService _audioService = AudioService();
 
   // Stato del servizio
   bool _isInitialized = false;
@@ -34,6 +35,8 @@ class VoskService {
   String _modelPath = '';
   StreamSubscription? _resultSubscription;
   StreamSubscription? _partialSubscription;
+  StreamSubscription? _volumeSubscription;
+  double _currentVolume = 0.0;
 
   // Buffer per i log del servizio
   final List<String> _serviceLog = [];
@@ -50,6 +53,14 @@ class VoskService {
   /// Costruttore privato per il singleton
   VoskService._() {
     _logEvent('VoskService inizializzato');
+    _initAudioService();
+  }
+
+  void _initAudioService() {
+    _audioService.initialize();
+    _volumeSubscription = _audioService.volumeLevel.listen((volume) {
+      _currentVolume = volume;
+    });
   }
 
   /// Registra un evento nel log del servizio con timestamp
@@ -72,7 +83,7 @@ class VoskService {
   }
 
   /// Inizializza il servizio e prepara il modello di riconoscimento vocale
-  Future<void> initialize({BuildContext? context}) async {
+  Future<void> initialize() async {
     if (_isInitialized) {
       _logEvent('Servizio già inizializzato');
       return;
@@ -93,7 +104,7 @@ class VoskService {
       try {
         attempts++;
         _logEvent('Tentativo di inizializzazione #$attempts');
-        await _initializeWithRetry(context);
+        await _initializeWithRetry();
         success = true;
       } catch (e, stackTrace) {
         _logEvent('Errore nel tentativo #$attempts: $e');
@@ -111,18 +122,10 @@ class VoskService {
   }
 
   /// Implementa la logica di inizializzazione con retry
-  Future<void> _initializeWithRetry(BuildContext? context) async {
+  Future<void> _initializeWithRetry() async {
     _logEvent('Inizio inizializzazione con retry');
 
-    // Verifica dei permessi necessari
-    bool hasPermissions;
-    if (context != null) {
-      _logEvent('Richiesta permessi con context');
-      hasPermissions = await _permissionService.requestAllPermissions(context);
-    } else {
-      _logEvent('Verifica permessi senza context');
-      hasPermissions = await _permissionService.checkAllPermissions();
-    }
+    bool hasPermissions = await _permissionService.checkAllPermissions();
 
     if (!hasPermissions) {
       throw Exception('Permessi necessari non concessi');
@@ -145,6 +148,13 @@ class VoskService {
         sampleRate: AppConfig.sampleRate,
       );
       _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+
+      // Impostiamo le configurazioni dopo la creazione utilizzando i parametri nominati
+      if (_speechRecognizer != null) {
+        await _speechRecognizer!.setMaxAlternatives(0);
+        await _speechRecognizer!.setPartialWords(partialWords: true);
+        await _speechRecognizer!.setWords(words: true);
+      }
     }
 
     _isInitialized = true;
@@ -231,22 +241,62 @@ class VoskService {
 
       _resultSubscription = _speechService!.onResult().listen(
             (Map<String, dynamic> result) {
-          final duration = DateTime.now().difference(startTime);
-          if (duration > const Duration(hours: 1)) {
-            _logEvent('Durata audio ($duration) superiore a 60 minuti. Abort processing.');
+          final currentDuration = DateTime.now().difference(startTime);
+          if (currentDuration > const Duration(hours: 1)) {
+            _logEvent('Durata audio ($currentDuration) superiore a 60 minuti. Abort processing.');
             if (!completer.isCompleted) {
               completer.completeError(Exception('Audio file too long. Processing aborted.'));
             }
             return;
           }
+
+          // Se il volume è troppo basso o troppo alto, consideriamo come nessun input
+          if (_currentVolume < AppConfig.volumeThreshold || _currentVolume > AppConfig.maxVolume) {
+            final silentResult = RecognitionResult(
+              text: '',
+              confidence: 0.0,
+              similarity: 0.0,
+              isCorrect: false,
+              duration: currentDuration,
+            );
+
+            if (!completer.isCompleted) {
+              completer.complete(silentResult);
+            }
+            return;
+          }
+
+          // Continua con il normale processamento VOSK solo se c'è abbastanza volume
           final recognizedText = result['text'] as String? ?? '';
-          final similarity = TextSimilarity.calculateSimilarity(recognizedText, targetText);
+          final List<dynamic> words = result['result'] as List<dynamic>? ?? [];
+          double totalConfidence = 0.0;
+
+          if (words.isNotEmpty) {
+            // Se il testo riconosciuto corrisponde esattamente al target
+            if (recognizedText.trim().toLowerCase() == targetText.trim().toLowerCase()) {
+              for (var word in words) {
+                totalConfidence += (word['conf'] as num).toDouble();
+              }
+              totalConfidence /= words.length;
+            } else {
+              for (var word in words) {
+                totalConfidence += (word['conf'] as num).toDouble();
+              }
+              totalConfidence /= words.length;
+              totalConfidence *= 0.5; // Penalità per mancata corrispondenza esatta
+            }
+
+            if (_currentVolume < AppConfig.idealVolume) {
+              totalConfidence *= (_currentVolume / AppConfig.idealVolume);
+            }
+          }
+
           final recognitionResult = RecognitionResult(
             text: recognizedText,
-            confidence: result['confidence'] as double? ?? 1.0,
-            similarity: similarity,
-            isCorrect: similarity >= AppConfig.minSimilarityScore,
-            duration: DateTime.now().difference(startTime),
+            confidence: totalConfidence,
+            similarity: totalConfidence,
+            isCorrect: totalConfidence >= AppConfig.minSimilarityScore,
+            duration: currentDuration,
           );
           _logEvent('Risultato finale: ${recognitionResult.text}');
           _logEvent('Similarità: ${recognitionResult.similarity}');
@@ -322,10 +372,12 @@ class VoskService {
   Future<void> dispose() async {
     _logEvent('Dispose del servizio VoskService chiamato.');
     await stopRecognition();
+    await _volumeSubscription?.cancel();
     if (_isInitialized && !_isSimulatedMode) {
       _speechRecognizer?.dispose();
       _model?.dispose();
       await _speechService?.dispose();
+      await _audioService.dispose();
       _speechService = null;
       _speechRecognizer = null;
       _model = null;
