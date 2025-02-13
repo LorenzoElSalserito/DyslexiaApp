@@ -37,7 +37,7 @@ dependencies:
   json_annotation: ^4.8.1
 
   # Packaging dependencies
-  msix: ^3.16.7
+  msix: ^3.16.8
   flutter_launcher_icons: ^0.13.1
   package_info_plus: ^8.2.1
 

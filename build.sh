@@ -202,3 +202,6 @@ echo "Gli installer si trovano in: $OUTPUT_DIR"
 # Lista i file generati
 echo -e "\nFile generati:"
 ls -la "$OUTPUT_DIR"
+
+echo -e "\n${GREEN}Questa app è stata Sviluppata da Lorenzo De Marco - ©Lorenzo DM${NC}"
+echo -e "\n${GREEN}Divertiti ad Usarla!${NC}"
