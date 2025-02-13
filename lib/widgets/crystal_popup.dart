@@ -1,3 +1,5 @@
+// lib/widgets/crystal_popup.dart
+
 import 'package:flutter/material.dart';
 import '../models/recognition_result.dart';
 
@@ -5,16 +7,16 @@ import '../models/recognition_result.dart';
 /// Gestisce sia il feedback per singoli esercizi che il riepilogo delle sessioni
 /// e il bonus giornaliero, fornendo un'esperienza utente gratificante e informativa.
 class CrystalPopup extends StatefulWidget {
-  final int earnedCrystals;           // Cristalli guadagnati in questa sessione
-  final int level;                    // Livello attuale del giocatore
-  final double progress;              // Progresso/accuratezza dell'esercizio
-  final RecognitionResult? recognitionResult;  // Risultato del riconoscimento vocale
-  final bool isSessionSummary;        // Indica se è un riepilogo sessione
-  final bool isStreakBonus;           // Indica se è un bonus streak
-  final int? consecutiveDays;         // Giorni consecutivi di gioco
-  final VoidCallback? onContinue;     // Callback per continuare
-  final VoidCallback? onEnd;          // Callback per terminare
-  final bool isDailyLoginBonus;       // Indica se è un bonus di login giornaliero
+  final int earnedCrystals; // Cristalli guadagnati in questa sessione
+  final int level; // Livello attuale del giocatore
+  final double progress; // Progresso/accuratezza dell'esercizio (valore da 0.0 a 1.0)
+  final RecognitionResult? recognitionResult; // Risultato del riconoscimento vocale
+  final bool isSessionSummary; // Indica se è un riepilogo sessione
+  final bool isStreakBonus; // Indica se è un bonus streak
+  final int? consecutiveDays; // Giorni consecutivi di gioco
+  final VoidCallback? onContinue; // Callback per continuare
+  final VoidCallback? onEnd; // Callback per terminare
+  final bool isDailyLoginBonus; // Indica se è un bonus di login giornaliero
 
   const CrystalPopup({
     Key? key,
@@ -34,7 +36,8 @@ class CrystalPopup extends StatefulWidget {
   _CrystalPopupState createState() => _CrystalPopupState();
 }
 
-class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderStateMixin {
+class _CrystalPopupState extends State<CrystalPopup>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _rotateAnimation;
@@ -73,7 +76,7 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
       curve: Curves.easeInOut,
     ));
 
-    // Animazione di rotazione del cristallo
+    // Animazione di rotazione del cristallo (rimane invariata)
     _rotateAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -103,12 +106,21 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
     double opacity = 0.5 + (widget.progress * 0.5);
     opacity = opacity.clamp(0.0, 1.0);
     return switch (widget.level) {
-      1 => Colors.red.withOpacity(opacity),
-      2 => Colors.orange.withOpacity(opacity),
-      3 => Colors.yellow.withOpacity(opacity),
-      4 => Colors.blue.withOpacity(opacity),
-      _ => Colors.purple.withOpacity(opacity),
+      1 => Colors.red.shade700,
+      2 => Colors.orange.shade700,
+      3 => Colors.yellowAccent.shade700,
+      4 => Colors.green.shade700,
+      5 => Colors.blue.shade700,
+      _ => Colors.purple.shade700,
     };
+  }
+
+  /// Restituisce l'emoji da mostrare in base all'accuratezza
+  String _getEmojiForProgress(double progress) {
+    if (progress < 0.45) return "😭";
+    if (progress < 0.75) return "😊";
+    if (progress < 0.90) return "😉";
+    return "🤩";
   }
 
   @override
@@ -235,31 +247,59 @@ class _CrystalPopupState extends State<CrystalPopup> with SingleTickerProviderSt
     );
   }
 
+  /// Nuovo metodo: mostra un indicatore emoji in base al progresso (accuratezza)
   Widget _buildRecognitionResult() {
-    return Column(
-      children: [
-        const SizedBox(height: 16),
-        LinearProgressIndicator(
-          value: widget.recognitionResult!.similarity,
-          backgroundColor: Colors.grey[200],
-          valueColor: AlwaysStoppedAnimation<Color>(
-            widget.recognitionResult!.similarity >= 0.85
-                ? Colors.green
-                : Colors.orange,
-          ),
-          minHeight: 8,
+    if (widget.recognitionResult == null) return const SizedBox.shrink();
+
+    final emoji = _getEmojiForProgress(widget.recognitionResult!.similarity);
+    final similarity = (widget.recognitionResult!.similarity * 100).toStringAsFixed(1);
+    final color = widget.recognitionResult!.isCorrect ? Colors.green : Colors.orange;
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Mostra l'emoji come indicatore principale
+            Text(
+              emoji,
+              style: const TextStyle(fontSize: 64),
+            ),
+            const SizedBox(height: 8),
+            // Mostra la percentuale di accuratezza
+            Text(
+              'Accuratezza: $similarity%',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontFamily: 'OpenDyslexic',
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Testo riconosciuto e messaggio di feedback
+            Text(
+              'Testo riconosciuto:',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.recognitionResult!.text,
+              style: const TextStyle(
+                fontStyle: FontStyle.italic,
+                fontFamily: 'OpenDyslexic',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.recognitionResult!.getFeedbackMessage(),
+              style: const TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          widget.recognitionResult!.getFeedbackMessage(),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 14,
-            fontFamily: 'OpenDyslexic',
-          ),
-        ),
-      ],
+      ),
     );
   }
 

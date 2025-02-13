@@ -71,7 +71,7 @@ class PlayerProfile extends Player {
 /// Gestore dei profili giocatore
 class ProfileManager extends ChangeNotifier {
   static const String _profilesKey = 'user_profiles';
-  static const int _maxProfiles = 4;
+  static const int _maxProfiles = 100;
 
   final SharedPreferences _prefs;
   List<PlayerProfile> _profiles = [];

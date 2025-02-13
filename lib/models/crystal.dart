@@ -1,5 +1,5 @@
 // lib/models/crystal.dart
-enum CrystalType { Red, Orange, Yellow, White, Blue }
+enum CrystalType { Red, Orange, Yellow, Green, Blue, Purple }
 
 class Crystal {
   final CrystalType type;

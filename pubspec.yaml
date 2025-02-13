@@ -1,5 +1,5 @@
 name: thesis_project
-description: "Thesis Project for Dyslexia"
+description: "OpenDSA: Reading - Applicazione per assistere persone con dislessia nella lettura"
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -7,6 +7,7 @@ version: 1.0.0+1
 environment:
   sdk: ">=3.5.3 <4.0.0"
 
+# Dipendenze base
 dependencies:
   flutter:
     sdk: flutter
@@ -35,6 +36,11 @@ dependencies:
   collection: ^1.18.0
   json_annotation: ^4.8.1
 
+  # Packaging dependencies
+  msix: ^3.16.7
+  flutter_launcher_icons: ^0.13.1
+  package_info_plus: ^5.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -45,6 +51,30 @@ dev_dependencies:
 dependency_overrides:
   vosk_flutter:
     path: ./local_vosk_flutter
+
+# Configurazione icone applicazione
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+  macos:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+  linux:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+
+# Configurazione Windows
+msix_config:
+  display_name: OpenDSA Reading
+  publisher_display_name: Lorenzo De Marco
+  identity_name: Lorenzo DM (LorenzoElSalserito)
+  msix_version: 1.0.0.0
+  logo_path: assets/icon/app_icon.png
+  capabilities: internetClient, microphone
 
 flutter:
   uses-material-design: true
@@ -57,6 +87,7 @@ flutter:
     - lib/assets/exercises/paragraphs.txt
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
+    - assets/icon/
 
   fonts:
     - family: OpenDyslexic
@@ -68,6 +99,4 @@ flutter:
           weight: 700
         - asset: lib/assets/fonts/OpenDyslexic-Bold-Italic.otf
           weight: 700
-
-#TODO: assicurarsi che tutti i files .dart siano utili
-#TODO: assicurarsi che il profilo "admin" abbia i pulsanti per poter avanzare di livello senza dover fare gli esercizi fino al NG+
+          style: italic

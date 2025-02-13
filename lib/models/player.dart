@@ -1,6 +1,6 @@
 // lib/models/player.dart
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../services/file_storage_service.dart';
 import 'dart:convert';
@@ -13,6 +13,9 @@ class Player with ChangeNotifier {
 
   // Service per il salvataggio dei dati
   final FileStorageService _storageService = FileStorageService();
+
+  // Flag per evitare notify dopo dispose
+  bool _isDisposed = false;
 
   // Proprietà fondamentali del giocatore
   String _id = '';
@@ -41,12 +44,13 @@ class Player with ChangeNotifier {
   };
 
   // Getters e setters
+
   String get id => _id;
   set id(String value) {
     if (_id != value) {
       _id = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -55,7 +59,7 @@ class Player with ChangeNotifier {
     if (value.isNotEmpty && _name != value) {
       _name = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -65,7 +69,7 @@ class Player with ChangeNotifier {
       _totalCrystals = value;
       _gameData['crystals'] = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -75,7 +79,7 @@ class Player with ChangeNotifier {
       _currentLevel = value;
       _gameData['level'] = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -84,7 +88,7 @@ class Player with ChangeNotifier {
     if (_currentStep != value) {
       _currentStep = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -100,7 +104,7 @@ class Player with ChangeNotifier {
       _lastPlayDate = value;
       _gameData['lastPlayDate'] = value?.toIso8601String();
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -109,7 +113,7 @@ class Player with ChangeNotifier {
     if (_maxConsecutiveDays != value) {
       _maxConsecutiveDays = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -118,7 +122,7 @@ class Player with ChangeNotifier {
     if (_currentConsecutiveDays != value) {
       _currentConsecutiveDays = value;
       saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -129,9 +133,8 @@ class Player with ChangeNotifier {
   void updateGameData(Map<String, dynamic> newData) {
     _gameData = Map<String, dynamic>.from(newData);
     saveProgress();
-    // Posticipa notifyListeners al termine del frame per evitare errori durante il build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
+      _notifyIfNotDisposed();
     });
   }
 
@@ -154,6 +157,7 @@ class Player with ChangeNotifier {
       shouldSave = true;
     }
 
+    // Se è un nuovo profilo, resetta i dati
     if (_totalCrystals == 0 && _currentLevel == 1) {
       _totalCrystals = 0;
       _currentLevel = 1;
@@ -171,7 +175,7 @@ class Player with ChangeNotifier {
 
     if (shouldSave) {
       await saveProgress();
-      notifyListeners();
+      _notifyIfNotDisposed();
     }
   }
 
@@ -187,24 +191,20 @@ class Player with ChangeNotifier {
       return;
     }
 
-    if (_lastLoginDate != null) {
-      if (_isSameDay(_lastLoginDate!, yesterday)) {
-        _currentConsecutiveDays++;
-        if (_currentConsecutiveDays > _maxConsecutiveDays) {
-          maxConsecutiveDays = _currentConsecutiveDays;
-        }
-      } else if (_isSameDay(_lastLoginDate!, now)) {
-        return;
-      } else {
-        _currentConsecutiveDays = 1;
+    if (_isSameDay(_lastLoginDate!, yesterday)) {
+      _currentConsecutiveDays++;
+      if (_currentConsecutiveDays > _maxConsecutiveDays) {
+        maxConsecutiveDays = _currentConsecutiveDays;
       }
+    } else if (!_isSameDay(_lastLoginDate!, now)) {
+      _currentConsecutiveDays = 1;
     }
 
     _lastLoginDate = now;
     _gameData['lastLoginDate'] = now.toIso8601String();
 
     saveProgress();
-    notifyListeners();
+    _notifyIfNotDisposed();
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -220,13 +220,9 @@ class Player with ChangeNotifier {
     }
   }
 
-  bool canLevelUp() => totalCrystals >= levelCrystalCost;
 
   void levelUp() {
-    if (canLevelUp() || isAdmin) {
-      if (!isAdmin) {
-        totalCrystals -= levelCrystalCost;
-      }
+    if (currentLevel < 6) {  // Massimo livello è 6
       currentLevel++;
       currentStep = 0;
       saveProgress();
@@ -247,7 +243,7 @@ class Player with ChangeNotifier {
     _usedSentences.clear();
     _gameData['newGamePlus'] = _newGamePlusCount;
     saveProgress();
-    notifyListeners();
+    _notifyIfNotDisposed();
   }
 
   Map<String, dynamic> toJson() {
@@ -297,7 +293,7 @@ class Player with ChangeNotifier {
     _gameData = (json['gameData'] as Map?)?.cast<String, dynamic>() ?? {};
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
+      _notifyIfNotDisposed();
     });
   }
 
@@ -351,11 +347,23 @@ class Player with ChangeNotifier {
     _usedSentences.clear();
     _gameData.clear();
     await saveProgress();
-    notifyListeners();
+    _notifyIfNotDisposed();
   }
 
   Future<bool> hasProfile() async {
     if (_id.isEmpty) return false;
     return await _storageService.profileExists(_id);
+  }
+
+  void _notifyIfNotDisposed() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

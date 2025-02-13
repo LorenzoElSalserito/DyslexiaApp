@@ -16,16 +16,16 @@ class AppConfig {
   static const int bufferSize = 4096;
 
   // Configurazioni Riconoscimento
-  static const double minSimilarityScore = 0.85;
-  static const double perfectSimilarityScore = 0.95;
-  static const int maxRecordingDuration = 30; // secondi
+  static const double minSimilarityScore = 0.75;
+  static const double perfectSimilarityScore = 0.90;
+  static const int maxRecordingDuration = 3600; // secondi
   static const int minRecordingDuration = 1;  // secondi
 
   // Configurazioni Game
-  static const int basePointsWord = 10;
-  static const int basePointsSentence = 30;
-  static const int basePointsParagraph = 100;
-  static const int basePointsPage = 200;
+  static const int basePointsWord = 1;
+  static const int basePointsSentence = 5;
+  static const int basePointsParagraph = 10;
+  static const int basePointsPage = 20;
 
   // Configurazioni Feedback
   static const bool defaultVibrationEnabled = true;
@@ -39,9 +39,9 @@ class AppConfig {
   static const Duration cacheExpiration = Duration(days: 30);
 
   // Configurazioni Learning Analytics
-  static const int maxStoredSessions = 50;
+  static const int maxStoredSessions = 20;
   static const int minSessionDuration = 60; // secondi
-  static const int maxSessionDuration = 3600; // secondi
+  static const int maxSessionDuration = 3900; // secondi
 
   // Configurazioni UI
   static const Duration animationDuration = Duration(milliseconds: 300);

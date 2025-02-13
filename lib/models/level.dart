@@ -34,11 +34,9 @@ class Level {
       number: 1,
       crystalType: CrystalType.Red,
       targetWords: 30,
-      targetCrystals: 300,
+      targetCrystals: 0,  // Rimosso costo
       subLevels: [
         SubLevel(name: "Parole Semplici", minWordLength: 3, maxWordLength: 5),
-        SubLevel(name: "Parole Medie", minWordLength: 6, maxWordLength: 8),
-        SubLevel(name: "Parole Complesse", minWordLength: 9, maxWordLength: 12),
       ],
       difficultyMultipliers: defaultMultipliers,
     ),
@@ -46,11 +44,9 @@ class Level {
       number: 2,
       crystalType: CrystalType.Orange,
       targetWords: 20,
-      targetCrystals: 1500,
+      targetCrystals: 0,  // Rimosso costo
       subLevels: [
-        SubLevel(name: "Frasi Brevi", minWords: 3, maxWords: 5),
-        SubLevel(name: "Frasi Medie", minWords: 6, maxWords: 8),
-        SubLevel(name: "Frasi Lunghe", minWords: 9, maxWords: 12),
+        SubLevel(name: "Parole Medie", minWords: 6, maxWords: 8),
       ],
       difficultyMultipliers: defaultMultipliers,
     ),
@@ -58,11 +54,19 @@ class Level {
       number: 3,
       crystalType: CrystalType.Yellow,
       targetWords: 20,
-      targetCrystals: 5000,
+      targetCrystals: 0,  // Rimosso costo
       subLevels: [
-        SubLevel(name: "Paragrafi Semplici", minSentences: 2, maxSentences: 3),
-        SubLevel(name: "Paragrafi Medi", minSentences: 4, maxSentences: 6),
-        SubLevel(name: "Paragrafi Complessi", minSentences: 7, maxSentences: 9),
+        SubLevel(name: "Parole Difficili", minWords: 9, maxWords: 12),
+      ],
+      difficultyMultipliers: defaultMultipliers,
+    ),
+    Level(
+      number: 4,
+      crystalType: CrystalType.Green,
+      targetWords: 15,
+      targetCrystals: 0,  // Rimosso costo
+      subLevels: [
+        SubLevel(name: "Frasi", minSentences: 1, maxSentences: 1),
       ],
       difficultyMultipliers: {
         Difficulty.easy: 1.0,
@@ -71,22 +75,32 @@ class Level {
       },
     ),
     Level(
-      number: 4,
-      crystalType: CrystalType.White,
+      number: 5,
+      crystalType: CrystalType.Blue,
       targetWords: 10,
-      targetCrystals: 0,
+      targetCrystals: 0,  // Rimosso costo
       subLevels: [
-        SubLevel(name: "Pagine Brevi", minParagraphs: 2, maxParagraphs: 3),
-        SubLevel(name: "Pagine Medie", minParagraphs: 4, maxParagraphs: 6),
-        SubLevel(name: "Pagine Complete", minParagraphs: 7, maxParagraphs: 9),
+        SubLevel(name: "Paragrafi", minParagraphs: 1, maxParagraphs: 1),
       ],
       difficultyMultipliers: {
         Difficulty.easy: 1.0,
         Difficulty.medium: 2.0,
         Difficulty.hard: 3.0,
       },
-      streakBonusThreshold: 2,
-      streakBonusMultiplier: 2.0,
+    ),
+    Level(
+      number: 6,
+      crystalType: CrystalType.Purple,
+      targetWords: 5,
+      targetCrystals: 0,  // Rimosso costo
+      subLevels: [
+        SubLevel(name: "Pagine", minParagraphs: 2, maxParagraphs: 3),
+      ],
+      difficultyMultipliers: {
+        Difficulty.easy: 1.0,
+        Difficulty.medium: 2.0,
+        Difficulty.hard: 3.0,
+      },
     ),
   ];
 

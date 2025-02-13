@@ -1,5 +1,7 @@
 // lib/services/content_service.dart
 
+import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -35,43 +37,24 @@ class ContentService extends ChangeNotifier {
     if (_isInitialized) return;
 
     try {
-      // Carica i contenuti per ogni livello di difficoltà
+      // Carica tutti i contenuti
       final easyWords = await _loadWords(AppConfig.wordsEasyPath);
       final mediumWords = await _loadWords(AppConfig.wordsMediumPath);
       final hardWords = await _loadWords(AppConfig.wordsHardPath);
-
-      // Carica gli altri tipi di contenuto
       final sentences = await _loadSentences(AppConfig.sentencesPath);
       final paragraphs = await _loadParagraphs(AppConfig.paragraphsPath);
       final pages = await _loadPages(AppConfig.pagesPath);
 
-      // Inizializza il ContentSet con tutti i contenuti caricati
+      // Inizializza il ContentSet
       _contentSet = ContentSet(
         dictionary: [
           ...easyWords.map((word) => Word(word)),
           ...mediumWords.map((word) => Word(word)),
-          ...hardWords.map((word) => Word(word))
+          ...hardWords.map((word) => Word(word)),
         ],
-        sentences: sentences.map((text) =>
-            Sentence(text.split(' ').map((word) => Word(word)).toList())
-        ).toList(),
-        paragraphs: paragraphs.map((text) =>
-            Paragraph(text.split('.').where((s) => s.trim().isNotEmpty)
-                .map((sentence) =>
-                Sentence(sentence.trim().split(' ')
-                    .map((word) => Word(word)).toList())
-            ).toList())
-        ).toList(),
-        pages: pages.map((text) =>
-            Page(text.split('\n\n').where((p) => p.trim().isNotEmpty)
-                .map((paragraph) =>
-                Paragraph(paragraph.split('.').where((s) => s.trim().isNotEmpty)
-                    .map((sentence) =>
-                    Sentence(sentence.trim().split(' ')
-                        .map((word) => Word(word)).toList())
-                ).toList())
-            ).toList())
-        ).toList(),
+        sentences: sentences,
+        paragraphs: paragraphs,
+        pages: pages,
       );
 
       _isInitialized = true;
@@ -79,10 +62,11 @@ class ContentService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _lastError = 'Errore nell\'inizializzazione: $e';
-      print(_lastError);
+      debugPrint(_lastError);
       rethrow;
     }
   }
+
 
   /// Carica il contenuto di un file di assets
   Future<String> loadAsset(String path) async {
@@ -120,46 +104,70 @@ class ContentService extends ChangeNotifier {
   }
 
   /// Carica le frasi da un file
-  Future<List<String>> _loadSentences(String path) async {
+  Future<List<Sentence>> _loadSentences(String path) async {
     try {
       final content = await loadAsset(path);
       return content.split('\n')
           .where((sentence) => sentence.trim().isNotEmpty)
-          .map((sentence) => _normalizeSentence(sentence))
+          .map((sentence) => Sentence(
+          sentence.split(' ')
+              .map((word) => Word(_normalizeWord(word)))
+              .toList()
+      ))
           .toList();
     } catch (e) {
-      _lastError = 'Errore nel caricamento delle frasi da $path: $e';
-      print(_lastError);
+      debugPrint('Errore nel caricamento delle frasi da $path: $e');
       return [];
     }
   }
 
   /// Carica i paragrafi da un file
-  Future<List<String>> _loadParagraphs(String path) async {
+  Future<List<Paragraph>> _loadParagraphs(String path) async {
     try {
       final content = await loadAsset(path);
       return content.split('\n\n')
           .where((paragraph) => paragraph.trim().isNotEmpty)
-          .map((paragraph) => _normalizeParagraph(paragraph))
+          .map((paragraph) => Paragraph(
+          paragraph.split('.')
+              .where((s) => s.trim().isNotEmpty)
+              .map((sentence) => Sentence(
+              sentence.trim().split(' ')
+                  .map((word) => Word(_normalizeWord(word)))
+                  .toList()
+          ))
+              .toList()
+      ))
           .toList();
     } catch (e) {
-      _lastError = 'Errore nel caricamento dei paragrafi da $path: $e';
-      print(_lastError);
+      debugPrint('Errore nel caricamento dei paragrafi da $path: $e');
       return [];
     }
   }
 
   /// Carica le pagine da un file
-  Future<List<String>> _loadPages(String path) async {
+  Future<List<Page>> _loadPages(String path) async {
     try {
       final content = await loadAsset(path);
       return content.split('\n\n\n')
           .where((page) => page.trim().isNotEmpty)
-          .map((page) => _normalizePage(page))
+          .map((page) => Page(
+          page.split('\n\n')
+              .where((p) => p.trim().isNotEmpty)
+              .map((paragraph) => Paragraph(
+              paragraph.split('.')
+                  .where((s) => s.trim().isNotEmpty)
+                  .map((sentence) => Sentence(
+                  sentence.trim().split(' ')
+                      .map((word) => Word(_normalizeWord(word)))
+                      .toList()
+              ))
+                  .toList()
+          ))
+              .toList()
+      ))
           .toList();
     } catch (e) {
-      _lastError = 'Errore nel caricamento delle pagine da $path: $e';
-      print(_lastError);
+      debugPrint('Errore nel caricamento delle pagine da $path: $e');
       return [];
     }
   }
@@ -197,31 +205,68 @@ class ContentService extends ChangeNotifier {
   Word getRandomWordForLevel(int level, Difficulty difficulty) {
     _exerciseCounter++;
 
-    // Reset delle parole usate ogni _maxUsedItems esercizi
     if (_exerciseCounter >= _maxUsedItems) {
       _usedWords.clear();
       _exerciseCounter = 0;
       notifyListeners();
     }
 
-    // Filtra le parole in base alla difficoltà
-    final availableWords = _getWordsForDifficulty(difficulty)
+    String path;
+    switch (level) {
+      case 1:
+        path = AppConfig.wordsEasyPath;
+        break;
+      case 2:
+        path = AppConfig.wordsMediumPath;
+        break;
+      case 3:
+        path = AppConfig.wordsHardPath;
+        break;
+      default:
+        path = AppConfig.wordsEasyPath;
+    }
+
+    List<Word> availableWords = _loadSpecificWords(path)
         .where((word) => !_usedWords.contains(word.text))
         .toList();
 
     if (availableWords.isEmpty) {
-      // Se non ci sono parole disponibili, resetta e riprova
       _usedWords.clear();
       return getRandomWordForLevel(level, difficulty);
     }
 
-    // Seleziona una parola casuale
     final word = availableWords[_random.nextInt(availableWords.length)];
     _usedWords.add(word.text);
     _updateUsageStats(word.text, difficulty);
     notifyListeners();
     return word;
   }
+
+  /// Carica parole specifiche per un determinato path
+  List<Word> _loadSpecificWords(String path) {
+    try {
+      if (_cachedContent.containsKey(path)) {
+        return _cachedContent[path]!.map((word) => Word(word)).toList();
+      }
+
+      // Usa rootBundle per caricare il file dalle risorse
+      final content = rootBundle.loadString(path);
+      final words = content.then((String content) {
+        _cachedContent[path] = content.split('\n')
+            .where((word) => word.trim().isNotEmpty)
+            .map((word) => _normalizeWord(word))
+            .toList();
+        return _cachedContent[path]!.map((word) => Word(word)).toList();
+      });
+
+      // In attesa del caricamento, usa la cache o un insieme vuoto
+      return _cachedContent[path]?.map((word) => Word(word)).toList() ?? [];
+    } catch (e) {
+      debugPrint('Errore nel caricamento delle parole da $path: $e');
+      return [];
+    }
+  }
+
 
   /// Filtra le parole in base alla difficoltà
   List<Word> _getWordsForDifficulty(Difficulty difficulty) {

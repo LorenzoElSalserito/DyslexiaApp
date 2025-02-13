@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/player_manager.dart';
-import '../models/player.dart';
 import 'game_screen.dart';
 
 /// Schermata per la creazione di un nuovo profilo utente
@@ -26,34 +25,25 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final playerManager = Provider.of<PlayerManager>(context, listen: false);
-      final globalPlayer = Provider.of<Player>(context, listen: false);
+      final playerManager =
+      Provider.of<PlayerManager>(context, listen: false);
 
-      // Crea il nuovo profilo
+      // Crea il nuovo profilo utilizzando il PlayerManager
       final player = await playerManager.createProfile(_nameController.text);
 
-      // Imposta esplicitamente i dati nel player globale
-      globalPlayer.id = player.id;
-      globalPlayer.name = player.name;
-      await globalPlayer.loadProgress();
-
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const GameScreen()),
-      );
+      // Una volta creato, il profilo attivo è gestito da PlayerManager;
+      // navighiamo alla GameScreen.
+      Navigator.pushReplacementNamed(context, '/game');
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              e.toString().contains('massimo di profili')
-                  ? 'Hai raggiunto il numero massimo di profili'
-                  : e.toString().contains('già esiste')
-                  ? 'Questo nome è già in uso'
-                  : 'Errore nella creazione del profilo: $e'
+            e.toString().contains('massimo di profili')
+                ? 'Hai raggiunto il numero massimo di profili'
+                : e.toString().contains('già esiste')
+                ? 'Questo nome è già in uso'
+                : 'Errore nella creazione del profilo: $e',
           ),
           backgroundColor: Colors.red,
         ),
@@ -156,7 +146,8 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                       ElevatedButton(
                         onPressed: _isSaving ? null : _createProfile,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 40, vertical: 15),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -168,7 +159,8 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                             : const Text(

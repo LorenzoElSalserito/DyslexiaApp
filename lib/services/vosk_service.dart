@@ -56,7 +56,7 @@ class VoskService {
   void _logEvent(String event) {
     final timestamp = DateTime.now().toIso8601String();
     final logEntry = '[$timestamp] $event';
-    print('VoskService: $logEntry');
+    debugPrint('VoskService: $logEntry');
     _serviceLog.add(logEntry);
 
     // Mantiene solo gli ultimi 1000 log
@@ -65,8 +65,9 @@ class VoskService {
     }
   }
 
-  /// Verifica se il riconoscimento vocale è supportato sulla piattaforma
+  /// Verifica se il riconoscimento vocale VOSK è supportato sulla piattaforma
   bool _isVoskSupported() {
+    _logEvent('Verifica supporto VOSK');
     return Platform.isAndroid || Platform.isIOS;
   }
 
@@ -80,7 +81,7 @@ class VoskService {
     int attempts = 0;
     bool success = false;
 
-    // Verifica se dobbiamo usare la modalità simulata
+    // Se il riconoscimento vocale non è supportato, attiva la modalità simulata
     if (!_isVoskSupported()) {
       _isSimulatedMode = true;
       _isInitialized = true;
@@ -92,7 +93,6 @@ class VoskService {
       try {
         attempts++;
         _logEvent('Tentativo di inizializzazione #$attempts');
-
         await _initializeWithRetry(context);
         success = true;
       } catch (e, stackTrace) {
@@ -105,7 +105,6 @@ class VoskService {
           _logEvent('Fallback a modalità simulata dopo errori di inizializzazione');
           return;
         }
-
         await Future.delayed(const Duration(seconds: 1));
       }
     }
@@ -115,47 +114,41 @@ class VoskService {
   Future<void> _initializeWithRetry(BuildContext? context) async {
     _logEvent('Inizio inizializzazione con retry');
 
-    try {
-      // Verifica dei permessi necessari
-      bool hasPermissions;
-      if (context != null) {
-        _logEvent('Richiesta permessi con context');
-        hasPermissions = await _permissionService.requestAllPermissions(context);
-      } else {
-        _logEvent('Verifica permessi senza context');
-        hasPermissions = await _permissionService.checkAllPermissions();
-      }
-
-      if (!hasPermissions) {
-        throw Exception('Permessi necessari non concessi');
-      }
-
-      _logEvent('Ricerca del modello VOSK locale');
-      _modelPath = await _findModelPath();
-      _logEvent('Modello trovato in: $_modelPath');
-
-      if (!await _verifyModelIntegrity(_modelPath)) {
-        throw Exception('Integrità del modello non verificata');
-      }
-
-      _logEvent('Inizializzazione componenti VOSK');
-      if (!_isSimulatedMode) {
-        _recognizer = VoskFlutterPlugin.instance();
-        _model = await _recognizer!.createModel(_modelPath);
-        _speechRecognizer = await _recognizer!.createRecognizer(
-          model: _model!,
-          sampleRate: AppConfig.sampleRate,
-        );
-        _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
-      }
-
-      _isInitialized = true;
-      _logEvent('Inizializzazione completata con successo');
-    } catch (e, stackTrace) {
-      _logEvent('Errore nell\'inizializzazione: $e');
-      _logEvent('Stack trace: $stackTrace');
-      rethrow;
+    // Verifica dei permessi necessari
+    bool hasPermissions;
+    if (context != null) {
+      _logEvent('Richiesta permessi con context');
+      hasPermissions = await _permissionService.requestAllPermissions(context);
+    } else {
+      _logEvent('Verifica permessi senza context');
+      hasPermissions = await _permissionService.checkAllPermissions();
     }
+
+    if (!hasPermissions) {
+      throw Exception('Permessi necessari non concessi');
+    }
+
+    _logEvent('Ricerca del modello VOSK locale');
+    _modelPath = await _findModelPath();
+    _logEvent('Modello trovato in: $_modelPath');
+
+    if (!await _verifyModelIntegrity(_modelPath)) {
+      throw Exception('Integrità del modello non verificata');
+    }
+
+    _logEvent('Inizializzazione componenti VOSK');
+    if (!_isSimulatedMode) {
+      _recognizer = VoskFlutterPlugin.instance();
+      _model = await _recognizer!.createModel(_modelPath);
+      _speechRecognizer = await _recognizer!.createRecognizer(
+        model: _model!,
+        sampleRate: AppConfig.sampleRate,
+      );
+      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+    }
+
+    _isInitialized = true;
+    _logEvent('Inizializzazione completata con successo');
   }
 
   /// Trova il percorso del modello VOSK
@@ -202,10 +195,10 @@ class VoskService {
 
   /// Avvia una sessione di riconoscimento vocale
   Future<RecognitionResult> startRecognition(String targetText) async {
-    _logEvent('Avvio riconoscimento vocale');
+    _logEvent('Avvio riconoscimento vocale per target: $targetText');
 
     if (!_isInitialized) {
-      _logEvent('Inizializzazione necessaria');
+      _logEvent('Servizio non inizializzato, chiamata initialize()');
       await initialize();
     }
 
@@ -213,7 +206,7 @@ class VoskService {
     final completer = Completer<RecognitionResult>();
 
     if (_isSimulatedMode) {
-      // In modalità simulata, generiamo un risultato plausibile
+      _logEvent('Modalità simulata attivata: generazione risultato simulato');
       await Future.delayed(const Duration(seconds: 2));
       final result = _generateSimulatedResult(targetText);
       completer.complete(result);
@@ -225,8 +218,7 @@ class VoskService {
         throw Exception('Speech service non inizializzato');
       }
 
-      _logEvent('Configurazione listeners');
-
+      _logEvent('Configurazione listeners per riconoscimento vocale');
       _partialSubscription = _speechService!.onPartial().listen(
             (Map<String, dynamic> partial) {
           final partialText = partial['partial'] as String? ?? '';
@@ -240,23 +232,24 @@ class VoskService {
       _resultSubscription = _speechService!.onResult().listen(
             (Map<String, dynamic> result) {
           final duration = DateTime.now().difference(startTime);
+          if (duration > const Duration(hours: 1)) {
+            _logEvent('Durata audio ($duration) superiore a 60 minuti. Abort processing.');
+            if (!completer.isCompleted) {
+              completer.completeError(Exception('Audio file too long. Processing aborted.'));
+            }
+            return;
+          }
           final recognizedText = result['text'] as String? ?? '';
-          final similarity = TextSimilarity.calculateSimilarity(
-            recognizedText,
-            targetText,
-          );
-
+          final similarity = TextSimilarity.calculateSimilarity(recognizedText, targetText);
           final recognitionResult = RecognitionResult(
             text: recognizedText,
             confidence: result['confidence'] as double? ?? 1.0,
             similarity: similarity,
             isCorrect: similarity >= AppConfig.minSimilarityScore,
-            duration: duration,
+            duration: DateTime.now().difference(startTime),
           );
-
           _logEvent('Risultato finale: ${recognitionResult.text}');
           _logEvent('Similarità: ${recognitionResult.similarity}');
-
           if (!completer.isCompleted) {
             completer.complete(recognitionResult);
           }
@@ -270,7 +263,7 @@ class VoskService {
       );
 
       await _speechService!.start();
-      _logEvent('Riconoscimento avviato');
+      _logEvent('Riconoscimento vocale avviato.');
     } catch (e) {
       _logEvent('Errore durante il riconoscimento: $e');
       if (!completer.isCompleted) {
@@ -284,54 +277,50 @@ class VoskService {
   /// Genera un risultato simulato plausibile
   RecognitionResult _generateSimulatedResult(String targetText) {
     final random = Random();
-    final similarity = 0.7 + (random.nextDouble() * 0.3); // Tra 0.7 e 1.0
-
-    // Simula alcuni errori comuni nella trascrizione
+    double similarity = random.nextDouble() * 0.7; // Similarità massima simulata pari a 0.7
     String recognizedText = targetText;
-    if (similarity < 0.9) {
-      // Introduci alcuni errori tipici
+    if (similarity < 0.6) {
       if (random.nextBool()) {
-        recognizedText = targetText.replaceAll('e', 'i');
-      }
-      if (random.nextBool()) {
-        recognizedText = recognizedText.replaceAll('b', 'd');
+        recognizedText = '';
+      } else {
+        final chars = recognizedText.split('');
+        final numErrors = (chars.length * (1 - similarity)).round();
+        for (var i = 0; i < numErrors; i++) {
+          final pos = random.nextInt(chars.length);
+          chars[pos] = String.fromCharCode(random.nextInt(26) + 97);
+        }
+        recognizedText = chars.join();
       }
     }
-
     return RecognitionResult(
       text: recognizedText,
       confidence: similarity,
       similarity: similarity,
       isCorrect: similarity >= AppConfig.minSimilarityScore,
-      duration: Duration(seconds: (2 + random.nextInt(3)).toInt()),
+      duration: Duration(seconds: 2 + random.nextInt(3)),
     );
   }
 
   /// Ferma il riconoscimento vocale in corso
   Future<void> stopRecognition() async {
-    _logEvent('Stop riconoscimento');
-
+    _logEvent('Stop riconoscimento vocale chiamato.');
     if (_isSimulatedMode) {
+      _logEvent('Modalità simulata: stopRecognition senza ulteriori azioni.');
       return;
     }
-
     if (_isInitialized && _speechService != null) {
       await _speechService!.stop();
       await _resultSubscription?.cancel();
       await _partialSubscription?.cancel();
       _resultSubscription = null;
       _partialSubscription = null;
-      _logEvent('Riconoscimento fermato');
+      _logEvent('Riconoscimento vocale fermato.');
     }
   }
 
-  /// Ottiene i log del servizio
-  List<String> getServiceLogs() => List.unmodifiable(_serviceLog);
-
   /// Rilascia le risorse utilizzate dal servizio
   Future<void> dispose() async {
-    _logEvent('Dispose del servizio');
-
+    _logEvent('Dispose del servizio VoskService chiamato.');
     await stopRecognition();
     if (_isInitialized && !_isSimulatedMode) {
       _speechRecognizer?.dispose();
@@ -343,9 +332,12 @@ class VoskService {
       _recognizer = null;
       _isInitialized = false;
       _instance = null;
-      _logEvent('Risorse rilasciate');
+      _logEvent('Risorse Vosk rilasciate.');
     }
   }
+
+  /// Ritorna i log del servizio
+  List<String> getServiceLogs() => List.unmodifiable(_serviceLog);
 
   // Getters pubblici
   bool get isInitialized => _isInitialized;

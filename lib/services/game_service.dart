@@ -10,16 +10,12 @@ import '../services/exercise_manager.dart';
 import '../models/recognition_result.dart';
 import '../services/game_notification_manager.dart';
 
-/// Servizio che gestisce la logica principale del gioco, inclusa la progressione,
-/// il salvataggio dei dati e il calcolo delle statistiche.
 class GameService extends ChangeNotifier {
-  // Stato interno del servizio
   late Player _player;
   final ContentService contentService;
   final ExerciseManager exerciseManager;
   final GameNotificationManager _notificationManager;
 
-  // Stato dell'inizializzazione
   bool _isInitialized = false;
 
   // Costanti per il sistema di progressione
@@ -36,9 +32,8 @@ class GameService extends ChangeNotifier {
   int _consecutiveDaysOver75 = 0;
   bool _dailyBonusGiven = false;
   DateTime? _lastBonusDate;
-  SubLevel _currentSubLevel;
+  late SubLevel _currentSubLevel;
 
-  /// Costruttore del servizio.
   GameService({
     required Player player,
     required this.contentService,
@@ -47,10 +42,10 @@ class GameService extends ChangeNotifier {
         _currentSubLevel = Level.allLevels[0].subLevels[0] {
     debugPrint('[GameService] Costruttore: Inizializzo i dati di gioco...');
     _player = player;
+    // Avvio il caricamento dei dati di gioco; non utilizziamo il valore di ritorno perché la funzione è di tipo Future<void>
     _loadGameData();
   }
 
-  /// Aggiorna l'istanza di player usata dal GameService
   Future<void> updatePlayer(Player newPlayer) async {
     _player = newPlayer;
     await _player.loadProgress();
@@ -59,7 +54,6 @@ class GameService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Carica i dati salvati dal profilo del giocatore.
   Future<void> _loadGameData() async {
     debugPrint('[GameService] _loadGameData: Avvio caricamento dati di gioco...');
     try {
@@ -81,19 +75,21 @@ class GameService extends ChangeNotifier {
       final accuracyHistoryList = gameData['accuracyHistory'] as List?;
 
       if (accuracyDatesList != null && accuracyHistoryList != null) {
-        _accuracyDates.clear();
-        _accuracyDates.addAll(accuracyDatesList.map((date) {
-          final d = DateTime.parse(date as String);
-          debugPrint('[GameService] Data aggiunta: $d');
-          return d;
-        }));
+        _accuracyDates
+          ..clear()
+          ..addAll(accuracyDatesList.map((date) {
+            final d = DateTime.parse(date as String);
+            debugPrint('[GameService] Data aggiunta: $d');
+            return d;
+          }));
 
-        _accuracyHistory.clear();
-        _accuracyHistory.addAll(accuracyHistoryList.map((acc) {
-          final a = (acc as num).toDouble();
-          debugPrint('[GameService] Accuratezza aggiunta: $a');
-          return a;
-        }));
+        _accuracyHistory
+          ..clear()
+          ..addAll(accuracyHistoryList.map((acc) {
+            final a = (acc as num).toDouble();
+            debugPrint('[GameService] Accuratezza aggiunta: $a');
+            return a;
+          }));
       } else {
         debugPrint('[GameService] Nessun dato di accuratezza trovato.');
       }
@@ -118,7 +114,6 @@ class GameService extends ChangeNotifier {
     }
   }
 
-  /// Carica il sottolivello corrente basato sul livello del giocatore.
   void _loadCurrentSubLevel() {
     final currentLevel = _player.currentLevel;
     final levelIndex = currentLevel - 1;
@@ -130,7 +125,6 @@ class GameService extends ChangeNotifier {
     }
   }
 
-  /// Inizializza il servizio.
   Future<void> initialize() async {
     if (_isInitialized) return;
     debugPrint('[GameService] initialize: Inizializzazione in corso...');
@@ -151,7 +145,6 @@ class GameService extends ChangeNotifier {
     }
   }
 
-  /// Verifica e assegna il bonus di login giornaliero.
   Future<void> _checkDailyLoginBonus() async {
     debugPrint('[GameService] _checkDailyLoginBonus: Verifica bonus giornaliero...');
     final now = DateTime.now();
@@ -177,10 +170,8 @@ class GameService extends ChangeNotifier {
     debugPrint('[GameService] Bonus giornaliero assegnato.');
   }
 
-  /// Mostra il popup del bonus giornaliero.
   Future<void> showDailyLoginBonus(BuildContext context) async {
-    if (_dailyBonusGiven && _lastBonusDate != null &&
-        _isSameDay(_lastBonusDate!, DateTime.now())) {
+    if (_dailyBonusGiven && _lastBonusDate != null && _isSameDay(_lastBonusDate!, DateTime.now())) {
       return;
     }
 
@@ -191,21 +182,18 @@ class GameService extends ChangeNotifier {
     );
   }
 
-  /// Calcola il bonus giornaliero basato sui giorni consecutivi.
   int _calculateDailyBonus(int consecutiveDays) {
     final bonus = (baseLoginBonus + ((consecutiveDays - 1) * bonusMultiplierIncrease)).round();
     debugPrint('[GameService] _calculateDailyBonus: consecutiveDays=$consecutiveDays, bonus=$bonus');
     return bonus;
   }
 
-  /// Verifica se due date sono nello stesso giorno.
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
         date1.month == date2.month &&
         date1.day == date2.day;
   }
 
-  /// Processa il risultato di un esercizio.
   Future<void> processExerciseResult(RecognitionResult result) async {
     debugPrint('[GameService] processExerciseResult: Risultato=${result.toJson()}');
     if (result.isCorrect) {
@@ -222,7 +210,6 @@ class GameService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Aggiorna l'accuratezza media e il conteggio dei giorni consecutivi.
   void _updateAccuracy(double accuracy) {
     final now = DateTime.now();
     debugPrint('[GameService] _updateAccuracy: accuracy=$accuracy, now=$now');
@@ -246,7 +233,6 @@ class GameService extends ChangeNotifier {
     _updateConsecutiveDays();
   }
 
-  /// Aggiorna il conteggio dei giorni consecutivi con accuratezza >= 75%.
   void _updateConsecutiveDays() {
     _consecutiveDaysOver75 = 0;
     for (int i = _accuracyHistory.length - 1; i >= 0; i--) {
@@ -259,7 +245,6 @@ class GameService extends ChangeNotifier {
     debugPrint('[GameService] ConsecutiveDaysOver75: $_consecutiveDaysOver75');
   }
 
-  /// Salva i dati del gioco nel profilo.
   Future<void> _saveGameData() async {
     debugPrint('[GameService] _saveGameData: Salvataggio dati gioco...');
     final gameData = Map<String, dynamic>.from(_player.gameData);
@@ -281,7 +266,6 @@ class GameService extends ChangeNotifier {
     debugPrint('[GameService] Dati di gioco salvati.');
   }
 
-  /// Controlla la progressione del livello.
   void _checkLevelProgression() {
     debugPrint('[GameService] _checkLevelProgression: _consecutiveDaysOver75=$_consecutiveDaysOver75');
     if (_consecutiveDaysOver75 >= requiredDaysForLevelUp) {
@@ -295,7 +279,6 @@ class GameService extends ChangeNotifier {
     }
   }
 
-  /// Resetta il bonus giornaliero.
   Future<void> resetDailyBonus() async {
     debugPrint('[GameService] resetDailyBonus: Reset bonus giornaliero...');
     _dailyBonusGiven = false;
@@ -304,24 +287,21 @@ class GameService extends ChangeNotifier {
     debugPrint('[GameService] Bonus giornaliero resettato.');
   }
 
-  /// Ottiene il sottolivello corrente.
   SubLevel getCurrentSubLevel() {
     return _currentSubLevel;
   }
 
-  /// Calcola il progresso verso il prossimo livello (0.0 - 1.0).
   double getLevelUpProgress() {
     final progress = _consecutiveDaysOver75 / requiredDaysForLevelUp;
     debugPrint('[GameService] getLevelUpProgress: $progress');
     return progress.clamp(0.0, 1.0);
   }
 
-  /// Verifica se il giocatore può avanzare di livello.
   bool canAdvanceLevel() {
-    return _consecutiveDaysOver75 >= requiredDaysForLevelUp;
+    return _consecutiveDaysOver75 >= requiredDaysForLevelUp && _player.currentLevel < 6;
   }
 
-// Getters pubblici
+  // Getters pubblici
   bool get isInitialized => _isInitialized;
   double getAverageAccuracy() => _averageAccuracy;
   int get streak => _currentStreak;
@@ -330,10 +310,10 @@ class GameService extends ChangeNotifier {
   int get consecutiveDaysOver75 => _consecutiveDaysOver75;
   List<DateTime> get accuracyDates => List.unmodifiable(_accuracyDates);
   List<double> get accuracyHistory => List.unmodifiable(_accuracyHistory);
-  bool get isDailyBonusAvailable => !_dailyBonusGiven ||
-      (_lastBonusDate != null && !_isSameDay(_lastBonusDate!, DateTime.now()));
+  bool get isDailyBonusAvailable =>
+      !_dailyBonusGiven ||
+          (_lastBonusDate != null && !_isSameDay(_lastBonusDate!, DateTime.now()));
 
-  /// Esporta i dati del gioco per il salvataggio
   Map<String, dynamic> exportGameData() {
     return {
       'accuracyDates': _accuracyDates.map((d) => d.toIso8601String()).toList(),
@@ -346,17 +326,17 @@ class GameService extends ChangeNotifier {
     };
   }
 
-  /// Importa i dati del gioco dal salvataggio
   void importGameData(Map<String, dynamic> data) {
     try {
-      _accuracyDates.clear();
-      _accuracyDates.addAll((data['accuracyDates'] as List?)
-          ?.map((d) => DateTime.parse(d as String)) ??
-          []);
+      _accuracyDates
+        ..clear()
+        ..addAll((data['accuracyDates'] as List?)
+            ?.map((d) => DateTime.parse(d as String)) ??
+            []);
 
-      _accuracyHistory.clear();
       _accuracyHistory
-          .addAll((data['accuracyHistory'] as List?)?.map((a) => a as double) ?? []);
+        ..clear()
+        ..addAll((data['accuracyHistory'] as List?)?.map((a) => a as double) ?? []);
 
       _currentStreak = data['currentStreak'] as int? ?? 0;
       _averageAccuracy = data['averageAccuracy'] as double? ?? 0.0;
@@ -364,17 +344,14 @@ class GameService extends ChangeNotifier {
       _dailyBonusGiven = data['dailyBonusGiven'] as bool? ?? false;
 
       final lastBonusDateStr = data['lastBonusDate'] as String?;
-      _lastBonusDate =
-      lastBonusDateStr != null ? DateTime.parse(lastBonusDateStr) : null;
+      _lastBonusDate = lastBonusDateStr != null ? DateTime.parse(lastBonusDateStr) : null;
 
       notifyListeners();
     } catch (e) {
       debugPrint('[GameService] Errore nell\'importazione dei dati: $e');
-      // In caso di errore, mantieni i dati attuali
     }
   }
 
-  /// Resetta tutti i dati del gioco mantenendo solo il progresso necessario
   Future<void> resetGameData({bool keepProgress = false}) async {
     if (!keepProgress) {
       _accuracyDates.clear();

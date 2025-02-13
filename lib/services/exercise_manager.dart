@@ -19,6 +19,7 @@ class ExerciseManager extends ChangeNotifier {
   final LearningAnalyticsService _analyticsService;
   final AudioService _audioService = AudioService();
   final Random _random = Random();
+  static const int maxLevel = 6;
 
   // Stato della sessione corrente
   Exercise? _currentExercise;
@@ -97,7 +98,7 @@ class ExerciseManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Genera un nuovo esercizio
+///Genera un nuovo esercizio
   Future<Exercise> generateExercise() async {
     debugPrint('[ExerciseManager] generateExercise: Generazione esercizio...');
     if (!_isInitialized) {
@@ -107,14 +108,45 @@ class ExerciseManager extends ChangeNotifier {
       throw Exception('Sessione non attiva. Chiamare startNewSession() prima.');
     }
 
-    // Ottiene una parola casuale dal content service
-    String content = _contentService.getRandomWordForLevel(1, _currentDifficulty).text;
+    String content;
+    ExerciseType exerciseType;
+
+    switch (_player.currentLevel) {
+      case 1:
+        exerciseType = ExerciseType.word;
+        content = _contentService.getRandomWordForLevel(1, _currentDifficulty).text;
+      case 2:
+        exerciseType = ExerciseType.word;
+        content = _contentService.getRandomWordForLevel(2, _currentDifficulty).text;
+      case 3:
+        exerciseType = ExerciseType.word;
+        content = _contentService.getRandomWordForLevel(3, _currentDifficulty).text;
+      case 4:
+      // Carica una frase casuale
+        exerciseType = ExerciseType.sentence;
+        final sentence = _contentService.contentSet.sentences[Random().nextInt(_contentService.contentSet.sentences.length)];
+        content = sentence.words.map((w) => w.text).join(' ');
+      case 5:
+      // Carica un paragrafo casuale
+        exerciseType = ExerciseType.paragraph;
+        final paragraph = _contentService.contentSet.paragraphs[Random().nextInt(_contentService.contentSet.paragraphs.length)];
+        content = paragraph.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join('. ');
+      case 6:
+      // Carica una pagina casuale
+        exerciseType = ExerciseType.page;
+        final page = _contentService.contentSet.pages[Random().nextInt(_contentService.contentSet.pages.length)];
+        content = page.paragraphs.map((p) => p.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join('. ')).join('\n\n');
+      default:
+        exerciseType = ExerciseType.word;
+        content = _contentService.getRandomWordForLevel(1, _currentDifficulty).text;
+    }
+
     int syllables = _countSyllables(content);
     int baseValue = syllables * 5;
 
     _currentExercise = Exercise(
       content: content,
-      type: _getExerciseTypeForLevel(_player.currentLevel),
+      type: exerciseType,
       difficulty: _currentDifficulty,
       crystalValue: baseValue,
       isBonus: _sessionResults.length >= 3 && _sessionResults.every((r) => r.isCorrect),
@@ -170,48 +202,35 @@ class ExerciseManager extends ChangeNotifier {
     return count > 0 ? count : 1;
   }
 
-  /// Ottiene il tipo di esercizio appropriato per il livello
-  ExerciseType _getExerciseTypeForLevel(int level) {
-    return switch (level) {
-      1 => ExerciseType.word,
-      2 => ExerciseType.sentence,
-      3 => ExerciseType.paragraph,
-      4 => ExerciseType.page,
-      _ => ExerciseType.word,
-    };
-  }
-
   /// Calcola i cristalli finali per un risultato
   int _calculateFinalCrystals(RecognitionResult result) {
     if (_currentExercise == null) return 0;
 
-    double multiplier = 1.0;
+    // Conta le sillabe nella parola target
+    int syllables = _countSyllables(_currentExercise!.content);
 
-    if (result.similarity >= hardDifficultyThreshold) {
-      multiplier += 0.5;
-    } else if (result.similarity >= mediumDifficultyThreshold) {
-      multiplier += 0.3;
-    } else if (result.similarity >= requiredAccuracy) {
-      multiplier += 0.1;
-    }
+    // Base: 1 cristallo per sillaba riconosciuta
+    int baseCrystals = syllables;
 
-    if (_sessionResults.length >= 3 && _sessionResults.every((r) => r.isCorrect)) {
-      multiplier += 0.5;
-    }
+    // Bonus basato sull'accuratezza
+    double accuracyBonus = syllables * result.similarity;
 
+    // Calcolo finale
+    int finalCrystals = (baseCrystals + accuracyBonus).round();
+
+    // Applica i moltiplicatori di difficoltà e New Game+
     switch (_currentDifficulty) {
       case Difficulty.easy:
-        multiplier *= 1.0;
+        finalCrystals = (finalCrystals * 1.0).round();
       case Difficulty.medium:
-        multiplier *= 1.5;
+        finalCrystals = (finalCrystals * 1.5).round();
       case Difficulty.hard:
-        multiplier *= 2.0;
+        finalCrystals = (finalCrystals * 2.0).round();
     }
 
-    multiplier *= (1.0 + (_player.newGamePlusCount * 0.5));
+    // Bonus New Game+
+    finalCrystals = (finalCrystals * (1.0 + (_player.newGamePlusCount * 0.5))).round();
 
-    int finalCrystals = (_currentExercise!.crystalValue * multiplier).round();
-    debugPrint('[ExerciseManager] _calculateFinalCrystals: multiplier=$multiplier, finalCrystals=$finalCrystals');
     return finalCrystals;
   }
 

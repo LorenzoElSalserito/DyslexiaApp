@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/player.dart';  // Import aggiunto per la classe Player
+import '../models/player.dart'; // Import per la classe Player
 import '../services/game_service.dart';
 import '../services/store_service.dart';
 import '../services/challenge_service.dart';
@@ -11,7 +11,7 @@ import '../models/challenge.dart';
 import '../widgets/progression_map.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  const GameScreen({Key? key}) : super(key: key);
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -348,6 +348,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Modifica della funzione _buildButtonsSection
   Widget _buildButtonsSection(Player player) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -385,21 +386,84 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: 8),
-              Expanded(
-                child: Row(
-                  children: [
-                    if (player.isAdmin) ...[
+              // Sezione pulsanti admin
+              if (player.isAdmin) ...[
+                Expanded(
+                  child: Row(
+                    children: [
                       Expanded(
                         child: _buildButton(
                           'Level Up',
-                          Colors.purple.shade900,
+                          Colors.black87,
                               () {
-                            player.levelUp();
+                            if (player.currentLevel < 7) {
+                              player.levelUp();
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text(
+                                    'Avanzamento di Livello',
+                                    style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                  ),
+                                  content: Text(
+                                    'Sei avanzato al livello ${player.currentLevel}!',
+                                    style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text(
+                                        'OK',
+                                        style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
                           },
                         ),
                       ),
                       const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildButton(
+                          'New Game+',
+                          Colors.black87,
+                              () {
+                            player.startNewGamePlus();
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text(
+                                  'New Game Plus!',
+                                  style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                ),
+                                content: Text(
+                                  'Hai avviato il New Game+ #${player.newGamePlusCount}!',
+                                  style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text(
+                                      'OK',
+                                      style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              Expanded(
+                child: Row(
+                  children: [
                     Expanded(
                       child: _buildButton(
                         'Menu',

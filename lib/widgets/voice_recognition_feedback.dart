@@ -12,9 +12,9 @@ class VoiceRecognitionFeedback extends StatelessWidget {
   final int? totalAttempts;
 
   // Costanti di stile
-  static const double _maxWaveHeight = 60.0;
-  static const int _wavePoints = 8;
-  static const Duration _waveDuration = Duration(milliseconds: 1500);
+  static const double _maxWaveHeight = 100.0;
+  static const int _wavePoints = 12;
+  static const Duration _waveDuration = Duration(milliseconds: 600);  // Diminuito da 1500 a 600 per animazione più veloce
 
   const VoiceRecognitionFeedback({
     Key? key,
@@ -63,7 +63,7 @@ class VoiceRecognitionFeedback extends StatelessWidget {
           SizedBox(
             height: _maxWaveHeight,
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(_wavePoints, (index) {
                 return _WaveBar(
                   index: index,
@@ -165,7 +165,7 @@ class _WaveBar extends StatefulWidget {
 
 class _WaveBarState extends State<_WaveBar> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _animation;
+  late final Animation<double> _heightAnimation;
 
   @override
   void initState() {
@@ -175,12 +175,26 @@ class _WaveBarState extends State<_WaveBar> with SingleTickerProviderStateMixin 
       vsync: this,
     );
 
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    );
+    // Animazione più fluida con curve personalizzata
+    _heightAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.3, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOutSine)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.3)
+            .chain(CurveTween(curve: Curves.easeInSine)),
+        weight: 50,
+      ),
+    ]).animate(_controller);
 
-    _controller.repeat(reverse: true);
+    // Aggiunge un delay casuale per ogni barra
+    Future.delayed(Duration(milliseconds: widget.index * 50), () {
+      if (mounted) {
+        _controller.repeat();
+      }
+    });
   }
 
   @override
@@ -192,19 +206,19 @@ class _WaveBarState extends State<_WaveBar> with SingleTickerProviderStateMixin 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _animation,
+      animation: _controller,
       builder: (context, child) {
-        final wave = math.sin(_animation.value * math.pi +
-            widget.index * (math.pi / widget.maxHeight));
-        final normalizedHeight =
-            (wave + 1) / 2 * widget.maxHeight * widget.volumeLevel;
+        final height = widget.maxHeight *
+            _heightAnimation.value *
+            widget.volumeLevel *
+            (0.4 + (widget.index % 2) * 0.2);  // Aggiunge variazione all'altezza
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2),
           width: 4,
-          height: normalizedHeight.clamp(2.0, widget.maxHeight),
+          height: height.clamp(4.0, widget.maxHeight),
+          margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.7),
+            color: Colors.black87.withOpacity(0.8),  // Cambiato da blue a black87
             borderRadius: BorderRadius.circular(2),
           ),
         );

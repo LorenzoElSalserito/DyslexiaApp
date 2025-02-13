@@ -298,7 +298,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Colors.blue.shade700, Colors.blue.shade500],
+              colors: [Colors.blue.shade900, Colors.blue.shade800],
             ),
           ),
           child: SafeArea(
@@ -327,7 +327,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                             style: const TextStyle(
                               fontSize: 18,
                               fontFamily: 'OpenDyslexic',
-                              color: Colors.black87,
+                              color: Colors.white,
                             ),
                           ),
                           Card(

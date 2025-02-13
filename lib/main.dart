@@ -34,16 +34,6 @@ void main() async {
         ChangeNotifierProvider<PlayerManager>(
           create: (_) => PlayerManager(prefs),
         ),
-        // ProxyProvider per il giocatore corrente, sincronizzato con il profilo
-        // corrente gestito dal PlayerManager.
-        ChangeNotifierProxyProvider<PlayerManager, Player>(
-          create: (_) => Player(), // istanza iniziale (dummy)
-          update: (context, playerManager, player) {
-            // Se currentProfile è disponibile nel PlayerManager, restituisce quell'istanza;
-            // altrimenti, mantiene l'istanza attuale.
-            return playerManager.currentProfile ?? player!;
-          },
-        ),
         // Provider per il servizio dei contenuti.
         ChangeNotifierProvider<ContentService>(
           create: (_) => ContentService(),
@@ -53,59 +43,64 @@ void main() async {
         Provider<LearningAnalyticsService>(
           create: (_) => LearningAnalyticsService(prefs),
         ),
-        // Provider per il gestore degli esercizi.
-        ChangeNotifierProxyProvider2<Player, ContentService, ExerciseManager>(
-          create: (context) => ExerciseManager(
-            player: context.read<Player>(),
-            contentService: context.read<ContentService>(),
-            analyticsService: context.read<LearningAnalyticsService>(),
-          ),
-          update: (context, player, contentService, previous) =>
-          previous ??
-              ExerciseManager(
-                player: player,
-                contentService: contentService,
-                analyticsService: context.read<LearningAnalyticsService>(),
-              ),
-        ),
-        // Provider per il servizio di gioco.
-        ChangeNotifierProxyProvider3<Player, ContentService, ExerciseManager, GameService>(
-          create: (context) => GameService(
-            player: context.read<Player>(),
-            contentService: context.read<ContentService>(),
-            exerciseManager: context.read<ExerciseManager>(),
-          ),
-          update: (context, player, contentService, exerciseManager, previous) {
-            final service = previous ??
-                GameService(
-                  player: player,
-                  contentService: contentService,
-                  exerciseManager: exerciseManager,
-                );
-            if (!service.isInitialized) {
-              // Avvia l'inizializzazione in una microtask per evitare conflitti durante il build.
-              Future.microtask(() => service.initialize());
+        // Provider per il gestore degli esercizi: ora si basa sul PlayerManager.
+        ChangeNotifierProxyProvider2<PlayerManager, ContentService, ExerciseManager>(
+          create: (context) {
+            final pm = context.read<PlayerManager>();
+            // Se non c'è ancora un profilo attivo, creiamo un dummy (ma in seguito verrà aggiornato)
+            return ExerciseManager(
+              player: pm.currentProfile ?? Player(),
+              contentService: context.read<ContentService>(),
+              analyticsService: context.read<LearningAnalyticsService>(),
+            );
+          },
+          update: (context, playerManager, contentService, previous) {
+            final current = playerManager.currentProfile;
+            if (current != null) {
+              previous!.updatePlayer(current);
             }
-            return service;
+            return previous!;
+          },
+        ),
+        // Provider per il servizio di gioco: ora si basa sul PlayerManager.
+        ChangeNotifierProxyProvider3<PlayerManager, ContentService, ExerciseManager, GameService>(
+          create: (context) {
+            final pm = context.read<PlayerManager>();
+            return GameService(
+              player: pm.currentProfile ?? Player(),
+              contentService: context.read<ContentService>(),
+              exerciseManager: context.read<ExerciseManager>(),
+            );
+          },
+          update: (context, playerManager, contentService, exerciseManager, previous) {
+            final current = playerManager.currentProfile;
+            if (current != null) {
+              previous!.updatePlayer(current);
+            }
+            if (!previous!.isInitialized) {
+              // Avvia l'inizializzazione in una microtask per evitare conflitti durante il build.
+              Future.microtask(() => previous.initialize());
+            }
+            return previous;
           },
         ),
         // Provider per il servizio delle sfide.
-        ChangeNotifierProxyProvider<Player, ChallengeService>(
+        ChangeNotifierProxyProvider<PlayerManager, ChallengeService>(
           create: (context) => ChallengeService(
             prefs,
-            context.read<Player>(),
+            context.read<PlayerManager>().currentProfile ?? Player(),
           ),
-          update: (context, player, previous) =>
-          previous ?? ChallengeService(prefs, player),
+          update: (context, playerManager, previous) =>
+          previous ?? ChallengeService(prefs, playerManager.currentProfile ?? Player()),
         ),
         // Provider per il servizio del negozio.
-        ChangeNotifierProxyProvider<Player, StoreService>(
+        ChangeNotifierProxyProvider<PlayerManager, StoreService>(
           create: (context) => StoreService(
             prefs,
-            context.read<Player>(),
+            context.read<PlayerManager>().currentProfile ?? Player(),
           ),
-          update: (context, player, previous) =>
-          previous ?? StoreService(prefs, player),
+          update: (context, playerManager, previous) =>
+          previous ?? StoreService(prefs, playerManager.currentProfile ?? Player()),
         ),
       ],
       child: const OpenDSAApp(),
@@ -127,7 +122,7 @@ class OpenDSAApp extends StatelessWidget {
       routes: {
         '/': (context) => const SplashScreenWidget(),
         '/game': (context) => const GameScreen(),
-        '/challenges': (context) => ChallengesScreen(), // Senza "const" per garantire l'aggiornamento.
+        '/challenges': (context) => ChallengesScreen(), // Non usiamo "const" per forzare l'aggiornamento
         '/store': (context) => const StoreScreen(),
         '/profile_selection': (context) => const ProfileSelectionScreen(),
         '/profile_creation': (context) => const ProfileCreationScreen(),

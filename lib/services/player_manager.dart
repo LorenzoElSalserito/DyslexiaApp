@@ -13,7 +13,7 @@ class PlayerManager extends ChangeNotifier {
   final SharedPreferences _prefs;
   final FileStorageService _fileStorage = FileStorageService();
   static const String _lastProfileKey = 'last_profile_id';
-  static const int maxProfiles = 4;
+  static const int maxProfiles = 100;
 
   List<Player> _profiles = [];
   Player? _currentProfile;
