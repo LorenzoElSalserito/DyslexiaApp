@@ -222,7 +222,7 @@ class Player with ChangeNotifier {
 
 
   void levelUp() {
-    if (currentLevel < 6) {  // Massimo livello è 6
+    if (currentLevel < 4) {  // Massimo livello è 4
       currentLevel++;
       currentStep = 0;
       saveProgress();

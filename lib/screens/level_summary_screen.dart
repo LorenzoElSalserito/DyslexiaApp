@@ -184,7 +184,7 @@ class LevelSummaryScreen extends StatelessWidget {
           SizedBox(height: 8),
           Text(
             daysNeeded > 0
-                ? 'Mantieni un\'accuratezza dell\'80% per altri $daysNeeded giorni'
+                ? 'Mantieni un\'accuratezza del 75% per altri $daysNeeded giorni'
                 : 'Pronto per il prossimo livello!',
             style: TextStyle(
               fontFamily: 'OpenDyslexic',

@@ -298,7 +298,7 @@ class GameService extends ChangeNotifier {
   }
 
   bool canAdvanceLevel() {
-    return _consecutiveDaysOver75 >= requiredDaysForLevelUp && _player.currentLevel < 6;
+    return _consecutiveDaysOver75 >= requiredDaysForLevelUp && _player.currentLevel < 4;
   }
 
   // Getters pubblici
