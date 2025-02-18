@@ -1,5 +1,8 @@
 // lib/models/level_types.dart
 
+/// Definisce i tipi di difficoltà e gli esercizi disponibili nel gioco,
+/// insieme alle impostazioni associate a ciascun livello di difficoltà.
+
 enum Difficulty { easy, medium, hard }
 
 enum ExerciseType { word, sentence, paragraph, page }

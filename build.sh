@@ -62,17 +62,64 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 
     if ! command -v xcodebuild &> /dev/null; then
         echo -e "${RED}xcodebuild non trovato. Installa Xcode e gli strumenti da riga di comando.${NC}"
-    else
-        flutter build ios --release --no-codesign || {
-            echo -e "${RED}Errore durante la build iOS${NC}"
-            exit 1
-        }
-        mkdir -p "$OUTPUT_DIR/iOS"
-        cp -r build/ios/iphoneos/Runner.app "$OUTPUT_DIR/iOS/"
-        echo -e "${GREEN}Build iOS completata${NC}"
+        exit 1
     fi
-else
-    echo -e "${YELLOW}Skipping iOS build - richiede macOS${NC}"
+
+    # Assicurati che CocoaPods sia installato
+    if ! command -v pod &> /dev/null; then
+        echo -e "${RED}CocoaPods non trovato. Installalo con: sudo gem install cocoapods${NC}"
+        exit 1
+    fi
+
+    # Pulisci la cache di CocoaPods
+    echo "Pulizia cache CocoaPods..."
+    rm -rf ios/Pods
+    rm -f ios/Podfile.lock
+
+    # Entra nella directory iOS
+    cd ios
+
+    # Verifica e crea il podspec per vosk_flutter se necessario
+    VOSK_PODSPEC=".symlinks/plugins/vosk_flutter/ios/vosk_flutter.podspec"
+    if [ ! -f "$VOSK_PODSPEC" ]; then
+      echo -e "${YELLOW}Podspec per vosk_flutter non trovato, creazione in corso...${NC}"
+      mkdir -p "$(dirname "$VOSK_PODSPEC")"
+      cat > "$VOSK_PODSPEC" << 'EOF'
+Pod::Spec.new do |s|
+  s.name             = 'vosk_flutter'
+  s.version          = '0.1.0'
+  s.summary          = 'Flutter plugin for Vosk speech recognition'
+  s.description      = 'A Flutter plugin to integrate Vosk offline speech recognition.'
+  s.homepage         = 'https://github.com/alphacep/vosk-flutter'
+  s.license          = { :type => 'Apache 2.0' }
+  s.author           = { 'Nickolay Shmyrev' => 'nshmyrev@alphacephei.com' }
+  s.source           = { :path => '.' }
+  s.source_files     = 'Classes/**/*'
+  s.public_header_files = 'Classes/**/*.h'
+  s.dependency 'Flutter'
+  s.platform         = :ios, '11.0'
+  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.swift_version    = '5.0'
+end
+EOF
+    fi
+
+    # Aggiorna i pod
+    echo "Aggiornamento CocoaPods..."
+    pod deintegrate
+    pod setup
+    pod install
+    cd ..
+
+    echo "Building iOS app..."
+    flutter build ios --release --no-codesign || {
+        echo -e "${RED}Errore durante la build iOS${NC}"
+        exit 1
+    }
+
+    mkdir -p "$OUTPUT_DIR/iOS"
+    cp -r build/ios/iphoneos/Runner.app "$OUTPUT_DIR/iOS/"
+    echo -e "${GREEN}Build iOS completata${NC}"
 fi
 
 # Build per Windows
