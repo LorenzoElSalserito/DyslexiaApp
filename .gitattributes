@@ -1,3 +1,5 @@
 vosk/graph/HCLG.fst filter=lfs diff=lfs merge=lfs -text
 vosk/rescore/G.carpa filter=lfs diff=lfs merge=lfs -text
 
+vosk/graph/HCLG.fst filter=lfs diff=lfs merge=lfs -text
+vosk/rescore/G.carpa filter=lfs diff=lfs merge=lfs -text
