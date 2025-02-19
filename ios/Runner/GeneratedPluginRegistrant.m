@@ -36,12 +36,6 @@
 @import shared_preferences_foundation;
 #endif
 
-#if __has_include(<vosk_flutter/LocalVoskFlutterPlugin.h>)
-#import <vosk_flutter/LocalVoskFlutterPlugin.h>
-#else
-@import vosk_flutter;
-#endif
-
 @implementation GeneratedPluginRegistrant
 
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry {
@@ -50,7 +44,6 @@
   [PathProviderPlugin registerWithRegistrar:[registry registrarForPlugin:@"PathProviderPlugin"]];
   [PermissionHandlerPlugin registerWithRegistrar:[registry registrarForPlugin:@"PermissionHandlerPlugin"]];
   [SharedPreferencesPlugin registerWithRegistrar:[registry registrarForPlugin:@"SharedPreferencesPlugin"]];
-  [LocalVoskFlutterPlugin registerWithRegistrar:[registry registrarForPlugin:@"LocalVoskFlutterPlugin"]];
 }
 
 @end

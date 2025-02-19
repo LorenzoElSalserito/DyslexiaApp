@@ -7,25 +7,25 @@ class AppConfig {
 
   // Configurazioni VOSK
   static const String voskModelUrl = 'https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip';
-  static const String voskModelName = 'vosk-model-small-it';
+  static const String voskModelName = 'vosk-model-it-0.22';
   static const String voskModelVersion = '0.22';
-  static const int vadAggressiveness = 3;   // 0-3 per la riduzione del rumore
-  static const double vadThreshold = 0.5;   // Soglia per il VAD
+  static const int vadAggressiveness = 2;   // 0-3 per la riduzione del rumore
+  static const double vadThreshold = 0.3;   // Soglia per il VAD
   static const bool vadEnable = true;       // Voice Activity Detection
   static const bool noiseSuppressionEnable = true;  // Soppressione rumore
   static const bool autoGainControlEnable = true;   // Controllo guadagno
 
   // Configurazioni Audio
-  static const int sampleRate = 32000;
+  static const int sampleRate = 16000;
   static const int channels = 1;
-  static const int bufferSize = 4096;
+  static const int bufferSize = 2048;
   static const double volumeThreshold = 0.1;  // Volume minimo per considerare input valido
-  static const double idealVolume = 0.5;      // Volume ideale per una buona registrazione
+  static const double idealVolume = 0.3;      // Volume ideale per una buona registrazione
   static const double maxVolume = 1.0;        // Volume massimo possibile
 
   // Configurazioni Riconoscimento
-  static const double minSimilarityScore = 0.85;
-  static const double perfectSimilarityScore = 0.95;
+  static const double minSimilarityScore = 0.65;
+  static const double perfectSimilarityScore = 0.90;
   static const int maxRecordingDuration = 3600; // secondi
   static const int minRecordingDuration = 1;  // secondi
 

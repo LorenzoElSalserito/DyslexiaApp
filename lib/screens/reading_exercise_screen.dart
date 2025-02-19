@@ -196,22 +196,25 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   Future<void> _showSessionSummary() async {
     if (!mounted) return;
     try {
+      // Recupera l'accuratezza complessiva dalla ExerciseManager
+      final double overallAccuracy = _exerciseManager.overallAccuracy;
+      final playerManager = Provider.of<PlayerManager>(context, listen: false);
+      final int currentLevel = playerManager.currentProfile?.currentLevel ?? 1;
+
       final shouldContinue = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (context) {
-          final playerManager = Provider.of<PlayerManager>(context, listen: false);
-          final int currentLevel = playerManager.currentProfile?.currentLevel ?? 1;
           return CrystalPopup(
             earnedCrystals: _totalCrystals,
             level: currentLevel,
-            progress: _sessionAccuracy,
+            progress: overallAccuracy, // Usa l'accuratezza corretta
             isSessionSummary: true,
             recognitionResult: RecognitionResult(
               text: '',
               confidence: 1.0,
-              similarity: _sessionAccuracy,
-              isCorrect: _sessionAccuracy >= 0.75,
+              similarity: overallAccuracy,
+              isCorrect: overallAccuracy >= 0.75,
               duration: const Duration(seconds: 1),
             ),
           );
@@ -221,8 +224,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       if (shouldContinue == true) {
         setState(() {
           _currentExercise = 0;
-          _sessionAccuracy = 0.0;
           _totalCrystals = 0;
+          // Puoi anche aggiornare _sessionAccuracy se ti serve
+          _sessionAccuracy = overallAccuracy;
           _isSessionStarted = false;
         });
         await _initializeSession();
@@ -236,6 +240,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       });
     }
   }
+
 
   /// Conta le sillabe in una parola italiana
   int _countSyllables(String word) {

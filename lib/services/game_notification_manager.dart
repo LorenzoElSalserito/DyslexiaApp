@@ -36,7 +36,7 @@ class GameNotificationManager {
   /// Mostra una notifica per il bonus di login giornaliero
   /// Il bonus aumenta di 0.5 per ogni giorno consecutivo
   Future<void> showDailyLoginBonus(BuildContext context, int consecutiveDays) async {
-    // Calcola il bonus base (10) più l'incremento per i giorni consecutivi
+    if (consecutiveDays <= 0) return; // Non mostrare il bonus se non ci sono giorni consecutivi
     final bonus = (10 + (consecutiveDays - 1) * 0.5).round();
 
     showDialog(

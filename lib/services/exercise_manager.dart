@@ -191,6 +191,10 @@ class ExerciseManager extends ChangeNotifier {
     _currentSessionIndex++;
     _totalCrystals += crystals;
     _sessionCrystals += crystals;
+
+    // Aggiunta: aggiorna i cristalli del giocatore
+    _player.addCrystals(crystals);
+
     debugPrint('[ExerciseManager] processExerciseResult: Aggiornati i totali - Sessione: $_sessionCrystals, Globale: $_totalCrystals');
 
     await _analyticsService.addResult(result);
@@ -293,6 +297,12 @@ class ExerciseManager extends ChangeNotifier {
           : _sessionAccuracies.reduce((a, b) => a + b) / _sessionAccuracies.length;
       debugPrint('[ExerciseManager] _completeSession: Accuratezza complessiva della sessione: $_overallAccuracy');
 
+      // Aggiorna il campo "averageAccuracy" all'interno di gameData
+      final updatedGameData = {
+        ..._player.gameData,
+        'averageAccuracy': _overallAccuracy,
+      };
+      _player.updateGameData(updatedGameData);
       await _player.saveProgress();
       debugPrint('[ExerciseManager] _completeSession: Progresso del giocatore salvato.');
     }

@@ -285,21 +285,6 @@ class _CrystalPopupState extends State<CrystalPopup>
               ),
             ),
             const SizedBox(height: 8),
-            // Header for recognized text.
-            Text(
-              'Testo riconosciuto:',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 4),
-            // Recognized text.
-            Text(
-              widget.recognitionResult!.text,
-              style: const TextStyle(
-                fontStyle: FontStyle.italic,
-                fontFamily: 'OpenDyslexic',
-              ),
-            ),
-            const SizedBox(height: 8),
             // Feedback message.
             Text(
               widget.recognitionResult!.getFeedbackMessage(),

@@ -215,8 +215,10 @@ class Player with ChangeNotifier {
 
   void addCrystals(int amount) {
     if (amount != 0) {
-      totalCrystals += amount;
+      _totalCrystals += amount;
+      _gameData['crystals'] = _totalCrystals;
       saveProgress();
+      _notifyIfNotDisposed();
     }
   }
 

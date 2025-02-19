@@ -89,6 +89,7 @@ flutter:
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
     - lib/assets/icon/
+    - vosk/
     - lib/assets/icon/ios_icon.png
     - lib/assets/icon/macos_icon.png
 

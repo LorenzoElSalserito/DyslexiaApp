@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/recognition_result.dart';
-import 'dart:math' as math;
 
 class VoiceRecognitionFeedback extends StatelessWidget {
-  // Parametri principali
   final bool isRecording;
   final String targetText;
   final double volumeLevel;
   final RecognitionResult? result;
   final int? currentAttempt;
   final int? totalAttempts;
-
-  // Costanti di stile
-  static const double _maxWaveHeight = 100.0;
-  static const int _wavePoints = 12;
-  static const Duration _waveDuration = Duration(milliseconds: 600);  // Diminuito da 1500 a 600 per animazione più veloce
 
   const VoiceRecognitionFeedback({
     Key? key,
@@ -31,55 +24,12 @@ class VoiceRecognitionFeedback extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Indicatore di progresso delle registrazioni
         if (currentAttempt != null && totalAttempts != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(totalAttempts!, (index) {
-                final isCompleted = index < currentAttempt!;
-                final isCurrent = index == currentAttempt;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: isCompleted
-                        ? Colors.green
-                        : isCurrent
-                        ? Colors.yellowAccent
-                        : Colors.grey[300],
-                    child: isCompleted
-                        ? const Icon(Icons.check, size: 12, color: Colors.white)
-                        : null,
-                  ),
-                );
-              }),
-            ),
-          ),
-
-        // Visualizzazione dell'onda sonora durante la registrazione
+          _buildProgressIndicator(),
         if (isRecording)
-          SizedBox(
-            height: _maxWaveHeight,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(_wavePoints, (index) {
-                return _WaveBar(
-                  index: index,
-                  volumeLevel: volumeLevel,
-                  maxHeight: _maxWaveHeight,
-                  duration: _waveDuration,
-                );
-              }),
-            ),
-          ),
-
-        // Visualizzazione del risultato del riconoscimento
+          _buildRecordingIndicator(),
         if (result != null && !isRecording)
           _buildRecognitionResult(context),
-
-        // Messaggi informativi
         if (isRecording)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -88,10 +38,47 @@ class VoiceRecognitionFeedback extends StatelessWidget {
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
+                fontFamily: 'OpenDyslexic',
               ),
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildProgressIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(totalAttempts!, (index) {
+          final isCompleted = index < currentAttempt!;
+          final isCurrent = index == currentAttempt;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: CircleAvatar(
+              radius: 8,
+              backgroundColor: isCompleted
+                  ? Colors.green
+                  : isCurrent
+                  ? Colors.yellowAccent
+                  : Colors.grey[300],
+              child: isCompleted
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null,
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildRecordingIndicator() {
+    return SizedBox(
+      height: 100,
+      child: Center(
+        child: RecordingPulseIndicator(volumeLevel: volumeLevel),
+      ),
     );
   }
 
@@ -121,6 +108,7 @@ class VoiceRecognitionFeedback extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: color,
+                    fontFamily: 'OpenDyslexic',
                   ),
                 ),
               ],
@@ -128,15 +116,23 @@ class VoiceRecognitionFeedback extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Testo riconosciuto:',
-              style: Theme.of(context).textTheme.titleSmall,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontFamily: 'OpenDyslexic',
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               result!.text,
-              style: const TextStyle(fontStyle: FontStyle.italic),
+              style: const TextStyle(
+                fontStyle: FontStyle.italic,
+                fontFamily: 'OpenDyslexic',
+              ),
             ),
             const SizedBox(height: 8),
-            Text(result!.getFeedbackMessage()),
+            Text(
+              result!.getFeedbackMessage(),
+              style: const TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
           ],
         ),
       ),
@@ -144,57 +140,47 @@ class VoiceRecognitionFeedback extends StatelessWidget {
   }
 }
 
-/// Widget animato che rappresenta una barra dell'onda sonora
-class _WaveBar extends StatefulWidget {
-  final int index;
+class RecordingPulseIndicator extends StatefulWidget {
   final double volumeLevel;
-  final double maxHeight;
-  final Duration duration;
 
-  const _WaveBar({
+  const RecordingPulseIndicator({
     Key? key,
-    required this.index,
     required this.volumeLevel,
-    required this.maxHeight,
-    required this.duration,
   }) : super(key: key);
 
   @override
-  State<_WaveBar> createState() => _WaveBarState();
+  State<RecordingPulseIndicator> createState() => _RecordingPulseIndicatorState();
 }
 
-class _WaveBarState extends State<_WaveBar> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _heightAnimation;
+class _RecordingPulseIndicatorState extends State<RecordingPulseIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: widget.duration,
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
 
-    // Animazione più fluida con curve personalizzata
-    _heightAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.3, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOutSine)),
-        weight: 50,
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 2.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
       ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.3)
-            .chain(CurveTween(curve: Curves.easeInSine)),
-        weight: 50,
-      ),
-    ]).animate(_controller);
+    );
 
-    // Aggiunge un delay casuale per ogni barra
-    Future.delayed(Duration(milliseconds: widget.index * 50), () {
-      if (mounted) {
-        _controller.repeat();
-      }
-    });
+    _opacityAnimation = Tween<double>(begin: 0.6, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _controller.repeat();
   }
 
   @override
@@ -205,24 +191,43 @@ class _WaveBarState extends State<_WaveBar> with SingleTickerProviderStateMixin 
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final height = widget.maxHeight *
-            _heightAnimation.value *
-            widget.volumeLevel *
-            (0.4 + (widget.index % 2) * 0.2);  // Aggiunge variazione all'altezza
+    final size = 50.0 + (widget.volumeLevel * 30.0);
 
-        return Container(
-          width: 4,
-          height: height.clamp(4.0, widget.maxHeight),
-          margin: const EdgeInsets.symmetric(horizontal: 2),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Opacity(
+              opacity: _opacityAnimation.value,
+              child: Transform.scale(
+                scale: _scaleAnimation.value,
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        Container(
+          width: size * 0.8,
+          height: size * 0.8,
           decoration: BoxDecoration(
-            color: Colors.black87.withOpacity(0.8),  // Cambiato da blue a black87
-            borderRadius: BorderRadius.circular(2),
+            shape: BoxShape.circle,
+            color: Colors.green.shade600,
           ),
-        );
-      },
+          child: const Icon(
+            Icons.mic,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }
