@@ -1,7 +1,0 @@
-Big Italian model for Vosk
-
-WER
-
-%WER 8.10 [ 11890 / 146712, 1546 ins, 1996 del, 8348 sub ] exp/chain/tdnn/decode_test_cv_rescore/wer_10_0.0
-%WER 15.68 [ 6406 / 40847, 846 ins, 846 del, 4714 sub ] exp/chain/tdnn/decode_test_mls_rescore/wer_8_0.0
-%WER 11.23 [ 2041 / 18167, 616 ins, 501 del, 924 sub ] exp/chain/tdnn/decode_test_mtedx_rescore/wer_9_0.0
