@@ -36,11 +36,6 @@ class AudioService {
   bool _processingResult = false;
   final Random _random = Random();
 
-  /// Costruttore privato per il singleton
-  AudioService._internal() {
-    debugPrint('AudioService inizializzato per ${Platform.operatingSystem}');
-  }
-
   /// Inizializza il servizio audio
   Future<void> initialize() async {
     if (_state.isInitialized) {
