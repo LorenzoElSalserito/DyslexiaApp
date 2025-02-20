@@ -7,6 +7,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:vosk_flutter/vosk_flutter.dart';
 import '../models/recognition_result.dart';
 import '../config/app_config.dart';
@@ -156,13 +157,11 @@ class VoskService {
     }
 
     final appDir = await getApplicationDocumentsDirectory();
-    final voskDir = Directory(p.join(appDir.path, 'vosk'));
+    final voskDir = Directory.current;
     if (!await voskDir.exists()) {
       await voskDir.create(recursive: true);
     }
     _modelPath = voskDir.path;
-
-    await _copyModelFromAssets(_modelPath);
 
     if (!await _verifyModelIntegrity(_modelPath)) {
       throw Exception('Integrità del modello non verificata in $_modelPath');
@@ -211,7 +210,7 @@ class VoskService {
     debugPrint('VoskService: Verifica integrità modello in: $modelPath');
     try {
       for (final file in _requiredFiles) {
-        final fullPath = p.join(modelPath, file);
+        final fullPath = path.join(modelPath, file);
         if (!await File(fullPath).exists()) {
           debugPrint('VoskService: File mancante: $file');
           return false;
