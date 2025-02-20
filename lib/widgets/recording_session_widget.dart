@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../services/audio_service.dart';
 
 class RecordingSessionWidget extends StatefulWidget {
@@ -145,7 +146,7 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
         Text(
           'Registrazione $_currentAttempt di ${_audioService.maxAttempts}',
           style: const TextStyle(
-            fontSize: 18,
+            fontSize: AppConfig.title,
             fontFamily: 'OpenDyslexic',
             color: Colors.black87,
           ),
@@ -156,7 +157,7 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
               ? '$_statusMessage\nProssima registrazione tra $_countdown secondi'
               : _statusMessage,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16, fontFamily: 'OpenDyslexic'),
+          style: const TextStyle(fontSize: AppConfig.subtitle, fontFamily: 'OpenDyslexic'),
         ),
         const SizedBox(height: 30),
         // Volume indicator during recording.
@@ -200,7 +201,7 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
                 ),
                 child: Text(
                   _isRecording ? 'Stop' : _isWaiting ? 'Preparati...' : 'Registra',
-                  style: const TextStyle(fontSize: 18, fontFamily: 'OpenDyslexic'),
+                  style: const TextStyle(fontSize: AppConfig.title, fontFamily: 'OpenDyslexic'),
                 ),
               ),
               if (_isProcessing) const CircularProgressIndicator(),

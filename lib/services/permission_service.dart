@@ -1,5 +1,4 @@
 // lib/services/permission_service.dart
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -99,9 +98,11 @@ class PermissionService {
       case Permission.microphone:
         permissionName = 'Microfono';
         explanation = 'Il microfono è necessario per il riconoscimento vocale durante gli esercizi di lettura.';
+        break;
       case Permission.storage:
         permissionName = 'Storage';
         explanation = 'L\'accesso allo storage è necessario per salvare i file di configurazione.';
+        break;
       default:
         permissionName = 'Richiesto';
         explanation = 'Questo permesso è necessario per il funzionamento dell\'app.';

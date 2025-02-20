@@ -29,6 +29,13 @@ class ChallengeService extends ChangeNotifier {
     _generateNewChallengesIfNeeded();
   }
 
+  bool refreshChallenges() {
+    _loadChallenges();
+    _checkAndResetChallenges();
+    _generateNewChallengesIfNeeded();
+    return true;
+  }
+
   void _loadChallenges() {
     try {
       final savedChallenges = _prefs.getString(_challengesKey);

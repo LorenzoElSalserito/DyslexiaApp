@@ -5,6 +5,11 @@ class AppConfig {
   static const String appName = 'DyslexiaHelper';
   static const String appVersion = '1.0.0';
 
+  //Configurazioni Font
+  static const double title = 18;
+  static const double subtitle = 14;
+  static const double others = 12;
+
   // Configurazioni VOSK
   static const String voskModelUrl = 'https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip';
   static const String voskModelName = 'vosk-model-it-0.22';
@@ -41,7 +46,7 @@ class AppConfig {
   static const bool defaultVisualEnabled = true;
 
   // Configurazioni Cache
-  static const int maxCacheSize = 200 * 1024 * 1024; // 200 MB
+  static const int maxCacheSize = 3000 * 1024 * 1024; // 2.5 GB
   static const Duration cacheExpiration = Duration(days: 30);
 
   // Configurazioni Learning Analytics
@@ -60,8 +65,14 @@ class AppConfig {
   static const Map<int, double> newGamePlusMultipliers = {
     1: 1.5,
     2: 2.0,
-    3: 2.5,
-    4: 3.0,
+    3: 3.0,
+    4: 4.0,
+    5: 5.0,
+    6: 6.0,
+    7: 7.0,
+    8: 8.0,
+    9: 9.0,
+    10: 10.0,
   };
 
   // Path delle risorse

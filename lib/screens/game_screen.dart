@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../models/player.dart'; // Import per la classe Player
 import '../services/game_service.dart';
 import '../services/store_service.dart';
@@ -9,6 +10,7 @@ import '../services/challenge_service.dart';
 import '../services/player_manager.dart';
 import '../models/challenge.dart';
 import '../widgets/progression_map.dart';
+import 'dart:math' show min;
 
 class GameScreen extends StatefulWidget {
   const GameScreen({Key? key}) : super(key: key);
@@ -102,7 +104,8 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         return Scaffold(
           body: LayoutBuilder(
             builder: (context, constraints) {
-              debugPrint('[GameScreen] LayoutBuilder: constraints=$constraints');
+              debugPrint(
+                  '[GameScreen] LayoutBuilder: constraints=$constraints');
               return Container(
                 width: constraints.maxWidth,
                 height: constraints.maxHeight,
@@ -149,9 +152,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   Widget _buildTopSection(Player player) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        double fontSize = constraints.maxWidth * 0.05;
-        if (fontSize > 24) fontSize = 24;
-        if (fontSize < 16) fontSize = 16;
+        double fontSize = AppConfig.title;
         return Container(
           padding: EdgeInsets.symmetric(
             vertical: constraints.maxHeight * 0.1,
@@ -169,26 +170,32 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Consumer<StoreService>(
-                      builder: (context, store, _) => Text(
-                        '${store.currentTitle ?? 'Novizio'} ${player.name}',
-                        style: TextStyle(
-                          fontFamily: 'OpenDyslexic',
-                          color: Colors.white,
-                          fontSize: fontSize,
-                          fontWeight: FontWeight.bold,
+                      builder: (context, store, _) => Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${store.currentTitle ?? 'Novizio'} ${player.name}',
+                            style: TextStyle(
+                              fontFamily: 'OpenDyslexic',
+                              color: Colors.white,
+                              fontSize: fontSize,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.diamond, color: Colors.orange, size: 20),
+                        const Icon(Icons.diamond,
+                            color: Colors.orange, size: 20),
                         const SizedBox(width: 4),
                         Text(
                           player.totalCrystals.toString(),
                           style: const TextStyle(
                             color: Colors.orange,
-                            fontSize: 16,
+                            fontSize: AppConfig.title,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'OpenDyslexic',
                           ),
@@ -205,13 +212,14 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
+                      const Icon(Icons.local_fire_department,
+                          color: Colors.orangeAccent, size: 20),
                       const SizedBox(width: 4),
                       Text(
                         '${player.currentConsecutiveDays} giorni',
                         style: const TextStyle(
                           color: Colors.orangeAccent,
-                          fontSize: 16,
+                          fontSize: AppConfig.title,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'OpenDyslexic',
                         ),
@@ -222,13 +230,14 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                     builder: (context, gameService, _) => Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.track_changes, color: Colors.lightGreenAccent, size: 20),
+                        const Icon(Icons.track_changes,
+                            color: Colors.lightGreenAccent, size: 20),
                         const SizedBox(width: 4),
                         Text(
                           '${(gameService.getAverageAccuracy() * 100).toStringAsFixed(1)}%',
                           style: const TextStyle(
                             color: Colors.lightGreenAccent,
-                            fontSize: 16,
+                            fontSize: AppConfig.title,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'OpenDyslexic',
                           ),
@@ -265,18 +274,20 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                     'Sfide Attive',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: AppConfig.subtitle,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'OpenDyslexic',
                     ),
                   ),
                   TextButton(
-                    onPressed: () => Navigator.pushNamed(context, '/challenges'),
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/challenges'),
                     child: const Text(
                       'Vedi tutte',
                       style: TextStyle(
                         color: Colors.amber,
                         fontFamily: 'OpenDyslexic',
+                        fontSize: AppConfig.others,
                       ),
                     ),
                   ),
@@ -288,6 +299,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   style: TextStyle(
                     color: Colors.white70,
                     fontFamily: 'OpenDyslexic',
+                    fontSize: AppConfig.others,
                   ),
                 )
               else
@@ -338,7 +350,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               '${(challenge.progressPercentage * 100).toInt()}% completato',
               style: const TextStyle(
                 color: Colors.white70,
-                fontSize: 12,
+                fontSize: AppConfig.others,
                 fontFamily: 'OpenDyslexic',
               ),
             ),
@@ -360,7 +372,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 child: _buildButton(
                   'Esercizio di Lettura',
                   Colors.green.shade700,
-                      () => Navigator.pushNamed(context, '/reading_exercise'),
+                  () => Navigator.pushNamed(context, '/reading_exercise'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -371,7 +383,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       child: _buildButton(
                         'Sfide',
                         const Color(0xFF4A148C),
-                            () => Navigator.pushNamed(context, '/challenges'),
+                        () => Navigator.pushNamed(context, '/challenges'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -379,7 +391,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       child: _buildButton(
                         'Negozio',
                         Colors.amber.shade900,
-                            () => Navigator.pushNamed(context, '/store'),
+                        () => Navigator.pushNamed(context, '/store'),
                       ),
                     ),
                   ],
@@ -395,7 +407,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         child: _buildButton(
                           'Level Up',
                           Colors.black87,
-                              () {
+                          () {
                             if (player.currentLevel < 7) {
                               player.levelUp();
                               showDialog(
@@ -403,18 +415,21 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                                 builder: (context) => AlertDialog(
                                   title: const Text(
                                     'Avanzamento di Livello',
-                                    style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                    style:
+                                        TextStyle(fontFamily: 'OpenDyslexic'),
                                   ),
                                   content: Text(
                                     'Sei avanzato al livello ${player.currentLevel}!',
-                                    style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                    style:
+                                        TextStyle(fontFamily: 'OpenDyslexic'),
                                   ),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context),
                                       child: const Text(
                                         'OK',
-                                        style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                        style: TextStyle(
+                                            fontFamily: 'OpenDyslexic'),
                                       ),
                                     ),
                                   ],
@@ -429,7 +444,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         child: _buildButton(
                           'New Game+',
                           Colors.black87,
-                              () {
+                          () {
                             player.startNewGamePlus();
                             showDialog(
                               context: context,
@@ -447,7 +462,8 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                                     onPressed: () => Navigator.pop(context),
                                     child: const Text(
                                       'OK',
-                                      style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                      style:
+                                          TextStyle(fontFamily: 'OpenDyslexic'),
                                     ),
                                   ),
                                 ],
@@ -468,7 +484,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       child: _buildButton(
                         'Menu',
                         Colors.blueGrey.shade900,
-                            () => Navigator.pushReplacementNamed(context, '/'),
+                        () => Navigator.pushReplacementNamed(context, '/'),
                       ),
                     ),
                   ],
@@ -500,7 +516,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         child: Text(
           text,
           style: const TextStyle(
-            fontSize: 16,
+            fontSize: AppConfig.subtitle,
             fontWeight: FontWeight.w600,
             fontFamily: 'OpenDyslexic',
           ),

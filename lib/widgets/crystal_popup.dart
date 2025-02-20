@@ -1,6 +1,7 @@
 // lib/widgets/crystal_popup.dart
 
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../models/recognition_result.dart';
 
 /// Widget che mostra un popup animato per i cristalli guadagnati.
@@ -154,7 +155,7 @@ class _CrystalPopupState extends State<CrystalPopup>
             Text(
               titleText,
               style: const TextStyle(
-                fontSize: 24,
+                fontSize: AppConfig.subtitle,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
                 fontFamily: 'OpenDyslexic',
@@ -167,7 +168,7 @@ class _CrystalPopupState extends State<CrystalPopup>
                 messageText,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: AppConfig.subtitle,
                   color: Colors.green,
                   fontFamily: 'OpenDyslexic',
                 ),
@@ -225,7 +226,7 @@ class _CrystalPopupState extends State<CrystalPopup>
     return Text(
       '+${widget.earnedCrystals} Cristalli',
       style: TextStyle(
-        fontSize: 28,
+        fontSize: AppConfig.title,
         fontWeight: FontWeight.bold,
         color: Colors.grey[800],
         fontFamily: 'OpenDyslexic',
@@ -239,7 +240,7 @@ class _CrystalPopupState extends State<CrystalPopup>
       child: Text(
         'Giorni consecutivi: ${widget.consecutiveDays}',
         style: TextStyle(
-          fontSize: 16,
+          fontSize: AppConfig.subtitle,
           color: Colors.grey[600],
           fontFamily: 'OpenDyslexic',
         ),
@@ -272,7 +273,7 @@ class _CrystalPopupState extends State<CrystalPopup>
             // Display the emoji as the main indicator.
             Text(
               emoji,
-              style: const TextStyle(fontSize: 64),
+              style: const TextStyle(fontSize: 50),
             ),
             const SizedBox(height: 8),
             // Display the accuracy percentage.

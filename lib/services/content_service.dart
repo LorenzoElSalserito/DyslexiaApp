@@ -1,5 +1,4 @@
 // lib/services/content_service.dart
-
 import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:math';
@@ -66,7 +65,6 @@ class ContentService extends ChangeNotifier {
       rethrow;
     }
   }
-
 
   /// Carica il contenuto di un file di assets
   Future<String> loadAsset(String path) async {
@@ -177,30 +175,6 @@ class ContentService extends ChangeNotifier {
     return word.trim().toLowerCase();
   }
 
-  /// Normalizza una frase
-  String _normalizeSentence(String sentence) {
-    return sentence.trim()
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .replaceAll(RegExp(r'[^\w\s\.,!?]'), '')
-        .trim();
-  }
-
-  /// Normalizza un paragrafo
-  String _normalizeParagraph(String paragraph) {
-    return paragraph.split('.')
-        .map((sentence) => _normalizeSentence(sentence))
-        .where((sentence) => sentence.isNotEmpty)
-        .join('. ');
-  }
-
-  /// Normalizza una pagina
-  String _normalizePage(String page) {
-    return page.split('\n\n')
-        .map((paragraph) => _normalizeParagraph(paragraph))
-        .where((paragraph) => paragraph.isNotEmpty)
-        .join('\n\n');
-  }
-
   /// Ottiene una parola casuale appropriata per il livello e la difficoltà
   Word getRandomWordForLevel(int level, Difficulty difficulty) {
     _exerciseCounter++;
@@ -237,7 +211,6 @@ class ContentService extends ChangeNotifier {
 
     final word = availableWords[_random.nextInt(availableWords.length)];
     _usedWords.add(word.text);
-    _updateUsageStats(word.text, difficulty);
     notifyListeners();
     return word;
   }
@@ -249,7 +222,6 @@ class ContentService extends ChangeNotifier {
         return _cachedContent[path]!.map((word) => Word(word)).toList();
       }
 
-      // Usa rootBundle per caricare il file dalle risorse
       final content = rootBundle.loadString(path);
       final words = content.then((String content) {
         _cachedContent[path] = content.split('\n')
@@ -259,91 +231,11 @@ class ContentService extends ChangeNotifier {
         return _cachedContent[path]!.map((word) => Word(word)).toList();
       });
 
-      // In attesa del caricamento, usa la cache o un insieme vuoto
       return _cachedContent[path]?.map((word) => Word(word)).toList() ?? [];
     } catch (e) {
       debugPrint('Errore nel caricamento delle parole da $path: $e');
       return [];
     }
-  }
-
-
-  /// Filtra le parole in base alla difficoltà
-  List<Word> _getWordsForDifficulty(Difficulty difficulty) {
-    final words = _contentSet.dictionary;
-    switch (difficulty) {
-      case Difficulty.easy:
-      // Parole brevi con sillabe semplici (2-3 sillabe, max 5 lettere)
-        return words.where((word) =>
-        _countSyllables(word.text) <= 2 &&
-            word.text.length <= 5 &&
-            !_hasComplexSyllables(word.text)
-        ).toList();
-
-      case Difficulty.medium:
-      // Parole di media lunghezza (3-4 sillabe, 6-8 lettere)
-        return words.where((word) =>
-        _countSyllables(word.text) <= 4 &&
-            word.text.length > 5 &&
-            word.text.length <= 8
-        ).toList();
-
-      case Difficulty.hard:
-      // Parole lunghe o complesse (4+ sillabe o 8+ lettere)
-        return words.where((word) =>
-        _countSyllables(word.text) > 4 ||
-            word.text.length > 8 ||
-            _hasComplexSyllables(word.text)
-        ).toList();
-    }
-  }
-
-  /// Conta le sillabe in una parola italiana
-  int _countSyllables(String word) {
-    final vowels = RegExp('[aeiouAEIOU]');
-    final diphthongs = RegExp('(ai|au|ei|eu|oi|ou|ia|ie|io|iu|ua|ue|ui|uo)');
-
-    int count = vowels.allMatches(word).length;
-    count -= diphthongs.allMatches(word).length;
-    return count > 0 ? count : 1;
-  }
-
-  /// Verifica se una parola contiene sillabe complesse
-  bool _hasComplexSyllables(String word) {
-    // Gruppi consonantici complessi in italiano
-    final complexGroups = RegExp(
-        '(str|spr|scr|spl|sbl|sgl|sbr|sfr|zz|gn|gl|gh|ch|sc[ie])'
-    );
-    return complexGroups.hasMatch(word);
-  }
-
-  /// Aggiorna le statistiche di utilizzo
-  void _updateUsageStats(String word, Difficulty difficulty) {
-    _wordUsageStats[word] = (_wordUsageStats[word] ?? 0) + 1;
-    _difficultyStats[difficulty] = (_difficultyStats[difficulty] ?? 0) + 1;
-  }
-
-  /// Ottiene le statistiche di utilizzo
-  Map<String, dynamic> getUsageStats() {
-    return {
-      'totalExercises': _exerciseCounter,
-      'uniqueWordsUsed': _usedWords.length,
-      'wordUsage': Map<String, int>.from(_wordUsageStats),
-      'difficultyStats': Map<Difficulty, int>.from(_difficultyStats),
-    };
-  }
-
-  /// Pulisce la cache dei contenuti
-  void clearCache() {
-    _cachedContent.clear();
-    notifyListeners();
-  }
-
-  /// Resetta manualmente il contatore degli esercizi e le parole usate
-  void resetExerciseCounter() {
-    _exerciseCounter = 0;
-    _usedWords.clear();
-    notifyListeners();
   }
 
   // Getters pubblici

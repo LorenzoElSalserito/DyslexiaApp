@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../services/store_service.dart';
 import '../services/player_manager.dart';
 import '../models/trophy.dart';
@@ -89,7 +90,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   const Text(
                     'Negozio Trofei',
                     style: TextStyle(
-                      fontSize: 28,
+                      fontSize: AppConfig.title,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       fontFamily: 'OpenDyslexic',
@@ -101,16 +102,16 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.black87,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppConfig.subtitle),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.diamond, color: Colors.amber, size: 24),
+                    const Icon(Icons.diamond, color: Colors.amber, size: AppConfig.others),
                     const SizedBox(width: 8),
                     Text(
                       crystals,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: AppConfig.others,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         fontFamily: 'OpenDyslexic',
@@ -144,7 +145,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                     'Nessun trofeo disponibile',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: AppConfig.subtitle,
                       fontFamily: 'OpenDyslexic',
                     ),
                   ),
@@ -168,7 +169,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               'Non hai ancora sbloccato nessun trofeo',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 18,
+                fontSize: AppConfig.subtitle,
                 fontFamily: 'OpenDyslexic',
               ),
             ),
@@ -246,14 +247,14 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
             children: [
               Icon(
                 trophy.icon,
-                size: 48,
+                size: AppConfig.title,
                 color: trophy.color,
               ),
               const SizedBox(height: 8),
               Text(
                 trophy.name,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: AppConfig.others,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'OpenDyslexic',
                   color: Colors.black87,
@@ -265,7 +266,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 trophy.rarity,
                 style: TextStyle(
                   color: Colors.grey[800],
-                  fontSize: 12,
+                  fontSize: AppConfig.others,
                   fontFamily: 'OpenDyslexic',
                 ),
               ),
@@ -286,7 +287,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         color: canBuy ? Colors.black : Colors.grey,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'OpenDyslexic',
-                        fontSize: 12,
+                        fontSize: AppConfig.others,
                       ),
                     ),
                   ],
@@ -314,14 +315,14 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            Icon(trophy.icon, color: trophy.color, size: 32),
+            Icon(trophy.icon, color: trophy.color, size: AppConfig.title),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 trophy.name,
                 style: const TextStyle(
                   fontFamily: 'OpenDyslexic',
-                  fontSize: 20,
+                  fontSize: AppConfig.subtitle,
                   color: Colors.black87,
                 ),
               ),
@@ -336,7 +337,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               Text(
                 trophy.description,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: AppConfig.others,
                   fontFamily: 'OpenDyslexic',
                   color: Colors.black87,
                 ),
@@ -351,6 +352,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontFamily: 'OpenDyslexic',
+                      fontSize: AppConfig.others,
                       color: Colors.black87,
                     ),
                   ),
@@ -362,6 +364,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                 style: const TextStyle(
                   fontFamily: 'OpenDyslexic',
                   fontWeight: FontWeight.bold,
+                  fontSize: AppConfig.subtitle,
                   color: Colors.black87,
                 ),
               ),
@@ -376,6 +379,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontFamily: 'OpenDyslexic',
+                        fontSize: AppConfig.others,
                         color: Colors.black87,
                       ),
                     ),

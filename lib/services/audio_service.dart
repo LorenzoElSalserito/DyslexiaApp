@@ -1,5 +1,4 @@
 // lib/services/audio_service.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -80,7 +79,6 @@ class AudioService {
 
   Future<void> _setupRecordingDirectory() async {
     try {
-      // Creiamo una directory temporanea per la registrazione
       final tempDir = await Directory.systemTemp.createTemp('audio_recording_');
       _recordingPath = '${tempDir.path}/recording.wav';
       debugPrint('AudioService: Directory di registrazione impostata su $_recordingPath');
@@ -91,7 +89,11 @@ class AudioService {
   }
 
   Future<String> startRecording() async {
-    if (!_canStartRecording() || _processingResult) return '';
+    // Se è in corso l'elaborazione, non avviare una nuova registrazione
+    if (_processingResult) {
+      debugPrint('AudioService: Elaborazione in corso, impossibile avviare una nuova registrazione.');
+      return '';
+    }
     try {
       debugPrint('AudioService: startRecording() chiamato.');
       _streamControllers.reset();
@@ -112,6 +114,7 @@ class AudioService {
       rethrow;
     }
   }
+
 
   Future<void> _startSimulatedRecording() async {
     _state.volumeTimer?.cancel();
@@ -164,12 +167,12 @@ class AudioService {
       debugPrint('AudioService: stopRecording() chiamato ma condizione non soddisfatta. Stato: ${_state.currentState}');
       return '';
     }
+    // Blocchiamo ulteriori invocazioni finché non terminiamo il ciclo
     if (_processingResult) return '';
+    _processingResult = true;
     try {
       debugPrint('AudioService: stopRecording() chiamato.');
-      _processingResult = true;
       final filePath = await _stopCurrentRecording();
-      _processingResult = false;
       _updateState(AudioState.waitingNext);
       Timer(_delayBetweenRecordings, () {
         if (_state.currentState == AudioState.waitingNext) {
@@ -182,10 +185,13 @@ class AudioService {
     } catch (e, stack) {
       debugPrint('Errore stop registrazione: $e\n$stack');
       _updateState(AudioState.stopped);
-      _processingResult = false;
       rethrow;
+    } finally {
+      // Assicuriamoci di resettare il flag anche in caso di errore
+      _processingResult = false;
     }
   }
+
 
   Future<String> _stopCurrentRecording() async {
     _recordingTimer?.cancel();

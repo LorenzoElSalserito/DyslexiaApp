@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
+
 class OptionsScreen extends StatefulWidget {
   // Aggiungiamo il costruttore const
   const OptionsScreen({Key? key}) : super(key: key);
@@ -48,7 +50,7 @@ class _OptionsScreenState extends State<OptionsScreen> {
           const Text(
             'Opzioni',
             style: TextStyle(
-              fontSize: 28,
+              fontSize: AppConfig.title,
               fontWeight: FontWeight.bold,
               color: Colors.white,
               fontFamily: 'OpenDyslexic',
@@ -103,7 +105,7 @@ class _OptionsScreenState extends State<OptionsScreen> {
         Text(
           title,
           style: const TextStyle(
-            fontSize: 20,
+            fontSize: AppConfig.title,
             fontWeight: FontWeight.bold,
             color: Colors.white,
             fontFamily: 'OpenDyslexic',

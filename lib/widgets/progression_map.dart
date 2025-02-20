@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../services/game_service.dart';
 import '../services/player_manager.dart';
 import '../models/player.dart';
@@ -24,7 +25,7 @@ class ProgressionMap extends StatelessWidget {
       return const Center(
         child: Text(
           'Nessun profilo selezionato',
-          style: TextStyle(fontFamily: 'OpenDyslexic', fontSize: 18),
+          style: TextStyle(fontFamily: 'OpenDyslexic', fontSize: AppConfig.title),
         ),
       );
     }
@@ -96,7 +97,7 @@ class ProgressionMap extends StatelessWidget {
                 Text(
                   'Livello ${player.currentLevel}',
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: AppConfig.title,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     fontFamily: 'OpenDyslexic',
@@ -116,7 +117,7 @@ class ProgressionMap extends StatelessWidget {
                   'NG+${player.newGamePlusCount}',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: AppConfig.others,
                     fontFamily: 'OpenDyslexic',
                   ),
                 ),
@@ -175,7 +176,7 @@ class ProgressionMap extends StatelessWidget {
             '${(averageAccuracy * 100).toStringAsFixed(1)}% Accuratezza',
             style: TextStyle(
               color: isGoodAccuracy ? Colors.green.shade400 : Colors.orange,
-              fontSize: 12,
+              fontSize: AppConfig.others,
               fontFamily: 'OpenDyslexic',
             ),
           ),
@@ -226,7 +227,7 @@ class ProgressionMap extends StatelessWidget {
             label,
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
-              fontSize: 12,
+              fontSize: AppConfig.others,
               fontFamily: 'OpenDyslexic',
             ),
           ),
@@ -237,7 +238,7 @@ class ProgressionMap extends StatelessWidget {
             value,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: AppConfig.others,
               fontWeight: FontWeight.bold,
               fontFamily: 'OpenDyslexic',
             ),
@@ -264,7 +265,7 @@ class ProgressionMap extends StatelessWidget {
             'Streak: $streak',
             style: const TextStyle(
               color: Colors.orange,
-              fontSize: 12,
+              fontSize: AppConfig.others,
               fontFamily: 'OpenDyslexic',
             ),
           ),

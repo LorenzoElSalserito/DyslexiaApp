@@ -2,10 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../services/player_manager.dart';
 import '../models/player.dart';
 import 'profile_creation_screen.dart';
 import 'game_screen.dart';
+import '../widgets/adaptive_profile_card.dart';
+import 'dart:math' show min;
 
 class ProfileSelectionScreen extends StatefulWidget {
   const ProfileSelectionScreen({Key? key}) : super(key: key);
@@ -16,10 +19,10 @@ class ProfileSelectionScreen extends StatefulWidget {
 
 class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     with SingleTickerProviderStateMixin {
-  // Stato per la gestione della selezione e dell'eliminazione
+  // Stato della selezione dei profili
   final Set<String> _selectedProfiles = {};
   bool _isDeleting = false;
-  bool _isSelectMode = false; // Flag per la modalità selezione
+  bool _isSelectMode = false;
 
   // Controller per le animazioni
   late AnimationController _animationController;
@@ -28,6 +31,10 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
+  }
+
+  void _initializeAnimations() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -43,17 +50,388 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     _animationController.forward();
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
+  // Layout responsivo
+  int _getColumnCount(double width) {
+    if (width < 360) return 2;        // Smartphone piccoli
+    if (width < 600) return 3;        // Smartphone normali
+    if (width < 900) return 4;        // Tablet
+    return 5;                         // Desktop/Tablet grandi
   }
 
-  // Gestione eliminazione profili
-  Future<void> _deleteSelectedProfiles(
-      BuildContext context, PlayerManager playerManager) async {
+  EdgeInsets _getScreenPadding(double width) {
+    if (width < 360) return const EdgeInsets.all(8);
+    if (width < 600) return const EdgeInsets.all(12);
+    return const EdgeInsets.all(16);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: _handleBackPress,
+      child: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.blue.shade900, Colors.blue.shade800],
+            ),
+          ),
+          child: SafeArea(
+            child: Consumer<PlayerManager>(
+              builder: (context, playerManager, child) {
+                final profiles = playerManager.profiles;
+                final canAddProfile = playerManager.canCreateProfile;
+                final screenWidth = MediaQuery.of(context).size.width;
+                final columnCount = _getColumnCount(screenWidth);
+                final padding = _getScreenPadding(screenWidth);
+
+                return Column(
+                  children: [
+                    _buildHeader(screenWidth),
+                    if (profiles.isNotEmpty)
+                      _buildToolbar(),
+                    Expanded(
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: CustomScrollView(
+                          slivers: [
+                            SliverPadding(
+                              padding: padding,
+                              sliver: SliverGrid(
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columnCount,
+                                  childAspectRatio: 0.85,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                ),
+                                delegate: SliverChildBuilderDelegate(
+                                      (context, index) {
+                                    if (index == profiles.length && canAddProfile) {
+                                      return _buildAddProfileCard(context);
+                                    }
+                                    return AdaptiveProfileCard(
+                                      profile: profiles[index],
+                                      isSelected: _selectedProfiles.contains(profiles[index].id),
+                                      isSelectMode: _isSelectMode,
+                                      onTap: () => _handleProfileTap(profiles[index]),
+                                      onLongPress: () => _handleProfileLongPress(profiles[index]),
+                                    );
+                                  },
+                                  childCount: profiles.length + (canAddProfile ? 1 : 0),
+                                ),
+                              ),
+                            ),
+                            if (profiles.isEmpty)
+                              SliverFillRemaining(
+                                child: Center(
+                                  child: _buildEmptyState(canAddProfile),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_isSelectMode && _selectedProfiles.isNotEmpty)
+                      _buildDeleteButton(playerManager),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(double screenWidth) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'OpenDSA: Reading',
+              style: TextStyle(
+                fontSize: screenWidth < 360 ? 24 : AppConfig.title,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'OpenDyslexic',
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Consumer<PlayerManager>(
+            builder: (context, playerManager, child) {
+              final hasProfiles = playerManager.profiles.isNotEmpty;
+              return Text(
+                hasProfiles
+                    ? 'Seleziona il tuo profilo per iniziare'
+                    : 'Crea il tuo primo profilo',
+                style: TextStyle(
+                  fontSize: screenWidth < 360 ? 14 : AppConfig.subtitle,
+                  color: Colors.white70,
+                  fontFamily: 'OpenDyslexic',
+                ),
+                textAlign: TextAlign.center,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool canAddProfile) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.person_add_outlined,
+          size: 64,
+          color: Colors.white.withOpacity(0.5),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Nessun profilo presente',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: AppConfig.title,
+            fontFamily: 'OpenDyslexic',
+          ),
+        ),
+        if (canAddProfile) ...[
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text(
+              'Crea Nuovo Profilo',
+              style: TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfileCreationScreen()),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildToolbar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          if (_selectedProfiles.isNotEmpty)
+            Text(
+              '${_selectedProfiles.length} selezionat${_selectedProfiles.length == 1 ? 'o' : 'i'}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'OpenDyslexic',
+              ),
+            ),
+          TextButton.icon(
+            icon: Icon(
+              _isSelectMode ? Icons.close : Icons.delete,
+              color: Colors.white,
+            ),
+            label: Text(
+              _isSelectMode ? 'Annulla' : 'Gestisci Profili',
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'OpenDyslexic',
+              ),
+            ),
+            onPressed: _toggleSelectMode,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleSelectMode() {
+    setState(() {
+      _isSelectMode = !_isSelectMode;
+      if (!_isSelectMode) {
+        _selectedProfiles.clear();
+      }
+    });
+  }
+
+  void _handleProfileTap(Player profile) {
+    if (_isSelectMode) {
+      setState(() {
+        if (_selectedProfiles.contains(profile.id)) {
+          _selectedProfiles.remove(profile.id);
+        } else {
+          _selectedProfiles.add(profile.id);
+        }
+      });
+    } else {
+      _selectProfile(profile);
+    }
+  }
+
+  void _handleProfileLongPress(Player profile) {
+    if (!_isSelectMode) {
+      setState(() {
+        _isSelectMode = true;
+        _selectedProfiles.add(profile.id);
+      });
+    }
+  }
+
+  Future<bool> _handleBackPress() async {
+    if (_isSelectMode) {
+      setState(() {
+        _isSelectMode = false;
+        _selectedProfiles.clear();
+      });
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _selectProfile(Player profile) async {
+    try {
+      final playerManager = Provider.of<PlayerManager>(context, listen: false);
+      await playerManager.selectProfile(profile);
+
+      if (!mounted) return;
+
+      // Animazione di uscita
+      await _animationController.reverse();
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const GameScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Errore nella selezione del profilo: $e',
+            style: const TextStyle(fontFamily: 'OpenDyslexic'),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildAddProfileCard(BuildContext context) {
+    // Determiniamo se siamo su uno schermo piccolo
+    final isSmallScreen = MediaQuery.of(context).size.width < 360;
+
+    return Hero(
+      tag: 'new_profile',
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.white, width: 2),
+        ),
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ProfileCreationScreen()),
+          ),
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                // Riduciamo il raggio su schermi piccoli
+                radius: isSmallScreen ? 25 : 30,
+                backgroundColor: Colors.greenAccent,
+                child: Icon(
+                  Icons.add,
+                  size: isSmallScreen ? 25 : 30,
+                  color: Colors.blue.shade800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  isSmallScreen ? 'Nuovo' : 'Nuovo\nProfilo',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 14 : AppConfig.subtitle,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                    fontFamily: 'OpenDyslexic',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteButton(PlayerManager playerManager) {
+    // Determiniamo le dimensioni del contenitore in base allo schermo
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 8 : 16,
+        vertical: isSmallScreen ? 8 : 16,
+      ),
+      child: ElevatedButton.icon(
+        icon: _isDeleting
+            ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
+            : const Icon(Icons.delete_forever),
+        label: Text(
+          _isDeleting
+              ? 'Eliminazione in corso...'
+              : 'Elimina ${_selectedProfiles.length} profil${_selectedProfiles.length == 1 ? 'o' : 'i'}',
+          style: TextStyle(
+            fontFamily: 'OpenDyslexic',
+            fontSize: isSmallScreen ? 14 : 16,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          padding: EdgeInsets.symmetric(
+            vertical: isSmallScreen ? 12 : 16,
+            horizontal: isSmallScreen ? 16 : 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onPressed: _isDeleting ? null : () => _deleteSelectedProfiles(playerManager),
+      ),
+    );
+  }
+
+  Future<void> _deleteSelectedProfiles(PlayerManager playerManager) async {
     if (_selectedProfiles.isEmpty) return;
 
+    // Mostriamo un dialog di conferma
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -64,22 +442,35 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             fontWeight: FontWeight.bold,
           ),
         ),
-        content: Text(
-          'Sei sicuro di voler eliminare ${_selectedProfiles.length} profil${_selectedProfiles.length == 1 ? 'o' : 'i'} selezionat${_selectedProfiles.length == 1 ? 'o' : 'i'}?\n'
-              'Questa operazione non può essere annullata.',
-          style: const TextStyle(fontFamily: 'OpenDyslexic'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sei sicuro di voler eliminare ${_selectedProfiles.length} profil${_selectedProfiles.length == 1 ? 'o' : 'i'}?',
+              style: const TextStyle(fontFamily: 'OpenDyslexic'),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Questa azione non può essere annullata.',
+              style: TextStyle(
+                fontFamily: 'OpenDyslexic',
+                color: Colors.red,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text(
               'Annulla',
               style: TextStyle(fontFamily: 'OpenDyslexic'),
             ),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
               foregroundColor: Colors.red,
             ),
@@ -100,413 +491,67 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     setState(() => _isDeleting = true);
 
     try {
-      for (final profileId in _selectedProfiles) {
-        await playerManager.deleteProfile(profileId);
-      }
+      // Effettuiamo l'eliminazione
+      await playerManager.deleteProfiles(List.from(_selectedProfiles));
 
+      if (!mounted) return;
+
+      // Mostriamo un feedback di successo
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Profili eliminati con successo',
+            style: TextStyle(fontFamily: 'OpenDyslexic'),
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Resettiamo lo stato
       setState(() {
         _selectedProfiles.clear();
-        _isSelectMode = false; // Disattiva la modalità selezione dopo l'eliminazione
+        _isSelectMode = false;
       });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Profili eliminati con successo',
-              style: TextStyle(fontFamily: 'OpenDyslexic'),
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Errore durante l\'eliminazione: $e',
-              style: const TextStyle(fontFamily: 'OpenDyslexic'),
-            ),
-            backgroundColor: Colors.red,
+      if (!mounted) return;
+
+      // Mostriamo un messaggio di errore
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Errore durante l\'eliminazione: $e',
+            style: const TextStyle(fontFamily: 'OpenDyslexic'),
           ),
-        );
-      }
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      setState(() => _isDeleting = false);
+      if (mounted) {
+        setState(() => _isDeleting = false);
+      }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<PlayerManager>(
-      builder: (context, playerManager, child) {
-        final profiles = playerManager.profiles;
-        final canAddProfile = playerManager.canCreateProfile;
-
-        return Scaffold(
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.blue.shade900, Colors.blue.shade800],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  _buildHeader(profiles),
-                  // Barra degli strumenti con pulsante di eliminazione
-                  if (profiles.isNotEmpty) _buildToolbar(context),
-                  Expanded(
-                    child: ScaleTransition(
-                      scale: _scaleAnimation,
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3, // Aumentato a 3 per profili più piccoli
-                          childAspectRatio: 0.85,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: profiles.length + (canAddProfile ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == profiles.length && canAddProfile) {
-                            return _buildAddProfileCard(context);
-                          }
-                          return _buildProfileCard(
-                            context,
-                            profiles[index],
-                            playerManager,
-                            isSelected: _selectedProfiles.contains(profiles[index].id),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  if (_isSelectMode && _selectedProfiles.isNotEmpty)
-                    _buildDeleteButton(playerManager, context),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
+}
 
-  Widget _buildHeader(List<Player> profiles) {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Text(
-                'OpenDSA: Reading',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontFamily: 'OpenDyslexic',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            profiles.isEmpty
-                ? 'Crea il tuo primo profilo'
-                : 'Seleziona il tuo profilo per iniziare',
-            style: const TextStyle(
-              fontSize: 18,
-              color: Colors.white70,
-              fontFamily: 'OpenDyslexic',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+// Estensioni utili per il responsive design
+extension ScreenSizeHelpers on BuildContext {
+  Size get screenSize => MediaQuery.of(this).size;
+  double get screenWidth => screenSize.width;
+  double get screenHeight => screenSize.height;
 
-  // Barra degli strumenti con pulsante di eliminazione
-  Widget _buildToolbar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton.icon(
-            icon: Icon(
-              _isSelectMode ? Icons.close : Icons.delete,
-              color: Colors.white,
-            ),
-            label: Text(
-              _isSelectMode ? 'Annulla' : 'Gestisci Profili',
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'OpenDyslexic',
-              ),
-            ),
-            onPressed: () {
-              setState(() {
-                _isSelectMode = !_isSelectMode;
-                if (!_isSelectMode) {
-                  _selectedProfiles.clear();
-                }
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  bool get isSmallScreen => screenWidth < 360;
+  bool get isMediumScreen => screenWidth < 600;
+  bool get isLargeScreen => screenWidth >= 900;
 
-  Widget _buildDeleteButton(PlayerManager playerManager, BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          icon: _isDeleting
-              ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          )
-              : const Icon(Icons.delete_forever),
-          label: Text(
-            _isDeleting
-                ? 'Eliminazione in corso...'
-                : 'Elimina ${_selectedProfiles.length} profil${_selectedProfiles.length == 1 ? 'o' : 'i'}',
-            style: const TextStyle(fontFamily: 'OpenDyslexic'),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.shade100,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onPressed: _isDeleting
-              ? null
-              : () => _deleteSelectedProfiles(context, playerManager),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileCard(
-      BuildContext context,
-      Player profile,
-      PlayerManager playerManager, {
-        required bool isSelected,
-      }) {
-    return Card(
-      elevation: isSelected ? 8 : 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isSelected ? Colors.yellow : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-          if (_isSelectMode) {
-            setState(() {
-              if (isSelected) {
-                _selectedProfiles.remove(profile.id);
-              } else {
-                _selectedProfiles.add(profile.id);
-              }
-            });
-          } else {
-            _selectProfile(context, profile);
-          }
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          children: [
-            // Uso di Center per assicurare la centratura di tutto il contenuto
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildProfileAvatar(profile),
-                    const SizedBox(height: 8),
-                    _buildProfileInfo(profile),
-                  ],
-                ),
-              ),
-            ),
-            if (_isSelectMode)
-              Positioned(
-                right: 4,
-                top: 4,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.yellow : Colors.white.withOpacity(0.8),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isSelected ? Icons.check : Icons.check_box_outline_blank,
-                    color: isSelected ? Colors.black : Colors.grey,
-                    size: 20,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileAvatar(Player profile) {
-    return Hero(
-      tag: 'profile_avatar_${profile.id}',
-      child: CircleAvatar(
-        radius: 35,
-        backgroundColor: Colors.blue.shade800,
-        child: Text(
-          profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '',
-          style: const TextStyle(
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontFamily: 'OpenDyslexic',
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileInfo(Player profile) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center, // Centratura orizzontale
-      children: [
-        Text(
-          profile.name,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'OpenDyslexic',
-          ),
-          textAlign: TextAlign.center,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (profile.currentLevel > 1 || profile.totalCrystals > 0) ...[
-          const SizedBox(height: 4),
-          Text(
-            'Liv. ${profile.currentLevel}',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[900],
-              fontFamily: 'OpenDyslexic',
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.diamond, size: 16, color: Colors.deepOrange),
-              const SizedBox(width: 2),
-              Text(
-                '${profile.totalCrystals}',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[900],
-                  fontFamily: 'OpenDyslexic',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildAddProfileCard(BuildContext context) {
-    return Hero(
-      tag: 'new_profile',
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: Colors.white,
-            width: 2,
-          ),
-        ),
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => ProfileCreationScreen()),
-          ),
-          borderRadius: BorderRadius.circular(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 30, // Dimensione ridotta per corrispondere agli altri profili
-                backgroundColor: Colors.greenAccent,
-                child: Icon(
-                  Icons.add,
-                  size: 30,
-                  color: Colors.blue.shade800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Nuovo\nProfilo',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                  fontFamily: 'OpenDyslexic',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _selectProfile(BuildContext context, Player profile) async {
-    final playerManager = Provider.of<PlayerManager>(context, listen: false);
-    try {
-      await playerManager.selectProfile(profile);
-      // Non usiamo più Provider.of<Player>, poiché il profilo attivo è gestito da PlayerManager.
-      // Una volta selezionato il profilo, passiamo alla schermata di gioco.
-      if (context.mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const GameScreen()),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Errore nella selezione del profilo: $e',
-              style: const TextStyle(fontFamily: 'OpenDyslexic'),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  EdgeInsets get responsivePadding {
+    if (isSmallScreen) return const EdgeInsets.all(8);
+    if (isMediumScreen) return const EdgeInsets.all(12);
+    return const EdgeInsets.all(16);
   }
 }

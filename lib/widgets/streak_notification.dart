@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
+
 class StreakNotification extends StatefulWidget {
   final int streak;
   final double multiplier;
@@ -110,7 +112,7 @@ class _StreakNotificationState extends State<StreakNotification>
                     'Streak x${widget.streak}',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: AppConfig.subtitle,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

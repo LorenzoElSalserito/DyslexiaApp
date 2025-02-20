@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../services/player_manager.dart';
 import 'game_screen.dart';
 
@@ -104,7 +105,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                       const Text(
                         'Come ti chiami?',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: AppConfig.title,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'OpenDyslexic',
                         ),
@@ -139,7 +140,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                         onFieldSubmitted: (_) => _createProfile(),
                         style: const TextStyle(
                           fontFamily: 'OpenDyslexic',
-                          fontSize: 16,
+                          fontSize: AppConfig.subtitle,
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -166,7 +167,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                             : const Text(
                           'Crea Profilo',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: AppConfig.title,
                             fontFamily: 'OpenDyslexic',
                           ),
                         ),

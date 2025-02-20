@@ -1,254 +1,248 @@
 #!/bin/bash
-set -e
 
-# Definizione dei colori per l'output
+# Impostazione strict mode
+set -euo pipefail
+
+# Colori per l'output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo "OpenDSA: Reading - Build Script"
+# Configurazione app
+APP_NAME="OpenDSA-Reading"
+APP_VERSION="1.0.0"
+OUTPUT_DIR="build/releases"
+
+# Logo
+echo -e "${GREEN}OpenDSA: Reading - Build Script${NC}"
 echo "=============================="
 
-# Controllo prerequisiti
-echo "Controllo prerequisiti..."
+# Funzione per verificare i prerequisiti
+check_prerequisites() {
+    echo -e "${YELLOW}Controllo prerequisiti...${NC}"
 
-if ! command -v flutter &> /dev/null; then
-    echo -e "${RED}Flutter non trovato. Assicurati che Flutter sia installato e nel PATH.${NC}"
-    exit 1
-fi
-
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    if ! command -v wget &> /dev/null; then
-        echo -e "${RED}wget non trovato. Installalo con: sudo apt-get install wget${NC}"
+    if ! command -v flutter &> /dev/null; then
+        echo -e "${RED}Flutter non trovato. Assicurati che Flutter sia installato e nel PATH.${NC}"
         exit 1
     fi
-fi
 
-# Pulizia della build precedente
-echo "Pulizia build precedente..."
-rm -rf build/
-flutter clean
+    local FLUTTER_VERSION
+    FLUTTER_VERSION=$(flutter --version | head -n 1)
+    echo "Flutter version: $FLUTTER_VERSION"
 
-# Installazione delle dipendenze
-echo "Installazione dipendenze..."
-flutter pub get
+    # Abilita piattaforme desktop
+    case "$OSTYPE" in
+        darwin*)
+            flutter config --enable-macos-desktop
+            ;;
+        linux*)
+            flutter config --enable-linux-desktop
+            ;;
+        msys*|win32)
+            flutter config --enable-windows-desktop
+            ;;
+    esac
+}
 
-# Preparazione directory di output
-echo "Preparazione directory di output..."
-OUTPUT_DIR="build/releases"
-mkdir -p "$OUTPUT_DIR"
+# Funzione per pulire e preparare l'ambiente
+prepare_environment() {
+    echo -e "${YELLOW}Preparazione ambiente...${NC}"
+    flutter clean
+    flutter pub get
+
+    # Crea directory di output
+    mkdir build
+    mkdir "$OUTPUT_DIR"
+}
 
 # Build per Android
-echo -e "${YELLOW}Building Android...${NC}"
-echo "Building APK..."
-flutter build apk --release || {
-    echo -e "${RED}Errore durante la build Android APK${NC}"
-    exit 1
-}
-cp build/app/outputs/flutter-apk/app-release.apk "$OUTPUT_DIR/OpenDSA-Reading.apk"
+build_android() {
+    echo -e "${YELLOW}Building Android...${NC}"
 
-echo "Building App Bundle..."
-flutter build appbundle --release || {
-    echo -e "${RED}Errore durante la build Android App Bundle${NC}"
-    exit 1
-}
-cp build/app/outputs/bundle/release/app-release.aab "$OUTPUT_DIR/OpenDSA-Reading.aab"
-echo -e "${GREEN}Build Android completata${NC}"
-
-# Build per iOS/iPadOS
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo -e "${YELLOW}Building iOS/iPadOS...${NC}"
-
-    if ! command -v xcodebuild &> /dev/null; then
-        echo -e "${RED}xcodebuild non trovato. Installa Xcode e gli strumenti da riga di comando.${NC}"
-        exit 1
+    echo "Building APK..."
+    if flutter build apk --release; then
+        cp "build/app/outputs/flutter-apk/app-release.apk" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION.apk"
+    else
+        echo -e "${RED}Errore nella build APK${NC}"
+        return 1
     fi
 
-    # Assicurati che CocoaPods sia installato
+    echo "Building App Bundle..."
+    if flutter build appbundle --release; then
+        cp "build/app/outputs/bundle/release/app-release.aab" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION.aab"
+    else
+        echo -e "${RED}Errore nella build App Bundle${NC}"
+        return 1
+    fi
+
+    echo -e "${GREEN}Build Android completata${NC}"
+}
+
+# Build per iOS
+build_ios() {
+    # Verifica se siamo su macOS
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo -e "${YELLOW}Skipping iOS build - richiede macOS${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}Building iOS...${NC}"
+
+    # Verifica prerequisiti iOS
+    if ! command -v xcodebuild &> /dev/null; then
+        echo -e "${RED}xcodebuild non trovato. Installa Xcode.${NC}"
+        return 1
+    fi
+
     if ! command -v pod &> /dev/null; then
         echo -e "${RED}CocoaPods non trovato. Installalo con: sudo gem install cocoapods${NC}"
-        exit 1
+        return 1
     fi
 
-    # Pulisci la cache di CocoaPods
-    echo "Pulizia cache CocoaPods..."
-    rm -rf ios/Pods
-    rm -f ios/Podfile.lock
+    # Setup CocoaPods
+    (cd ios && pod install) || {
+        echo -e "${RED}Errore nell'installazione dei pods${NC}"
+        return 1
+    }
 
-    # Entra nella directory iOS
-    cd ios
-
-    # Verifica e crea il podspec per vosk_flutter se necessario
-    VOSK_PODSPEC=".symlinks/plugins/vosk_flutter/ios/vosk_flutter.podspec"
-    if [ ! -f "$VOSK_PODSPEC" ]; then
-      echo -e "${YELLOW}Podspec per vosk_flutter non trovato, creazione in corso...${NC}"
-      mkdir -p "$(dirname "$VOSK_PODSPEC")"
-      cat > "$VOSK_PODSPEC" << 'EOF'
-Pod::Spec.new do |s|
-  s.name             = 'vosk_flutter'
-  s.version          = '0.1.0'
-  s.summary          = 'Flutter plugin for Vosk speech recognition'
-  s.description      = 'A Flutter plugin to integrate Vosk offline speech recognition.'
-  s.homepage         = 'https://github.com/alphacep/vosk-flutter'
-  s.license          = { :type => 'Apache 2.0' }
-  s.author           = { 'Nickolay Shmyrev' => 'nshmyrev@alphacephei.com' }
-  s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
-  s.public_header_files = 'Classes/**/*.h'
-  s.dependency 'Flutter'
-  s.platform         = :ios, '11.0'
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
-  s.swift_version    = '5.0'
-end
-EOF
+    # Build iOS
+    if flutter build ios --release --no-codesign; then
+        mkdir -p "$OUTPUT_DIR/ios"
+        cp -r "build/ios/iphoneos/Runner.app" "$OUTPUT_DIR/ios/"
+        echo -e "${GREEN}Build iOS completata${NC}"
+    else
+        echo -e "${RED}Errore nella build iOS${NC}"
+        return 1
     fi
-
-    # Aggiorna i pod
-    echo "Aggiornamento CocoaPods..."
-    pod deintegrate
-    pod setup
-    pod install
-    cd ..
-
-    echo "Building iOS app..."
-    flutter build ios --release --no-codesign || {
-        echo -e "${RED}Errore durante la build iOS${NC}"
-        exit 1
-    }
-
-    mkdir -p "$OUTPUT_DIR/iOS"
-    cp -r build/ios/iphoneos/Runner.app "$OUTPUT_DIR/iOS/"
-    echo -e "${GREEN}Build iOS completata${NC}"
-fi
-
-# Build per Windows
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    echo -e "${YELLOW}Building Windows...${NC}"
-
-    flutter build windows --release || {
-        echo -e "${RED}Errore durante la build Windows${NC}"
-        exit 1
-    }
-
-    # Copia l'exe
-    mkdir -p "$OUTPUT_DIR/windows"
-    cp -r build/windows/runner/Release/* "$OUTPUT_DIR/windows/"
-
-    # Genera MSIX
-    flutter pub run msix:create || {
-        echo -e "${RED}Errore durante la creazione MSIX${NC}"
-        exit 1
-    }
-
-    # Copia MSIX
-    if [ -f build/windows/runner/Release/*.msix ]; then
-        cp build/windows/runner/Release/*.msix "$OUTPUT_DIR/"
-    fi
-
-    echo -e "${GREEN}Build Windows completata${NC}"
-else
-    echo -e "${YELLOW}Skipping Windows build - richiede Windows${NC}"
-fi
+}
 
 # Build per macOS
-if [[ "$OSTYPE" == "darwin"* ]]; then
+build_macos() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo -e "${YELLOW}Skipping macOS build - richiede macOS${NC}"
+        return 0
+    fi
+
     echo -e "${YELLOW}Building macOS...${NC}"
 
-    flutter build macos --release || {
-        echo -e "${RED}Errore durante la build macOS${NC}"
-        exit 1
-    }
+    if flutter build macos --release; then
+        # Crea DMG
+        mkdir -p "build/macos/dmg"
+        cp -r "build/macos/Build/Products/Release/$APP_NAME.app" "build/macos/dmg/"
 
-    DMG_DIR="build/macos/Build/Products/Release/"
-    hdiutil create -volname "OpenDSA: Reading" \
-                  -srcfolder "$DMG_DIR" \
-                  -ov -format UDZO \
-                  "$OUTPUT_DIR/OpenDSA-Reading.dmg" || {
-        echo -e "${RED}Errore durante la creazione DMG${NC}"
-        exit 1
-    }
+        hdiutil create -volname "$APP_NAME" \
+                -srcfolder "build/macos/dmg" \
+                -ov -format UDZO \
+                "$OUTPUT_DIR/$APP_NAME-$APP_VERSION.dmg"
 
-    echo -e "${GREEN}Build macOS completata${NC}"
-else
-    echo -e "${YELLOW}Skipping macOS build - richiede macOS${NC}"
-fi
+        echo -e "${GREEN}Build macOS completata${NC}"
+    else
+        echo -e "${RED}Errore nella build macOS${NC}"
+        return 1
+    fi
+}
 
 # Build per Linux
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+build_linux() {
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+        echo -e "${YELLOW}Skipping Linux build - richiede Linux${NC}"
+        return 0
+    fi
+
     echo -e "${YELLOW}Building Linux...${NC}"
 
-    flutter build linux --release || {
-        echo -e "${RED}Errore durante la build Linux${NC}"
-        exit 1
-    }
+    # Installa dipendenze Linux
+#    if [ -f "/etc/debian_version" ]; then
+#        sudo apt-get update
+#        sudo apt-get install -y libgtk-3-dev liblzma-dev libstdc++6 libglu1-mesa ninja-build libblkid-dev
+#    elif [ -f "/etc/fedora-release" ]; then
+#        sudo dnf install -y gtk3-devel xz-devel libstdc++ mesa-libGLU ninja-build
+#    elif [ -f "/etc/arch-release" ]; then
+#        sudo pacman -Sy gtk3 xz gcc-libs mesa-glu ninja
+#    fi
 
-    # Creazione file .desktop
-    DESKTOP_DIR="build/linux/x64/release/bundle/usr/share/applications"
-    mkdir -p "$DESKTOP_DIR"
-    cat > "$DESKTOP_DIR/thesis_project.desktop" << EOL
+    # Build Linux
+    if flutter build linux --release; then
+        # Prepara AppImage
+        local APPDIR="build/appdir"
+        mkdir -p "$APPDIR/usr/bin"
+        mkdir -p "$APPDIR/usr/share/applications"
+        mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+
+        # Copia file necessari
+        cp -r "build/linux/x64/release/bundle/"* "$APPDIR/usr/bin/"
+        cp "assets/icon/app_icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP_NAME.png"
+
+        # Crea desktop entry
+        cat > "$APPDIR/usr/share/applications/$APP_NAME.desktop" << EOL
 [Desktop Entry]
-Version=1.0
-Type=Application
 Name=OpenDSA: Reading
-Comment=OpenDSA: Reading - Dyslexia Helper App
-Icon=app_icon
 Exec=thesis_project
-Terminal=false
+Icon=$APP_NAME
+Type=Application
 Categories=Education;
-Keywords=reading;dyslexia;learning;education;
-StartupWMClass=thesis_project
 EOL
 
-    # Download linuxdeploy
-    LINUXDEPLOY="linuxdeploy-x86_64.AppImage"
-    if [ ! -f "$LINUXDEPLOY" ]; then
-        wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage" -O "$LINUXDEPLOY" || {
-            echo -e "${RED}Errore durante il download di linuxdeploy${NC}"
-            exit 1
-        }
-        chmod +x "$LINUXDEPLOY"
-    fi
+        # Scarica e usa appimagetool
+        wget -c "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+        chmod +x appimagetool-x86_64.AppImage
+        ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 
-    # Creazione AppImage
-    APPIMAGE_TMP="build/linux-appimage"
-    mkdir -p "$APPIMAGE_TMP"
-
-    ./$LINUXDEPLOY \
-        --appdir="$APPIMAGE_TMP" \
-        -e build/linux/x64/release/bundle/thesis_project \
-        -i lib/assets/icon/app_icon.png \
-        -d "$DESKTOP_DIR/thesis_project.desktop" \
-        --output appimage || {
-            echo -e "${RED}Errore durante la creazione AppImage${NC}"
-            exit 1
-        }
-
-    # Trova e sposta l'AppImage generato
-    GENERATED_APPIMAGE=$(ls -t OpenDSA*AppImage | head -1)
-    if [ -f "$GENERATED_APPIMAGE" ]; then
-        mv "$GENERATED_APPIMAGE" "$OUTPUT_DIR/"
-        echo -e "${GREEN}AppImage creata con successo${NC}"
+        echo -e "${GREEN}Build Linux completata${NC}"
     else
-        echo -e "${RED}Errore: AppImage non generata${NC}"
-        exit 1
+        echo -e "${RED}Errore nella build Linux${NC}"
+        return 1
+    fi
+}
+
+# Build per Windows
+build_windows() {
+    if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "win32" ]]; then
+        echo -e "${YELLOW}Skipping Windows build - richiede Windows${NC}"
+        return 0
     fi
 
-    # Copia la versione non-AppImage
-    mkdir -p "$OUTPUT_DIR/linux"
-    cp -r build/linux/x64/release/bundle/* "$OUTPUT_DIR/linux/"
+    echo -e "${YELLOW}Building Windows...${NC}"
 
-    echo -e "${GREEN}Build Linux completata${NC}"
-else
-    echo -e "${YELLOW}Skipping Linux build - richiede Linux${NC}"
-fi
+    if flutter build windows --release; then
+        mkdir -p "$OUTPUT_DIR/windows"
+        cp -r "build/windows/runner/Release/"* "$OUTPUT_DIR/windows/"
 
-echo -e "\n${GREEN}Build completata con successo!${NC}"
-echo "Gli installer si trovano in: $OUTPUT_DIR"
+        # Crea MSIX
+        if flutter pub run msix:create; then
+            find "build/windows/runner/Release" -name "*.msix" -exec cp {} "$OUTPUT_DIR/" \;
+        else
+            echo -e "${YELLOW}Attenzione: Creazione MSIX fallita${NC}"
+        fi
 
-# Lista i file generati
-echo -e "\nFile generati:"
-ls -la "$OUTPUT_DIR"
+        echo -e "${GREEN}Build Windows completata${NC}"
+    else
+        echo -e "${RED}Errore nella build Windows${NC}"
+        return 1
+    fi
+}
 
-echo -e "\n${GREEN}Questa app è stata Sviluppata da Lorenzo De Marco - ©Lorenzo DM${NC}"
-echo -e "\n${GREEN}Divertiti ad Usarla!${NC}"
+# Funzione principale
+main() {
+    check_prerequisites
+    prepare_environment
+
+    build_android
+    build_ios
+    build_macos
+    build_linux
+    build_windows
+
+    echo -e "\n${GREEN}Build completata con successo!${NC}"
+    echo "Gli installer si trovano in: $OUTPUT_DIR"
+
+    echo -e "\nFile generati:"
+    ls -la "$OUTPUT_DIR"
+}
+
+# Esegui lo script
+main
+echo -e "\n${GREEN}Build completata${NC}"
+echo -e "${YELLOW}OpenDSA: Reading - Lorenzo De Marco${NC} ©Lorenzo DM"
+echo -e "${YELLOW}OpenDSA: Reading - Divertiti ad usarla! ©Lorenzo DM"

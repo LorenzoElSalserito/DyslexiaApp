@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../models/player.dart';
 import '../services/game_service.dart';
 import 'game_screen.dart';
@@ -66,7 +67,7 @@ class LevelSummaryScreen extends StatelessWidget {
               : 'Livello $level Completato!',
           style: TextStyle(
             fontFamily: 'OpenDyslexic',
-            fontSize: 28,
+            fontSize: AppConfig.title,
             fontWeight: FontWeight.bold,
             color: Colors.black87,
           ),
@@ -78,7 +79,7 @@ class LevelSummaryScreen extends StatelessWidget {
               'Complimenti per il tuo progresso!',
               style: TextStyle(
                 fontFamily: 'OpenDyslexic',
-                fontSize: 18,
+                fontSize: AppConfig.subtitle,
                 color: Colors.black54,
               ),
             ),
@@ -97,7 +98,7 @@ class LevelSummaryScreen extends StatelessWidget {
           'Accuratezza Media',
           style: TextStyle(
             fontFamily: 'OpenDyslexic',
-            fontSize: 20,
+            fontSize: AppConfig.subtitle,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -121,7 +122,7 @@ class LevelSummaryScreen extends StatelessWidget {
               '${(averageAccuracy * 100).toStringAsFixed(1)}%',
               style: TextStyle(
                 fontFamily: 'OpenDyslexic',
-                fontSize: 32,
+                fontSize: AppConfig.subtitle,
                 fontWeight: FontWeight.bold,
                 color: isGoodAccuracy ? Colors.green : Colors.orange,
               ),
@@ -135,7 +136,7 @@ class LevelSummaryScreen extends StatelessWidget {
               : 'Continua ad esercitarti per migliorare',
           style: TextStyle(
             fontFamily: 'OpenDyslexic',
-            fontSize: 16,
+            fontSize: AppConfig.subtitle,
             color: isGoodAccuracy ? Colors.green : Colors.orange,
           ),
         ),
@@ -167,7 +168,7 @@ class LevelSummaryScreen extends StatelessWidget {
             'Progresso verso il prossimo livello',
             style: TextStyle(
               fontFamily: 'OpenDyslexic',
-              fontSize: 16,
+              fontSize: AppConfig.subtitle,
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
@@ -188,7 +189,7 @@ class LevelSummaryScreen extends StatelessWidget {
                 : 'Pronto per il prossimo livello!',
             style: TextStyle(
               fontFamily: 'OpenDyslexic',
-              fontSize: 14,
+              fontSize: AppConfig.others,
               color: Colors.grey[600],
             ),
             textAlign: TextAlign.center,
@@ -211,7 +212,7 @@ class LevelSummaryScreen extends StatelessWidget {
                 '+$earned',
                 style: TextStyle(
                   fontFamily: 'OpenDyslexic',
-                  fontSize: 24,
+                  fontSize: AppConfig.others,
                   fontWeight: FontWeight.bold,
                   color: Colors.amber,
                 ),
@@ -224,7 +225,7 @@ class LevelSummaryScreen extends StatelessWidget {
           'Totale cristalli: ${player.totalCrystals}',
           style: TextStyle(
             fontFamily: 'OpenDyslexic',
-            fontSize: 18,
+            fontSize: AppConfig.others,
             fontWeight: FontWeight.bold,
             color: Colors.black87,
           ),
@@ -241,7 +242,7 @@ class LevelSummaryScreen extends StatelessWidget {
           'Continua',
           style: TextStyle(
             fontFamily: 'OpenDyslexic',
-            fontSize: 20,
+            fontSize: AppConfig.subtitle,
           ),
         ),
       ),

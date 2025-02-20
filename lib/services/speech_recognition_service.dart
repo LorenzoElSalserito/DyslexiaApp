@@ -1,7 +1,7 @@
 // lib/services/speech_recognition_service.dart
-
 import 'dart:async';
-import 'package:flutter/foundation.dart'; // Per debugPrint
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../services/vosk_service.dart';
 import '../services/audio_service.dart';
 import '../models/recognition_result.dart';
@@ -84,8 +84,9 @@ class SpeechRecognitionService {
     });
   }
 
-  /// Inizializza i servizi necessari
-  Future<void> initialize() async {
+  /// Inizializza i servizi necessari.
+  /// [context] è necessario per passarlo a VoskService e poter richiedere i permessi.
+  Future<void> initialize(BuildContext context) async {
     _updateState(RecognitionState.initializing);
     debugPrint('SpeechRecognitionService: Inizializzazione in corso...');
     try {
@@ -181,8 +182,5 @@ class SpeechRecognitionService {
   bool get isRecording => _state == RecognitionState.recording;
   String? get currentTargetText => _currentTargetText;
   int get currentAttempt => _currentAttempt;
-  int get maxAttempts => _audioService.maxAttempts;
-  bool get isSessionComplete => _audioService.isSessionComplete;
-  Duration get delayBetweenRecordings => _audioService.delayBetweenRecordings;
   List<RecognitionResult> get currentResults => List.unmodifiable(_currentSessionResults);
 }

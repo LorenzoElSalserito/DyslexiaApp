@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../services/store_service.dart';
 import '../models/player.dart';
 import '../models/trophy.dart';
@@ -92,7 +93,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                       const Text(
                         'OpenDSA: Reading - Negozio',
                         style: TextStyle(
-                          fontSize: 28,
+                          fontSize: AppConfig.title,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                           fontFamily: 'OpenDyslexic',
@@ -115,7 +116,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                         Text(
                           '${player.totalCrystals}',
                           style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: AppConfig.subtitle,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             fontFamily: 'OpenDyslexic',
@@ -156,7 +157,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                     'Nessun trofeo disponibile',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: AppConfig.subtitle,
                       fontFamily: 'OpenDyslexic',
                     ),
                   ),
@@ -183,7 +184,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               'Non hai ancora sbloccato nessun trofeo',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 18,
+                fontSize: AppConfig.subtitle,
                 fontFamily: 'OpenDyslexic',
               ),
             ),
@@ -278,14 +279,14 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
               children: [
                 Icon(
                   trophy.icon,
-                  size: 48,
+                  size: AppConfig.subtitle,
                   color: trophy.color,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   trophy.name,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: AppConfig.others,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'OpenDyslexic',
                     color: Colors.black87,
@@ -297,7 +298,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   trophy.rarity,
                   style: TextStyle(
                     color: Colors.grey[800],
-                    fontSize: 12,
+                    fontSize: AppConfig.others,
                     fontFamily: 'OpenDyslexic',
                   ),
                 ),
@@ -355,7 +356,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                     trophy.name,
                     style: const TextStyle(
                       fontFamily: 'OpenDyslexic',
-                      fontSize: 20,
+                      fontSize: AppConfig.subtitle,
                       color: Colors.black87,
                     ),
                   ),
@@ -370,7 +371,7 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
                   Text(
                     trophy.description,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: AppConfig.subtitle,
                       fontFamily: 'OpenDyslexic',
                       color: Colors.black87,
                     ),

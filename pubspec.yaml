@@ -24,6 +24,7 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # VOSK and Audio related
+  vosk_flutter: ^0.3.48
   flutter_sound: ^9.23.1
   permission_handler: ^11.3.1
   permission_handler_platform_interface: ^4.2.0
@@ -50,8 +51,7 @@ dev_dependencies:
 
 dependency_overrides:
   web: ^1.0.0
-  vosk_flutter:
-    path: ./local_vosk_flutter
+  permission_handler: ^11.3.1
 
 # Configurazione icone applicazione
 flutter_icons:
@@ -81,6 +81,23 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/icon/
+    - assets/icon/ios_icon.png
+    - assets/icon/macos_icon.png
+    - assets/vosk/README
+    - assets/vosk/am/final.mdl
+    - assets/vosk/conf/mfcc.conf
+    - assets/vosk/conf/model.conf
+    - assets/vosk/graph/Gr.fst
+    - assets/vosk/graph/HCLr.fst
+    - assets/vosk/graph/disambig_tid.int
+    - assets/vosk/graph/phones/word_boundary.int
+    - assets/vosk/ivector/final.dubm
+    - assets/vosk/ivector/final.ie
+    - assets/vosk/ivector/final.mat
+    - assets/vosk/ivector/global_cmvn.stats
+    - assets/vosk/ivector/online_cmvn.conf
+    - assets/vosk/ivector/splice.conf
     - lib/assets/exercises/easy_words.txt
     - lib/assets/exercises/medium_words.txt
     - lib/assets/exercises/hard_words.txt
@@ -88,10 +105,6 @@ flutter:
     - lib/assets/exercises/paragraphs.txt
     - lib/assets/exercises/pages.txt
     - lib/assets/fonts/
-    - lib/assets/icon/
-    - vosk/
-    - lib/assets/icon/ios_icon.png
-    - lib/assets/icon/macos_icon.png
 
   fonts:
     - family: OpenDyslexic

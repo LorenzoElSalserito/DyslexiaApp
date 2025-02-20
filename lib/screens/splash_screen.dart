@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../services/content_service.dart';
 import '../services/player_manager.dart';
 import 'profile_selection_screen.dart';
@@ -112,7 +113,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       color: Colors.blueGrey,
-                                      fontSize: 24,
+                                      fontSize: AppConfig.title,
                                       fontWeight: FontWeight.bold,
                                       fontFamily: 'OpenDyslexic',
                                     ),
@@ -133,7 +134,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 16,
+                                fontSize: AppConfig.subtitle,
                                 fontFamily: 'OpenDyslexic',
                               ),
                             ),
@@ -147,7 +148,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
                                 fontFamily: 'OpenDyslexic',
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppConfig.subtitle),
                             ElevatedButton(
                               onPressed: _initializeApp,
                               style: ElevatedButton.styleFrom(
@@ -162,7 +163,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
                               child: const Text(
                                 'Riprova',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: AppConfig.subtitle,
                                   fontFamily: 'OpenDyslexic',
                                 ),
                               ),

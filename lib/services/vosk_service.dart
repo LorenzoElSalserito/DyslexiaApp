@@ -3,59 +3,63 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as path;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:vosk_flutter/vosk_flutter.dart';
-import '../models/recognition_result.dart';
+import 'package:path_provider/path_provider.dart';
+
 import '../config/app_config.dart';
+import '../models/recognition_result.dart';
 import 'permission_service.dart';
 import 'audio_service.dart';
 
-/// VoskService gestisce il riconoscimento vocale con VOSK.
-/// Assume che il modello sia presente nella cartella "vosk/" (alla radice del progetto).
 class VoskService {
-  // Pattern Singleton
   static VoskService? _instance;
-  static VoskService get instance {
-    _instance ??= VoskService._internal();
-    return _instance!;
-  }
+  static VoskService get instance => _instance ??= VoskService._internal();
 
   VoskFlutterPlugin? _recognizer;
   Model? _model;
   Recognizer? _speechRecognizer;
-  SpeechService? _speechService;
+
+  // Stream controllers per i risultati
+  final _resultController = StreamController<String>.broadcast();
+  final _partialController = StreamController<String>.broadcast();
+
+  String _lastResult = '';
+  String _lastPartial = '';
+
+  // Gestione del riconoscimento corrente
+  Completer<String>? _recognitionCompleter;
+  bool _isRecognizing = false;
 
   final PermissionService _permissionService = PermissionService();
   final AudioService _audioService = AudioService();
 
   bool _isInitialized = false;
-  bool _isSimulatedMode = false;
   String _modelPath = '';
-  StreamSubscription? _resultSubscription;
-  StreamSubscription? _partialSubscription;
   StreamSubscription? _volumeSubscription;
   double _currentVolume = 0.0;
+
+  static const List<String> _requiredFiles = [
+    'am/final.mdl',
+    'conf/mfcc.conf',
+    'conf/model.conf',
+    'graph/Gr.fst',
+    'graph/HCLr.fst',
+    'graph/disambig_tid.int',
+    'graph/phones/word_boundary.int',
+    'ivector/final.dubm',
+    'ivector/final.ie',
+    'ivector/final.mat',
+    'ivector/global_cmvn.stats',
+    'ivector/online_cmvn.conf',
+    'ivector/splice.conf',
+  ];
+
   final List<String> _serviceLog = [];
   static const int _maxInitAttempts = 3;
-
-  // Mappa per errori comuni (usata per il calcolo della similarità)
-  static const Map<String, List<String>> _commonConfusions = {
-    'b': ['d', 'p'],
-    'd': ['b', 'q'],
-    'p': ['q', 'b'],
-    'q': ['p', 'd'],
-    'm': ['n', 'w'],
-    'n': ['m'],
-    'a': ['e'],
-    'e': ['a'],
-    's': ['z'],
-    'z': ['s'],
-    'f': ['v'],
-    'v': ['f'],
-  };
 
   VoskService._internal() {
     _logEvent('VoskService inizializzato');
@@ -70,18 +74,12 @@ class VoskService {
     });
   }
 
-  void _logEvent(String event) {
+  void _logEvent(String msg) {
     final timestamp = DateTime.now().toIso8601String();
-    final logEntry = '[$timestamp] $event';
-    debugPrint('VoskService: $logEntry');
-    _serviceLog.add(logEntry);
+    final entry = '[$timestamp] $msg';
+    debugPrint('VoskService: $entry');
+    _serviceLog.add(entry);
     if (_serviceLog.length > 1000) _serviceLog.removeAt(0);
-  }
-
-  bool _isVoskSupported() {
-    _logEvent('Verifica supporto VOSK');
-    // Per questo esempio consideriamo VOSK supportato solo su Android e iOS.
-    return Platform.isAndroid || Platform.isIOS;
   }
 
   Future<void> initialize() async {
@@ -93,28 +91,16 @@ class VoskService {
     int attempts = 0;
     bool success = false;
 
-    // Se la piattaforma non supporta VOSK, attiva la modalità simulata
-    if (!_isVoskSupported()) {
-      _isSimulatedMode = true;
-      _isInitialized = true;
-      _logEvent('Modalità simulata attivata per piattaforma non supportata');
-      return;
-    }
-
     while (!success && attempts < _maxInitAttempts) {
       try {
         attempts++;
         _logEvent('Tentativo di inizializzazione #$attempts');
         await _initializeWithRetry();
         success = true;
-      } catch (e, stackTrace) {
-        _logEvent('Errore nel tentativo #$attempts: $e');
-        _logEvent('Stack trace: $stackTrace');
+      } catch (e, st) {
+        _logEvent('Errore nell\'inizializzazione #$attempts: $e\n$st');
         if (attempts >= _maxInitAttempts) {
-          _isSimulatedMode = true;
-          _isInitialized = true;
-          _logEvent('Fallback a modalità simulata dopo errori di inizializzazione');
-          return;
+          throw Exception('Impossibile inizializzare VOSK dopo $attempts tentativi');
         }
         await Future.delayed(const Duration(seconds: 1));
       }
@@ -122,102 +108,140 @@ class VoskService {
   }
 
   Future<void> _initializeWithRetry() async {
-    _logEvent('Inizio inizializzazione con retry');
+    _logEvent('Avvio inizializzazione con retry');
+
+    // Verifichiamo i permessi
     bool hasPermissions = await _permissionService.checkAllPermissions();
     if (!hasPermissions) {
-      throw Exception('Permessi necessari non concessi');
+      // Invece di richiedere i permessi qui, lanciamo un'eccezione
+      throw Exception('Permessi necessari non concessi. Richiedi i permessi prima di inizializzare VOSK');
     }
-    _logEvent('Ricerca del modello VOSK');
-    _modelPath = await _findModelPath();
-    _logEvent('Modello trovato in: $_modelPath');
+
+    final appDir = await getApplicationDocumentsDirectory();
+    final voskDir = Directory(p.join(appDir.path, 'vosk'));
+    if (!await voskDir.exists()) {
+      await voskDir.create(recursive: true);
+    }
+    _modelPath = voskDir.path;
+
+    await _copyModelFromAssets(_modelPath);
+
     if (!await _verifyModelIntegrity(_modelPath)) {
-      throw Exception('Integrità del modello non verificata');
+      throw Exception('Integrità del modello non verificata in $_modelPath');
     }
-    _logEvent('Inizializzazione componenti VOSK');
-    if (!_isSimulatedMode) {
-      _recognizer = VoskFlutterPlugin.instance();
-      _model = await _recognizer!.createModel(_modelPath);
-      _speechRecognizer = await _recognizer!.createRecognizer(
-        model: _model!,
-        sampleRate: AppConfig.sampleRate,
-      );
-      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
-      if (_speechRecognizer != null) {
-        await _speechRecognizer!.setMaxAlternatives(3);
-        await _speechRecognizer!.setPartialWords(partialWords: true);
-        await _speechRecognizer!.setWords(words: true);
-      }
-    }
+
+    _recognizer = VoskFlutterPlugin.instance();
+    _model = await _recognizer!.createModel(_modelPath);
+    _speechRecognizer = await _recognizer!.createRecognizer(
+      model: _model!,
+      sampleRate: AppConfig.sampleRate,
+    );
+
     _isInitialized = true;
     _logEvent('Inizializzazione completata con successo');
   }
 
-  Future<String> _findModelPath() async {
-    try {
-      // Se siamo in modalità test, usa il percorso degli asset
-      if (Platform.environment.containsKey('FLUTTER_TEST')) {
-        return path.join(Directory.current.path, 'lib', 'assets', 'vosk');
+
+  Future<void> _copyModelFromAssets(String modelPath) async {
+    _logEvent('Copia del modello dagli assets in: $modelPath');
+
+    for (final file in _requiredFiles) {
+      final assetPath = 'assets/vosk/$file';
+      final targetFile = File(p.join(modelPath, file));
+
+      if (!await targetFile.exists()) {
+        try {
+          await targetFile.parent.create(recursive: true);
+          final data = await rootBundle.load(assetPath);
+          await targetFile.writeAsBytes(data.buffer.asUint8List());
+          _logEvent('Copiato file: $file');
+        } catch (e) {
+          _logEvent('Errore nel copiare $file: $e');
+          throw Exception('Impossibile copiare il file modello $file');
+        }
       }
-      // Assumiamo che la cartella "vosk/" si trovi nella radice del progetto
-      final currentDir = Directory.current;
-      final modelDir = path.join(currentDir.path, 'vosk');
-      if (!await Directory(modelDir).exists()) {
-        _logEvent('Directory modello non trovata in: $modelDir');
-        throw Exception('Directory modello VOSK non trovata');
-      }
-      _logEvent('Directory modello trovata in: $modelDir');
-      return modelDir;
-    } catch (e) {
-      _logEvent('Errore nella ricerca del modello: $e');
-      rethrow;
     }
   }
 
   Future<bool> _verifyModelIntegrity(String modelPath) async {
-    debugPrint('VoskService: Verifica integrità modello in: $modelPath');
+    _logEvent('Verifica integrità modello in: $modelPath');
     try {
-      final requiredFiles = [
-        'am/final.mdl',
-        'conf/mfcc.conf',
-        'conf/model.conf',
-        'graph/HCLG.fst',
-        'graph/words.txt',
-        'graph/phones/word_boundary.int',
-        'ivector/final.dubm',
-        'ivector/final.ie',
-        'ivector/final.mat',
-        'ivector/global_cmvn.stats',
-        'ivector/online_cmvn.conf',
-        'ivector/splice.conf',
-      ];
-      for (final file in requiredFiles) {
-        final fullPath = path.join(modelPath, file);
+      for (final file in _requiredFiles) {
+        final fullPath = p.join(modelPath, file);
         if (!await File(fullPath).exists()) {
-          debugPrint('VoskService: File mancante: $file');
+          _logEvent('File mancante: $file');
           return false;
         }
       }
-      debugPrint('VoskService: Verifica integrità modello completata con successo');
+      _logEvent('Integrità modello verificata');
       return true;
     } catch (e) {
-      debugPrint('VoskService: Errore nella verifica integrità: $e');
+      _logEvent('Errore nella verifica integrità: $e');
       return false;
     }
   }
 
-  /// Pre-processa l'audio: registra, attende, ferma e legge il file WAV.
-  /// Rimuove l'header WAV (44 byte) e converte i campioni PCM16 in float.
+  Future<RecognitionResult> startRecognition(String targetText) async {
+    _logEvent('Avvio riconoscimento vocale per target: "$targetText"');
+    if (!_isInitialized) {
+      _logEvent('Servizio non inizializzato, chiamata initialize()');
+      await initialize();
+    }
+
+    final startTime = DateTime.now();
+
+    try {
+      // Aggiungiamo un controllo preliminare del modello
+      if (_model == null || _speechRecognizer == null) {
+        throw Exception('Modello VOSK o riconoscitore non inizializzati');
+      }
+
+      // Registrazione audio con timeout più lungo
+      const timeout = Duration(seconds: 30); // Aumentato da 10 a 30 secondi
+
+      final audioResult = await Future.any([
+        _performRecognition(targetText, startTime),
+        Future.delayed(timeout, () {
+          _logEvent('Timeout nel riconoscimento vocale dopo ${timeout.inSeconds} secondi');
+          return _createEmptyResult(startTime);
+        }),
+      ]);
+
+      // Aggiungiamo log dettagliati del risultato
+      _logEvent('Risultato riconoscimento: ${audioResult.text}');
+      _logEvent('Confidenza: ${audioResult.confidence}');
+      _logEvent('Similarità: ${audioResult.similarity}');
+
+      return audioResult;
+
+    } catch (e, stack) {
+      _logEvent('Errore nel riconoscimento: $e\nStack: $stack');
+      // Aggiungiamo più dettagli all'errore
+      final errorResult = _createEmptyResult(startTime);
+      _logEvent('Creato risultato vuoto con durata: ${errorResult.duration.inMilliseconds}ms');
+      return errorResult;
+    }
+  }
+
+  /// Registra l'audio e restituisce i byte pre-processati.
+  /// Se _useAlternativeRecorder è true, usa il registratore alternativo (flutter_sound);
+  /// altrimenti usa il registratore nativo fornito da AudioService.
+  /// Metodo ausiliario per l'acquisizione audio tramite AudioService
   Future<List<int>> _preprocessAudio() async {
     try {
       String recordingPath = await _audioService.startRecording();
-      // Attende la durata della registrazione
-      await Future.delayed(const Duration(seconds: 5));
+      _logEvent('Avviata registrazione audio: $recordingPath');
+
+      await Future.delayed(AppConfig.maxRecordingDuration as Duration);
+
       String recordedFile = await _audioService.stopRecording();
+      _logEvent('Registrazione fermata, file: $recordedFile');
+
       final file = File(recordedFile);
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
         _logEvent('Audio registrato: ${bytes.length} byte');
-        // Rimuove l'header WAV (44 byte) se presente
+        // Rimuoviamo l'header WAV se presente (44 bytes)
         final rawData = bytes.length > 44 ? bytes.sublist(44) : bytes;
         return rawData;
       } else {
@@ -230,145 +254,83 @@ class VoskService {
     }
   }
 
-  /// Avvia il riconoscimento vocale per il testo target.
-  /// In modalità simulata, genera un risultato simulato.
-  Future<RecognitionResult> startRecognition(String targetText) async {
-    _logEvent('Avvio riconoscimento vocale per target: $targetText');
-    if (!_isInitialized) {
-      _logEvent('Servizio non inizializzato, chiamata initialize()');
-      await initialize();
-    }
-    final startTime = DateTime.now();
+  Future<RecognitionResult> _performRecognition(String targetText, DateTime startTime) async {
     try {
-      if (_isSimulatedMode) {
-        _logEvent('Modalità simulata attivata: generazione risultato simulato');
-        await Future.delayed(const Duration(seconds: 2));
-        return _generateSimulatedResult(targetText);
-      }
+      _logEvent('Avvio pre-processing audio');
       final audioData = await _preprocessAudio();
+
       if (audioData.isEmpty) {
         _logEvent('Nessun dato audio valido');
         return _createEmptyResult(startTime);
       }
-      // Converte i campioni PCM16 in float (16-bit little-endian)
-      final int sampleCount = audioData.length ~/ 2;
-      final Float32List floatAudioData = Float32List(sampleCount);
-      for (int i = 0; i < sampleCount; i++) {
-        int low = audioData[i * 2];
-        int high = audioData[i * 2 + 1];
-        int sample = (high << 8) | low;
-        if (sample >= 32768) sample -= 65536;
-        floatAudioData[i] = sample / 32768.0;
+
+      // Aggiungiamo log della dimensione dei dati audio
+      _logEvent('Dimensione dati audio: ${audioData.length} bytes');
+
+      // Inviamo i dati al riconoscitore in chunks più piccoli
+      const int chunkSize = 4096;
+      for (int i = 0; i < audioData.length; i += chunkSize) {
+        final end = (i + chunkSize < audioData.length) ? i + chunkSize : audioData.length;
+        final chunk = audioData.sublist(i, end);
+
+        // Convertiamo i bytes in Float32List per VOSK
+        final buffer = Float32List(chunk.length ~/ 2);
+        for (var j = 0; j < chunk.length; j += 2) {
+          final sample = (chunk[j + 1] << 8) | chunk[j];
+          buffer[j ~/ 2] = (sample < 32768 ? sample : sample - 65536) / 32768.0;
+        }
+
+        await _speechRecognizer?.acceptWaveformFloats(buffer);
+
+        // Otteniamo i risultati parziali per debug
+        final partial = await _speechRecognizer?.getPartialResult();
+        if (partial != null && partial.isNotEmpty) {
+          _logEvent('Risultato parziale: $partial');
+        }
       }
-      final bool isFinal = await _speechRecognizer!.acceptWaveformFloats(floatAudioData);
-      final String resultJson = isFinal
-          ? await _speechRecognizer!.getFinalResult()
-          : await _speechRecognizer!.getPartialResult();
-      final Map<String, dynamic> result = jsonDecode(resultJson);
-      if (!result.containsKey('result')) {
-        _logEvent('Nessun risultato dal riconoscimento');
-        return _createEmptyResult(startTime);
-      }
-      final List<dynamic> words = result['result'] as List<dynamic>;
-      double totalConfidence = 0.0;
-      String recognizedText = '';
-      for (var word in words) {
-        recognizedText += '${word['word']} ';
-        totalConfidence += (word['conf'] as num).toDouble();
-      }
-      recognizedText = recognizedText.trim();
-      totalConfidence = words.isEmpty ? 0.0 : totalConfidence / words.length;
-      return _applyPostProcessing(
-        recognizedText,
-        targetText,
-        totalConfidence,
-        DateTime.now().difference(startTime),
+
+      // Otteniamo il risultato finale
+      final result = await _speechRecognizer?.getFinalResult() ?? '{}';
+      _logEvent('Risultato finale JSON: $result');
+
+      final resultMap = jsonDecode(result) as Map<String, dynamic>;
+      final recognizedText = (resultMap['text'] ?? '').toString().trim();
+
+      _logEvent('Testo riconosciuto: $recognizedText');
+
+      final similarity = _calculateTextSimilarity(recognizedText, targetText);
+      _logEvent('Similarità calcolata: $similarity');
+
+      return RecognitionResult(
+        text: recognizedText,
+        confidence: similarity,
+        similarity: similarity,
+        isCorrect: similarity >= AppConfig.minSimilarityScore,
+        duration: DateTime.now().difference(startTime),
       );
-    } catch (e) {
-      _logEvent('Errore nel riconoscimento: $e');
+
+    } catch (e, stack) {
+      _logEvent('Errore nel riconoscimento: $e\nStack: $stack');
       return _createEmptyResult(startTime);
     }
   }
 
-  RecognitionResult _applyPostProcessing(String recognized, String target, double confidence, Duration duration) {
-    final normalizedRecognized = recognized.toLowerCase().trim();
-    final normalizedTarget = target.toLowerCase().trim();
-    final similarity = _calculateItalianSimilarity(normalizedRecognized, normalizedTarget);
-    final isCorrect = similarity >= AppConfig.minSimilarityScore;
-    _logEvent('Risultato finale: "$normalizedRecognized", Similarità: $similarity');
-    return RecognitionResult(
-      text: normalizedRecognized,
-      confidence: confidence,
-      similarity: similarity,
-      isCorrect: isCorrect,
-      duration: duration,
-    );
-  }
+  double _calculateTextSimilarity(String text1, String text2) {
+    text1 = text1.trim().toLowerCase();
+    text2 = text2.trim().toLowerCase();
 
-  double _calculateItalianSimilarity(String s1, String s2) {
-    if (s1 == s2) return 1.0;
-    if (s1.isEmpty || s2.isEmpty) return 0.0;
-    final exactMatch = s1 == s2 ? 1.0 : 0.0;
-    final levenshtein = _calculateLevenshteinSimilarity(s1, s2);
-    final phonetic = _calculatePhoneticSimilarity(s1, s2);
-    const exactWeight = 0.4;
-    const levenshteinWeight = 0.3;
-    const phoneticWeight = 0.3;
-    return (exactMatch * exactWeight) + (levenshtein * levenshteinWeight) + (phonetic * phoneticWeight);
-  }
+    if (text1 == text2) return 1.0;
+    if (text1.isEmpty || text2.isEmpty) return 0.0;
 
-  double _calculatePhoneticSimilarity(String s1, String s2) {
-    final phonetic1 = _getPhoneticCode(s1);
-    final phonetic2 = _getPhoneticCode(s2);
-    return _calculateLevenshteinSimilarity(phonetic1, phonetic2);
-  }
+    int matches = 0;
+    final words1 = text1.split(' ');
+    final words2 = text2.split(' ');
 
-  String _getPhoneticCode(String text) {
-    var result = text.toLowerCase();
-    result = result
-        .replaceAll('chi', 'ki')
-        .replaceAll('che', 'ke')
-        .replaceAll('ghi', 'gi')
-        .replaceAll('ghe', 'ge')
-        .replaceAll('gn', 'ñ')
-        .replaceAll('gl', 'ʎ')
-        .replaceAll('sc', 'ʃ');
-    return result;
-  }
-
-  double _calculateLevenshteinSimilarity(String s1, String s2) {
-    if (s1 == s2) return 1.0;
-    if (s1.isEmpty || s2.isEmpty) return 0.0;
-    final matrix = List.generate(
-      s1.length + 1,
-          (i) => List<int>.generate(s2.length + 1, (j) => j == 0 ? i : 0),
-    );
-    for (int j = 0; j <= s2.length; j++) {
-      matrix[0][j] = j;
+    for (final word in words1) {
+      if (words2.contains(word)) matches++;
     }
-    for (int i = 1; i <= s1.length; i++) {
-      for (int j = 1; j <= s2.length; j++) {
-        final cost = _calculateSubstitutionCost(s1[i - 1], s2[j - 1]);
-        matrix[i][j] = [
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + cost,
-        ].reduce(min);
-        if (i > 1 && j > 1 && s1[i - 1] == s2[j - 2] && s1[i - 2] == s2[j - 1]) {
-          matrix[i][j] = min(matrix[i][j], matrix[i - 2][j - 2] + 1);
-        }
-      }
-    }
-    final maxLength = max(s1.length, s2.length);
-    return 1.0 - (matrix[s1.length][s2.length] / maxLength);
-  }
 
-  int _calculateSubstitutionCost(String char1, String char2) {
-    if (char1 == char2) return 0;
-    if (_commonConfusions.containsKey(char1) && _commonConfusions[char1]!.contains(char2)) {
-      return 1;
-    }
-    return 2;
+    return matches / ((words1.length + words2.length) / 2);
   }
 
   RecognitionResult _createEmptyResult(DateTime startTime) {
@@ -381,58 +343,34 @@ class VoskService {
     );
   }
 
-  /// Metodo per generare un risultato simulato.
-  /// Per evitare che la simulazione produca valori troppo bassi (che portano a 0 cristalli),
-  /// generiamo una confidence compresa tra 0.6 e 1.0.
-  RecognitionResult _generateSimulatedResult(String targetText) {
-    final random = Random();
-    final simulatedConfidence = 0.6 + random.nextDouble() * 0.4; // valore tra 0.6 e 1.0
-    return RecognitionResult(
-      text: targetText,
-      confidence: simulatedConfidence,
-      similarity: simulatedConfidence,
-      isCorrect: simulatedConfidence >= AppConfig.minSimilarityScore,
-      duration: Duration(seconds: 2),
-    );
-  }
-
-  Future<void> stopRecognition() async {
-    _logEvent('Stop riconoscimento vocale chiamato.');
-    if (_isSimulatedMode) {
-      _logEvent('Modalità simulata: stopRecognition senza ulteriori azioni.');
-      return;
-    }
-    if (_isInitialized && _speechService != null) {
-      await _speechService!.stop();
-      await _resultSubscription?.cancel();
-      await _partialSubscription?.cancel();
-      _resultSubscription = null;
-      _partialSubscription = null;
-      _logEvent('Riconoscimento vocale fermato.');
-    }
-  }
-
   Future<void> dispose() async {
-    _logEvent('Dispose del servizio VoskService chiamato.');
-    await stopRecognition();
+    _logEvent('Dispose chiamato');
+    _isRecognizing = false;
     await _volumeSubscription?.cancel();
-    if (_isInitialized && !_isSimulatedMode) {
-      _speechRecognizer?.dispose();
+
+    await _resultController.close();
+    await _partialController.close();
+
+    if (_isInitialized) {
+      await _speechRecognizer?.dispose();
       _model?.dispose();
-      await _speechService?.dispose();
       await _audioService.dispose();
-      _speechService = null;
+
       _speechRecognizer = null;
       _model = null;
       _recognizer = null;
       _isInitialized = false;
       _instance = null;
-      _logEvent('Risorse Vosk rilasciate.');
+
+      _logEvent('Risorse rilasciate');
     }
   }
 
-  List<String> getServiceLogs() => List.unmodifiable(_serviceLog);
   bool get isInitialized => _isInitialized;
   String get modelPath => _modelPath;
-}
+  List<String> getServiceLogs() => List.unmodifiable(_serviceLog);
 
+  // Stream per ascoltare i risultati
+  Stream<String> get resultStream => _resultController.stream;
+  Stream<String> get partialStream => _partialController.stream;
+}

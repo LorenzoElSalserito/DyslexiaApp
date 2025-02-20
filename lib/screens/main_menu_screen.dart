@@ -1,6 +1,7 @@
 // main_menu_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../models/player.dart';
 import 'game_screen.dart';
 import 'profile_creation_screen.dart';
@@ -53,7 +54,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 'Dyslexia App',
                 style: TextStyle(
                   fontFamily: 'OpenDyslexic',
-                  fontSize: 32,
+                  fontSize: AppConfig.title,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -111,7 +112,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           label,
           style: TextStyle(
             fontFamily: 'OpenDyslexic',
-            fontSize: 18,
+            fontSize: AppConfig.title,
           ),
         ),
         style: ElevatedButton.styleFrom(

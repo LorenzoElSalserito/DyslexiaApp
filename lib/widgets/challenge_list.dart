@@ -1,6 +1,7 @@
 // lib/widgets/challenge_list.dart
 
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../models/challenge.dart';
 import '../models/enums.dart';
 
@@ -126,7 +127,7 @@ class ChallengeCard extends StatelessWidget {
         Text(
           challenge.title,
           style: const TextStyle(
-            fontSize: 18,
+            fontSize: AppConfig.title,
             fontWeight: FontWeight.bold,
             fontFamily: 'OpenDyslexic',
           ),
@@ -135,7 +136,7 @@ class ChallengeCard extends StatelessWidget {
           challenge.description,
           style: TextStyle(
             color: Colors.grey[600],
-            fontSize: 14,
+            fontSize: AppConfig.subtitle,
             fontFamily: 'OpenDyslexic',
           ),
         ),
@@ -164,7 +165,7 @@ class ChallengeCard extends StatelessWidget {
               '${challenge.currentProgress} / ${challenge.targetValue}',
               style: TextStyle(
                 color: Colors.grey[600],
-                fontSize: 12,
+                fontSize: AppConfig.others,
                 fontFamily: 'OpenDyslexic',
               ),
             ),
@@ -173,7 +174,7 @@ class ChallengeCard extends StatelessWidget {
               style: TextStyle(
                 color: _getProgressColor(),
                 fontWeight: FontWeight.bold,
-                fontSize: 12,
+                fontSize: AppConfig.others,
                 fontFamily: 'OpenDyslexic',
               ),
             ),
