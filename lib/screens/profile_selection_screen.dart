@@ -201,24 +201,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             fontFamily: 'OpenDyslexic',
           ),
         ),
-        if (canAddProfile) ...[
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text(
-              'Crea Nuovo Profilo',
-              style: TextStyle(fontFamily: 'OpenDyslexic'),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ProfileCreationScreen()),
-            ),
-          ),
-        ],
       ],
     );
   }

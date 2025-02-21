@@ -1,4 +1,4 @@
-// lib/services/audio_service.dart
+/// lib/services/audio_service.dart
 
 import 'dart:async';
 import 'dart:io';
@@ -12,7 +12,6 @@ import '../models/enums.dart';
 /// Servizio che gestisce le registrazioni audio.
 /// Si occupa della registrazione, aggiornamento del volume e gestione del ciclo di vita.
 class AudioService {
-  // Costanti per la gestione della registrazione
   static const Duration _recordingDuration = Duration(seconds: 5);
   static const Duration _delayBetweenRecordings = Duration(seconds: 3);
   static const int _maxAttempts = 5;
@@ -24,19 +23,17 @@ class AudioService {
     debugPrint('AudioService inizializzato per ${Platform.operatingSystem}');
   }
 
-  // Stato interno del servizio
   final _AudioServiceState _state = _AudioServiceState();
   final _StreamControllers _streamControllers = _StreamControllers();
 
-  // Componenti audio
   FlutterSoundRecorder? _recorder;
   String? _recordingPath;
   Timer? _recordingTimer;
   Timer? _volumeUpdateTimer;
   bool _processingResult = false;
   final Random _random = Random();
+  StreamSubscription? _recorderSubscription;
 
-  /// Inizializza il servizio audio
   Future<void> initialize() async {
     if (_state.isInitialized) {
       debugPrint('AudioService: Già inizializzato, reset degli stream');
@@ -59,23 +56,34 @@ class AudioService {
     }
   }
 
-  /// Verifica se la registrazione è supportata sulla piattaforma
   bool _isRecordingSupported() {
     return Platform.isAndroid || Platform.isIOS;
   }
 
-  /// Inizializza la modalità simulata
   Future<void> _initializeSimulated() async {
     _state.isReady = true;
     debugPrint('Modalità simulata attivata');
   }
 
-  /// Inizializza la modalità nativa
   Future<void> _initializeNative() async {
     try {
+      if (_recorder != null) {
+        await _recorder?.closeRecorder();
+        _recorder = null;
+      }
+
       _recorder = FlutterSoundRecorder();
       await _recorder?.openRecorder();
       await _recorder?.setSubscriptionDuration(const Duration(milliseconds: 100));
+
+      // Imposta il listener del volume
+      _recorderSubscription = _recorder?.onProgress?.listen((event) {
+        if (event.decibels != null) {
+          final volume = _normalizeVolume(event.decibels!);
+          _streamControllers.volume.add(volume);
+        }
+      });
+
       _state.isReady = true;
       debugPrint('Registrazione nativa inizializzata.');
     } catch (e) {
@@ -85,7 +93,12 @@ class AudioService {
     }
   }
 
-  /// Configura la directory di registrazione
+  double _normalizeVolume(double decibels) {
+    const double minDb = -60.0;
+    const double maxDb = 0.0;
+    return ((decibels - minDb) / (maxDb - minDb)).clamp(0.0, 1.0);
+  }
+
   Future<void> _setupRecordingDirectory() async {
     try {
       final tempDir = await Directory.systemTemp.createTemp('audio_recording_');
@@ -97,13 +110,17 @@ class AudioService {
     }
   }
 
-  /// Avvia la registrazione audio
   Future<String> startRecording() async {
-    // Se è in corso l'elaborazione, non avviare una nuova registrazione
     if (_processingResult) {
       debugPrint('AudioService: Elaborazione in corso, impossibile avviare una nuova registrazione.');
       return '';
     }
+
+    if (!_canStartRecording()) {
+      debugPrint('AudioService: Non può iniziare la registrazione. Stato non valido.');
+      return '';
+    }
+
     try {
       debugPrint('AudioService: startRecording() chiamato.');
       _streamControllers.reset();
@@ -125,7 +142,6 @@ class AudioService {
     }
   }
 
-  /// Avvia la registrazione simulata
   Future<void> _startSimulatedRecording() async {
     _state.volumeTimer?.cancel();
     _state.volumeTimer = Timer.periodic(
@@ -142,7 +158,6 @@ class AudioService {
     debugPrint('AudioService: Avvio registrazione simulata.');
   }
 
-  /// Avvia la registrazione nativa
   Future<void> _startNativeRecording() async {
     try {
       await _recorder?.startRecorder(
@@ -159,7 +174,6 @@ class AudioService {
     }
   }
 
-  /// Avvia il timer di registrazione
   void _startRecordingTimer() {
     _recordingTimer?.cancel();
     _recordingTimer = Timer(_recordingDuration, () {
@@ -170,22 +184,19 @@ class AudioService {
     debugPrint('AudioService: Avvio recording timer per $_recordingDuration');
   }
 
-  /// Ferma la registrazione corrente.
-  ///
-  /// Se lo stato corrente non è "recording" ma è già in "waitingNext" e
-  /// il percorso di registrazione è stato impostato, restituisce quel percorso.
   Future<String> stopRecording() async {
     if (_state.currentState != AudioState.recording) {
       if (_state.currentState == AudioState.waitingNext && _recordingPath != null) {
-        debugPrint('AudioService: stopRecording() chiamato in stato waitingNext, ritorno file path.');
+        debugPrint('AudioService: stopRecording() in stato waitingNext, ritorno file path.');
         return _recordingPath!;
       }
-      debugPrint('AudioService: stopRecording() chiamato, ma condizione non soddisfatta. Stato: ${_state.currentState}, processing: $_processingResult');
+      debugPrint('AudioService: stopRecording() chiamato, ma condizione non soddisfatta. Stato: ${_state.currentState}');
       return '';
     }
-    // Blocchiamo ulteriori invocazioni finché non terminiamo il ciclo
+
     if (_processingResult) return '';
     _processingResult = true;
+
     try {
       debugPrint('AudioService: stopRecording() chiamato.');
       final filePath = await _stopCurrentRecording();
@@ -203,12 +214,10 @@ class AudioService {
       _updateState(AudioState.stopped);
       rethrow;
     } finally {
-      // Assicuriamoci di resettare il flag anche in caso di errore
       _processingResult = false;
     }
   }
 
-  /// Ferma l'attuale registrazione e restituisce il percorso del file
   Future<String> _stopCurrentRecording() async {
     _recordingTimer?.cancel();
     _state.volumeTimer?.cancel();
@@ -223,7 +232,6 @@ class AudioService {
     return _recordingPath ?? '';
   }
 
-  /// Aggiorna lo stato del servizio
   void _updateState(AudioState newState) {
     _state.currentState = newState;
     if (!_streamControllers.isClosed) {
@@ -232,52 +240,41 @@ class AudioService {
     debugPrint('AudioService: Stato aggiornato a $newState');
   }
 
-  /// Verifica se è possibile avviare la registrazione
   bool _canStartRecording() {
     if (!_state.isInitialized) return false;
     if (_state.currentState == AudioState.recording) return false;
     if (_state.isSessionComplete) return false;
+    if (!_state.isReady) return false;
     return true;
   }
 
-  /// Rilascia le risorse utilizzate
   Future<void> dispose() async {
     debugPrint('AudioService: Dispose chiamato.');
     _recordingTimer?.cancel();
     _state.volumeTimer?.cancel();
-    if (!_state.isSimulatedMode) {
+    await _recorderSubscription?.cancel();
+
+    if (!_state.isSimulatedMode && _recorder != null) {
+      if (_state.currentState == AudioState.recording) {
+        await stopRecording();
+      }
       await _recorder?.closeRecorder();
       _recorder = null;
     }
+
     await _streamControllers.dispose();
     _state.reset();
     debugPrint('AudioService: Dispose completato, risorse rilasciate.');
   }
 
   // Getters pubblici
-
-  /// Stream del livello di volume aggiornato
   Stream<double> get volumeLevel => _streamControllers.volume.stream;
-
-  /// Stream dello stato audio
   Stream<AudioState> get audioState => _streamControllers.state.stream;
-
-  /// Stream del progresso della registrazione (tentativi)
   Stream<int> get recordingProgress => _streamControllers.progress.stream;
-
-  /// Ritorna true se è in corso una registrazione
   bool get isRecording => _state.currentState == AudioState.recording;
-
-  /// Stato corrente del servizio audio
   AudioState get currentState => _state.currentState;
-
-  /// Ritorna true se la sessione di registrazione è completa
   bool get isSessionComplete => _state.isSessionComplete;
-
-  /// Numero massimo di tentativi
   int get maxAttempts => _state._maxAttempts;
-
-  /// Ritardo tra una registrazione e l'altra
   Duration get delayBetweenRecordings => _delayBetweenRecordings;
 }
 

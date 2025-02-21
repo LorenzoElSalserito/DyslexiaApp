@@ -1,10 +1,10 @@
+// lib/screens/reading_exercise_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-import 'dart:math' show min;
 import '../config/app_config.dart';
 import '../services/player_manager.dart';
-import '../models/player.dart';
 import '../services/game_service.dart';
 import '../services/exercise_manager.dart';
 import '../services/speech_recognition_service.dart';
@@ -32,7 +32,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   bool _isInitialized = false;
   bool _isSessionStarted = false;
 
-  // Variabili per lo stato di download del modello (eventuale)
+  // Stato del download
   double _downloadProgressValue = 0.0;
   String _downloadStatusMessage = "";
 
@@ -48,41 +48,25 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   @override
   void initState() {
     super.initState();
-    // Recupera il manager degli esercizi (già fornito tramite Provider)
     _exerciseManager = Provider.of<ExerciseManager>(context, listen: false);
-    // Istanzia il servizio unificato di riconoscimento vocale
     _speechService = SpeechRecognitionService();
-    // Inizializza il servizio (richiede il BuildContext per i permessi)
     _initializeSession();
-    // Ascolta lo stream del volume per aggiornare l'UI
-    _volumeSubscription = _speechService.volumeStream.listen((volume) {
-      if (mounted) {
-        setState(() {
-          _volumeLevel = volume;
-        });
-      }
-    });
-    // Ascolta lo stato del riconoscimento (utile per aggiornare il bottone)
-    _speechStateSubscription = _speechService.stateStream.listen((state) {
-      if (mounted) setState(() {});
-    });
-    // Ascolta il risultato del riconoscimento e lo gestisce
-    _resultSubscription = _speechService.resultStream.listen((result) async {
-      await _handleRecognitionResult(result);
-    });
   }
 
   Future<void> _initializeSession() async {
     if (!mounted) return;
+
     try {
-      // Inizializza il servizio di riconoscimento (che a sua volta inizializza audio e VOSK)
+      // Inizializza il servizio di riconoscimento vocale
       await _speechService.initialize(context);
-      // Avvia una nuova sessione di esercizi
       await _exerciseManager.startNewSession();
       _isSessionStarted = true;
       await _loadNewExercise();
+
       if (mounted) setState(() => _isInitialized = true);
       debugPrint('[ReadingExerciseScreen] Sessione inizializzata.');
+
+      _setupSubscriptions();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -92,18 +76,39 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
-  /// Carica un nuovo esercizio tramite l'ExerciseManager
+  void _setupSubscriptions() {
+    _volumeSubscription = _speechService.volumeStream.listen((volume) {
+      if (mounted) {
+        setState(() => _volumeLevel = volume);
+      }
+    });
+
+    _speechStateSubscription = _speechService.stateStream.listen((state) {
+      if (mounted) setState(() {});
+    });
+
+    _resultSubscription = _speechService.resultStream.listen((result) async {
+      await _handleRecognitionResult(result);
+    });
+  }
+
   Future<void> _loadNewExercise() async {
     if (!mounted) return;
+
     try {
+      // Reset del servizio di riconoscimento prima del nuovo esercizio
+      await _speechService.reset();
+
       final exercise = await _exerciseManager.generateExercise();
       if (!mounted) return;
+
       setState(() {
         _currentWord = exercise.content;
         _isProcessing = false;
         _currentExercise++;
       });
-      debugPrint('[ReadingExerciseScreen] Nuovo esercizio caricato: $_currentWord');
+      debugPrint(
+          '[ReadingExerciseScreen] Nuovo esercizio caricato: $_currentWord');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -112,11 +117,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
-  /// Gestisce l'azione del bottone: se il servizio è idle o in attesa, avvia la registrazione;
-  /// se è in stato di registrazione, la ferma.
   Future<void> _onRecordButtonPressed() async {
     if (_speechService.currentState == RecognitionState.idle ||
-        _speechService.currentState == RecognitionState.waiting) {
+        _speechService.currentState == RecognitionState.completed) {
       try {
         await _speechService.startRecognition(_currentWord);
       } catch (e) {
@@ -135,26 +138,23 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
-  /// Gestisce il risultato del riconoscimento vocale e aggiorna la sessione
   Future<void> _handleRecognitionResult(RecognitionResult result) async {
     if (!mounted) return;
     try {
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
-      final Player? player = playerManager.currentProfile;
+      final player = playerManager.currentProfile;
       if (player == null) {
         throw Exception("Nessun profilo attivo.");
       }
-      final gameService = Provider.of<GameService>(context, listen: false);
 
-      // Processa il risultato tramite ExerciseManager e ottiene i cristalli guadagnati
-      final crystalsEarned = await _exerciseManager.processExerciseResult(result);
+      final crystalsEarned = await _exerciseManager.processExerciseResult(
+          result);
       setState(() => _totalCrystals += crystalsEarned);
-      debugPrint('[ReadingExerciseScreen] Risultato processato. Cristalli guadagnati: $crystalsEarned');
+      debugPrint(
+          '[ReadingExerciseScreen] Risultato processato. Cristalli guadagnati: $crystalsEarned');
 
-      // Mostra il popup di feedback
       await _showFeedbackPopup(result, crystalsEarned, player.currentLevel);
 
-      // Se la sessione è completa, mostra il riepilogo, altrimenti carica un nuovo esercizio
       if (_currentExercise >= _totalExercises) {
         await _showSessionSummary();
       } else {
@@ -169,49 +169,50 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
-  /// Mostra il popup di feedback dopo ogni esercizio
-  Future<void> _showFeedbackPopup(RecognitionResult result, int crystalsEarned, int level) async {
+  Future<void> _showFeedbackPopup(RecognitionResult result, int crystalsEarned,
+      int level) async {
     if (!mounted) return;
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => CrystalPopup(
-        earnedCrystals: crystalsEarned,
-        level: level,
-        progress: result.similarity,
-        recognitionResult: result,
-      ),
+      builder: (context) =>
+          CrystalPopup(
+            earnedCrystals: crystalsEarned,
+            level: level,
+            progress: result.similarity,
+            recognitionResult: result,
+          ),
     );
   }
 
-  /// Mostra il riepilogo della sessione e gestisce la decisione di continuare o uscire
   Future<void> _showSessionSummary() async {
     if (!mounted) return;
     try {
-      final double overallAccuracy = _exerciseManager.overallAccuracy;
+      final overallAccuracy = _exerciseManager.overallAccuracy;
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
-      final int currentLevel = playerManager.currentProfile?.currentLevel ?? 1;
+      final currentLevel = playerManager.currentProfile?.currentLevel ?? 1;
 
       final shouldContinue = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) {
-          return CrystalPopup(
-            earnedCrystals: _totalCrystals,
-            level: currentLevel,
-            progress: overallAccuracy,
-            isSessionSummary: true,
-            recognitionResult: RecognitionResult(
-              text: '',
-              confidence: 1.0,
-              similarity: overallAccuracy,
-              isCorrect: overallAccuracy >= 0.75,
-              duration: const Duration(seconds: 1),
+        builder: (context) =>
+            CrystalPopup(
+              earnedCrystals: _totalCrystals,
+              level: currentLevel,
+              progress: overallAccuracy,
+              isSessionSummary: true,
+              recognitionResult: RecognitionResult(
+                text: '',
+                confidence: 1.0,
+                similarity: overallAccuracy,
+                isCorrect: overallAccuracy >= 0.75,
+                duration: const Duration(seconds: 1),
+              ),
             ),
-          );
-        },
       );
+
       if (!mounted) return;
+
       if (shouldContinue == true) {
         setState(() {
           _currentExercise = 0;
@@ -231,8 +232,20 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   }
 
   @override
+  void dispose() {
+    _volumeSubscription?.cancel();
+    _speechStateSubscription?.cancel();
+    _resultSubscription?.cancel();
+    if (_speechService.currentState == RecognitionState.recording) {
+      _speechService.stopRecognition();
+    }
+    _speechService.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Stato di caricamento o errore
+    // [Prima parte del build per il loading rimane invariata]
     if (!_isInitialized || !_isSessionStarted) {
       return Scaffold(
         appBar: AppBar(
@@ -246,12 +259,14 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (_downloadProgressValue > 0.0 && _downloadProgressValue < 1.0) ...[
-                Text('${(_downloadProgressValue * 100).toStringAsFixed(1)}%',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontFamily: 'OpenDyslexic',
-                      color: Colors.black87,
-                    )),
+                Text(
+                  '${(_downloadProgressValue * 100).toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'OpenDyslexic',
+                    color: Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: 200,
@@ -329,6 +344,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
+                              // Barra di progresso
                               LinearProgressIndicator(
                                 value: _currentExercise / _totalExercises,
                                 backgroundColor: Colors.grey[300],
@@ -346,6 +362,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                   color: Colors.white,
                                 ),
                               ),
+
+                              // Carta con la parola da leggere
                               Card(
                                 elevation: 4,
                                 shape: RoundedRectangleBorder(
@@ -366,6 +384,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                   ),
                                 ),
                               ),
+
+                              // Indicatore di registrazione
                               if (_speechService.currentState == RecognitionState.recording)
                                 TweenAnimationBuilder<double>(
                                   tween: Tween<double>(begin: 1.0, end: 1.0 + _volumeLevel * 0.5),
@@ -380,6 +400,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                     targetText: _currentWord,
                                   ),
                                 ),
+
+                              // Pulsante di registrazione
                               if (!_isProcessing)
                                 ElevatedButton(
                                   onPressed: _onRecordButtonPressed,
@@ -405,6 +427,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                 CircularProgressIndicator(
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.yellowAccent.shade700),
                                 ),
+
+                              // Messaggio di errore
                               if (_errorMessage != null)
                                 Text(
                                   _errorMessage!,
@@ -422,7 +446,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                 ),
               ),
             ),
-            // Eventuale banner overlay per lo stato del download del modello
+
+            // Overlay per lo stato del download
             if (_downloadStatusMessage.isNotEmpty)
               Positioned(
                 top: 0,
@@ -462,18 +487,5 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _volumeSubscription?.cancel();
-    _speechStateSubscription?.cancel();
-    _resultSubscription?.cancel();
-    // Se la registrazione è in corso, termina il riconoscimento
-    if (_speechService.currentState == RecognitionState.recording) {
-      _speechService.stopRecognition();
-    }
-    _speechService.dispose();
-    super.dispose();
   }
 }
