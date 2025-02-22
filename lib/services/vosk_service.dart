@@ -133,12 +133,19 @@ class VoskService {
     _logEvent('Inizio inizializzazione con retry');
 
     // Verifica permessi
-    bool hasPermissions = await _permissionService.checkAllPermissions();
-    if (!hasPermissions) {
-      hasPermissions = await _permissionService.requestAllPermissions(context);
+    if (Platform.isAndroid || Platform.isIOS) {
+      bool hasPermissions = await _permissionService.checkAllPermissions();
       if (!hasPermissions) {
-        throw Exception('Permessi necessari non concessi');
+        hasPermissions =
+        await _permissionService.requestAllPermissions(context);
+        if (!hasPermissions) {
+          throw Exception('Permessi necessari non concessi');
+        }
       }
+    } else {
+      // Su Linux, macOS e Windows di solito non servono
+      // richieste di permessi microfono con plugin mobile.
+      debugPrint('VoskService: Nessuna richiesta permessi su ${Platform.operatingSystem}');
     }
 
     // Prepara il modello

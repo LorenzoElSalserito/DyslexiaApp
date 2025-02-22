@@ -4,47 +4,33 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as p;
 import 'package:record/record.dart';
+import 'package:record_platform_interface/record_platform_interface.dart';
+
+// Importa il tuo enum AudioState da models/enums.dart
 import '../models/enums.dart';
-import '../config/app_config.dart';
 
-/// Interfaccia base per il servizio audio
-abstract class IAudioService {
-  // Proprietà di base
-  bool get isInitialized;
-  bool get isRecording;
-  int get currentAttempt;
-  int get maxAttempts;
-  bool get isSessionComplete;
-  Duration get delayBetweenRecordings;
-
-  // Stream per gli aggiornamenti
-  Stream<double> get volumeLevel;
-  Stream<AudioState> get audioState;
-  Stream<int> get recordingProgress;
-
-  // Metodi base
-  Future<void> initialize();
-  Future<String> startRecording();
-  Future<String> stopRecording();
-  Future<void> dispose();
-}
-
-/// Implementazione del servizio audio che supporta diverse piattaforme
-class AudioService implements IAudioService {
+/// Servizio che gestisce la registrazione audio per OpenDSA: Reading.
+/// Utilizza il plugin 'record' per fornire una registrazione audio di alta qualità
+/// ottimizzata per il riconoscimento vocale.
+class AudioService {
   // Singleton pattern
   static final AudioService _instance = AudioService._internal();
   factory AudioService() => _instance;
 
-  // Costanti pubbliche
-  @override
-  final int maxAttempts = 5;
-  @override
-  final Duration delayBetweenRecordings = const Duration(seconds: 3);
+  // Costanti di configurazione audio
+  static const int _defaultSampleRate = 16000;  // 16 kHz
+  static const int _defaultBitRate = 16000;     // 16 kbps
+  static const int _defaultNumChannels = 1;     // Mono
 
-  // Durata massima di registrazione (opzionale)
-  final Duration _maxRecordingDuration = const Duration(seconds: 30);
+  // Costanti pubbliche per la gestione delle registrazioni
+  static const int _maxAttempts = 5;
+  static const Duration _delayBetweenRecordings = Duration(seconds: 3);
+
+  // Getters pubblici per le costanti
+  int get maxAttempts => _maxAttempts;
+  Duration get delayBetweenRecordings => _delayBetweenRecordings;
 
   // Stato interno
   bool _isInitialized = false;
@@ -53,170 +39,138 @@ class AudioService implements IAudioService {
   Timer? _volumeTimer;
   late String _recordingPath;
 
-  // Stream controllers
+  // Stream controllers per gli eventi in tempo reale
   final _volumeController = StreamController<double>.broadcast();
   final _stateController = StreamController<AudioState>.broadcast();
   final _progressController = StreamController<int>.broadcast();
 
-  // Recorder (utilizzato solo se non siamo su Linux)
-  AudioRecorder? _audioRecorder;
-  Process? _linuxRecordingProcess;
+  // Istanza del recorder
+  final Record _audioRecorder = Record();
 
-  AudioService._internal() {
-    // Su Linux non utilizziamo il plugin record (per evitare il problema di compilazione)
-    if (!Platform.isLinux) {
-      _audioRecorder = AudioRecorder();
-    }
-  }
+  // Costruttore privato per il singleton
+  AudioService._internal();
 
-  // Getters
-  @override
+  // Getters pubblici per lo stato
   Stream<double> get volumeLevel => _volumeController.stream;
-  @override
   Stream<AudioState> get audioState => _stateController.stream;
-  @override
   Stream<int> get recordingProgress => _progressController.stream;
-  @override
   bool get isInitialized => _isInitialized;
-  @override
   bool get isRecording => _isRecording;
-  @override
   int get currentAttempt => _currentAttempt;
-  @override
   bool get isSessionComplete => _currentAttempt >= maxAttempts;
 
-  @override
+  /// Inizializza il servizio audio e verifica i permessi necessari
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    debugPrint('AudioService: Inizializzazione...');
+    try {
+      debugPrint('AudioService: Inizializzazione...');
 
-    if (!Platform.isLinux) {
-      // Su piattaforme diverse da Linux usiamo il plugin record per controllare i permessi ed il supporto encoder
-      final hasPermission = await _audioRecorder!.hasPermission();
-      if (!hasPermission) {
-        throw Exception('Permessi audio non concessi');
-      }
-      final isWavSupported = await _audioRecorder!.isEncoderSupported(AudioEncoder.wav);
-      if (!isWavSupported) {
-        throw Exception('Encoder WAV non supportato su questa piattaforma');
-      }
-    }
-
-    // Prepara la directory per le registrazioni
-    final appDir = await getApplicationDocumentsDirectory();
-    final recordingsDir = Directory(path.join(appDir.path, 'OpenDSA_recordings'));
-    if (!await recordingsDir.exists()) {
-      await recordingsDir.create(recursive: true);
-    }
-    _recordingPath = path.join(recordingsDir.path, 'recording.wav');
-
-    // Su Linux verifichiamo la presenza di arecord per il fallback
-    if (Platform.isLinux) {
-      try {
-        final result = await Process.run('which', ['arecord']);
-        if (result.exitCode != 0) {
-          debugPrint('AudioService: arecord non trovato, usare il plugin record se disponibile');
+      // Verifica i permessi di registrazione (solo per Android/iOS)
+      if (Platform.isAndroid || Platform.isIOS) {
+        final hasPermission = await _audioRecorder.hasPermission();
+        if (!hasPermission) {
+          throw Exception('Permessi audio non concessi');
         }
-      } catch (e) {
-        debugPrint('AudioService: Errore verifica arecord: $e');
+      } else {
+        // Su Linux, macOS e Windows di solito non servono
+        // richieste di permessi microfono con plugin mobile.
+        debugPrint('AudioService: Nessuna richiesta permessi su ${Platform.operatingSystem}');
       }
-    }
 
-    _isInitialized = true;
-    _updateState(AudioState.stopped);
-    debugPrint('AudioService: Inizializzazione completata');
+      // Prepara la directory per le registrazioni
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final recordingsDir = Directory(p.join(appDocDir.path, 'OpenDSA_recordings'));
+      if (!await recordingsDir.exists()) {
+        await recordingsDir.create(recursive: true);
+      }
+      _recordingPath = p.join(recordingsDir.path, 'recording.wav');
+
+      _isInitialized = true;
+      _updateState(AudioState.stopped);
+      debugPrint('AudioService: Inizializzazione completata');
+    } catch (e) {
+      debugPrint('AudioService: Errore nell\'inizializzazione: $e');
+      rethrow;
+    }
   }
 
-  @override
+  /// Avvia una nuova registrazione audio
   Future<String> startRecording() async {
-    if (!_isInitialized) throw Exception('Servizio non inizializzato');
-    if (_isRecording) return _recordingPath;
+    if (!_isInitialized) {
+      throw Exception('AudioService non inizializzato. Chiama initialize() prima di registrare.');
+    }
+    if (_isRecording) {
+      // Se stiamo già registrando, restituiamo semplicemente il path
+      return _recordingPath;
+    }
 
-    _currentAttempt++;
-    _progressController.add(_currentAttempt);
+    try {
+      _currentAttempt++;
+      _progressController.add(_currentAttempt);
 
-    if (Platform.isLinux) {
-      // Su Linux usiamo il fallback con arecord
-      await _startLinuxRecording();
-    } else {
-      // Su altre piattaforme usiamo il plugin record
-      await _audioRecorder!.start(
-        RecordConfig(
-          encoder: AudioEncoder.wav,
-          bitRate: 16 * 1000,
-          numChannels: 1,
-        ),
+      // Configura e avvia la registrazione
+      await _audioRecorder.start(
+        encoder: AudioEncoder.wav,
+        bitRate: _defaultBitRate,
+        samplingRate: _defaultSampleRate,
+        numChannels: _defaultNumChannels,
         path: _recordingPath,
       );
+
+      _isRecording = true;
+      _updateState(AudioState.recording);
+      _startVolumeMonitoring();
+
+      debugPrint('AudioService: Registrazione avviata (attempt $_currentAttempt)');
+      return _recordingPath;
+    } catch (e) {
+      debugPrint('AudioService: Errore nell\'avvio della registrazione: $e');
+      rethrow;
     }
-
-    _isRecording = true;
-    _updateState(AudioState.recording);
-    _startVolumeMonitoring();
-
-    debugPrint('AudioService: Registrazione avviata');
-    return _recordingPath;
   }
 
-  Future<String> _startLinuxRecording() async {
-    final args = [
-      '-f', 'S16_LE',    // Formato PCM a 16-bit little-endian
-      '-r', '16000',     // Sample rate: 16 kHz
-      '-c', '1',         // Canale: mono
-      '-D', 'default',   // Dispositivo di default
-      _recordingPath,    // File di output
-    ];
-
-    _linuxRecordingProcess = await Process.start('arecord', args);
-    return _recordingPath;
-  }
-
-  @override
+  /// Ferma la registrazione corrente
   Future<String> stopRecording() async {
-    if (!_isRecording) return '';
-
-    _stopVolumeMonitoring();
-
-    if (Platform.isLinux) {
-      await _stopLinuxRecording();
-    } else {
-      await _audioRecorder!.stop();
+    if (!_isRecording) {
+      // Non stiamo registrando
+      return '';
     }
 
-    _isRecording = false;
-    _updateState(AudioState.stopped);
+    try {
+      _stopVolumeMonitoring();
+      await _audioRecorder.stop();
 
-    debugPrint('AudioService: Registrazione fermata');
-    return _recordingPath;
-  }
+      _isRecording = false;
+      _updateState(AudioState.stopped);
 
-  Future<void> _stopLinuxRecording() async {
-    if (_linuxRecordingProcess != null) {
-      _linuxRecordingProcess!.kill();
-      await _linuxRecordingProcess!.exitCode;
-      _linuxRecordingProcess = null;
+      debugPrint('AudioService: Registrazione fermata');
+      return _recordingPath;
+    } catch (e) {
+      debugPrint('AudioService: Errore nello stop della registrazione: $e');
+      rethrow;
     }
   }
 
+  /// Monitora il volume durante la registrazione
   void _startVolumeMonitoring() {
     _volumeTimer?.cancel();
-    _volumeTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
-      if (!_isRecording) return;
+    _volumeTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+          (timer) async {
+        if (!_isRecording) return;
 
-      double volume = 0.0;
-      if (Platform.isLinux) {
-        // Simulazione del volume per Linux
-        volume = 0.3 + (DateTime.now().millisecondsSinceEpoch % 1000) / 2000;
-      } else {
-        // Otteniamo il volume reale dal plugin record
-        volume = await _audioRecorder!
-            .getAmplitude()
-            .then((amp) => amp.current / 100)
-            .catchError((e) => 0.0);
-      }
-      _volumeController.add(volume.clamp(0.0, 1.0));
-    });
+        try {
+          final amplitude = await _audioRecorder.getAmplitude();
+          // Il plugin 'record' fornisce un valore in dB, di solito tra -160 e 0
+          // Convertiamolo in un valore normalizzato tra 0.0 e 1.0
+          final volume = (amplitude.current + 160) / 160;
+          _volumeController.add(volume.clamp(0.0, 1.0));
+        } catch (err) {
+          debugPrint('AudioService: Errore nel monitoraggio del volume: $err');
+        }
+      },
+    );
   }
 
   void _stopVolumeMonitoring() {
@@ -224,18 +178,18 @@ class AudioService implements IAudioService {
     _volumeTimer = null;
   }
 
+  /// Aggiorna lo stato dell'audio e invia l'evento sullo stream
   void _updateState(AudioState newState) {
     _stateController.add(newState);
   }
 
-  @override
+  /// Rilascia le risorse
   Future<void> dispose() async {
     if (_isRecording) {
       await stopRecording();
     }
-    if (!Platform.isLinux) {
-      await _audioRecorder!.dispose();
-    }
+
+    await _audioRecorder.dispose();
     await _volumeController.close();
     await _stateController.close();
     await _progressController.close();

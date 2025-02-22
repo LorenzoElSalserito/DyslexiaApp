@@ -26,8 +26,11 @@ dependencies:
   # VOSK and Audio related
   vosk_flutter: ^0.3.48
   flutter_sound: ^9.23.1
-  record: ^5.2.1
-  record_platform_interface: ^1.2.0
+  record: ^4.4.4
+  record_linux: ^0.4.1
+  record_platform_interface: ^0.5.0
+  record_windows: ^0.7.1
+  record_macos: ^0.2.2
   permission_handler: ^11.3.1
   permission_handler_platform_interface: ^4.2.0
   path_provider: ^2.1.2

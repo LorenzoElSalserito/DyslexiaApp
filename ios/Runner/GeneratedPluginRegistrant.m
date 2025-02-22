@@ -30,10 +30,10 @@
 @import permission_handler_apple;
 #endif
 
-#if __has_include(<record_darwin/RecordPlugin.h>)
-#import <record_darwin/RecordPlugin.h>
+#if __has_include(<record/RecordPlugin.h>)
+#import <record/RecordPlugin.h>
 #else
-@import record_darwin;
+@import record;
 #endif
 
 #if __has_include(<shared_preferences_foundation/SharedPreferencesPlugin.h>)
