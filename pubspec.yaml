@@ -26,6 +26,8 @@ dependencies:
   # VOSK and Audio related
   vosk_flutter: ^0.3.48
   flutter_sound: ^9.23.1
+  record: ^5.2.1
+  record_platform_interface: ^1.2.0
   permission_handler: ^11.3.1
   permission_handler_platform_interface: ^4.2.0
   path_provider: ^2.1.2
@@ -40,6 +42,7 @@ dependencies:
   # Packaging dependencies
   msix: ^3.16.8
   flutter_launcher_icons: ^0.13.1
+  flutter_sound_platform_interface: ^9.23.1
   package_info_plus: ^8.2.1
 
 dev_dependencies:
@@ -84,20 +87,20 @@ flutter:
     - assets/icon/
     - assets/icon/ios_icon.png
     - assets/icon/macos_icon.png
-    - assets/vosk/README
-    - assets/vosk/am/final.mdl
-    - assets/vosk/conf/mfcc.conf
-    - assets/vosk/conf/model.conf
-    - assets/vosk/graph/Gr.fst
-    - assets/vosk/graph/HCLr.fst
-    - assets/vosk/graph/disambig_tid.int
-    - assets/vosk/graph/phones/word_boundary.int
-    - assets/vosk/ivector/final.dubm
-    - assets/vosk/ivector/final.ie
-    - assets/vosk/ivector/final.mat
-    - assets/vosk/ivector/global_cmvn.stats
-    - assets/vosk/ivector/online_cmvn.conf
-    - assets/vosk/ivector/splice.conf
+    - vosk/README
+    - vosk/am/final.mdl
+    - vosk/conf/mfcc.conf
+    - vosk/conf/model.conf
+    - vosk/graph/Gr.fst
+    - vosk/graph/HCLr.fst
+    - vosk/graph/disambig_tid.int
+    - vosk/graph/phones/word_boundary.int
+    - vosk/ivector/final.dubm
+    - vosk/ivector/final.ie
+    - vosk/ivector/final.mat
+    - vosk/ivector/global_cmvn.stats
+    - vosk/ivector/online_cmvn.conf
+    - vosk/ivector/splice.conf
     - lib/assets/exercises/easy_words.txt
     - lib/assets/exercises/medium_words.txt
     - lib/assets/exercises/hard_words.txt

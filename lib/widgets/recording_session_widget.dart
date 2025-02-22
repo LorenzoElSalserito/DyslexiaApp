@@ -1,8 +1,7 @@
-// lib/widgets/recording_session_widget.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../config/app_config.dart';
+import '../models/enums.dart';
 import '../services/audio_service.dart';
 
 class RecordingSessionWidget extends StatefulWidget {
@@ -69,14 +68,17 @@ class _RecordingSessionWidgetState extends State<RecordingSessionWidget> {
   }
 
   void _updateStatusMessage(AudioState state) {
-    // Removed the AudioState.paused case because it doesn't exist.
+    // Ora lo switch gestisce anche il caso AudioState.paused.
     setState(() {
       _statusMessage = switch (state) {
-        AudioState.recording => 'Registrazione $_currentAttempt di ${_audioService.maxAttempts} in corso...',
-        AudioState.waitingNext => 'Preparati per la prossima registrazione...',
+        AudioState.recording =>
+        'Registrazione $_currentAttempt di ${_audioService.maxAttempts} in corso...',
+        AudioState.waitingNext =>
+        'Preparati per la prossima registrazione...',
         AudioState.stopped => _audioService.isSessionComplete
             ? 'Sessione completata!'
             : 'Premi il pulsante per registrare',
+        AudioState.paused => 'Registrazione in pausa...',
       };
     });
   }

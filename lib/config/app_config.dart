@@ -14,8 +14,8 @@ class AppConfig {
   static const String voskModelUrl = 'https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip';
   static const String voskModelName = 'vosk-model-it-0.22';
   static const String voskModelVersion = '0.22';
-  static const int vadAggressiveness = 2;   // 0-3 per la riduzione del rumore
-  static const double vadThreshold = 0.3;   // Soglia per il VAD
+  static const int vadAggressiveness = 1;   // 0-3 per la riduzione del rumore
+  static const double vadThreshold = 0.15;   // Soglia per il VAD
   static const bool vadEnable = true;       // Voice Activity Detection
   static const bool noiseSuppressionEnable = true;  // Soppressione rumore
   static const bool autoGainControlEnable = true;   // Controllo guadagno
@@ -24,8 +24,8 @@ class AppConfig {
   static const int sampleRate = 16000;
   static const int channels = 1;
   static const int bufferSize = 2048;
-  static const double volumeThreshold = 0.1;  // Volume minimo per considerare input valido
-  static const double idealVolume = 0.3;      // Volume ideale per una buona registrazione
+  static const double volumeThreshold = 0.05;  // Volume minimo per considerare input valido
+  static const double idealVolume = 0.2;      // Volume ideale per una buona registrazione
   static const double maxVolume = 1.0;        // Volume massimo possibile
 
   // Configurazioni Riconoscimento

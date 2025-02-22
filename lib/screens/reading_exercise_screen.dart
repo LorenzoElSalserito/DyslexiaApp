@@ -1,5 +1,3 @@
-// lib/screens/reading_exercise_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -9,6 +7,7 @@ import '../services/game_service.dart';
 import '../services/exercise_manager.dart';
 import '../services/speech_recognition_service.dart';
 import '../models/recognition_result.dart';
+import '../utils/permission_handler.dart';
 import '../widgets/voice_recognition_feedback.dart';
 import '../widgets/crystal_popup.dart';
 import '../models/enums.dart';
@@ -45,6 +44,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   StreamSubscription? _speechStateSubscription;
   StreamSubscription<RecognitionResult>? _resultSubscription;
 
+  String _statusMessage = '';
+
   @override
   void initState() {
     super.initState();
@@ -55,10 +56,17 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
   Future<void> _initializeSession() async {
     if (!mounted) return;
-
     try {
+      // Richiedi i permessi di storage PRIMA di inizializzare i servizi
+      bool storageGranted = await PermissionsHandler.requestStoragePermission();
+      if (!storageGranted) {
+        throw Exception("Permesso di scrittura/lettura su disco non concesso.");
+      }
+      debugPrint("Permesso di storage concesso.");
+
       // Inizializza il servizio di riconoscimento vocale
       await _speechService.initialize(context);
+      // Avvia la nuova sessione di esercizi
       await _exerciseManager.startNewSession();
       _isSessionStarted = true;
       await _loadNewExercise();
@@ -92,6 +100,20 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     });
   }
 
+  // Aggiornamento messaggio di stato con switch esaustivo
+  void _updateStatusMessage(AudioState state) {
+    setState(() {
+      _statusMessage = switch (state) {
+        AudioState.recording => 'Registrazione ${_exerciseManager.audioService.currentAttempt} di ${_exerciseManager.audioService.maxAttempts} in corso...',
+        AudioState.waitingNext => 'Preparati per la prossima registrazione...',
+        AudioState.stopped => _exerciseManager.audioService.isSessionComplete
+            ? 'Sessione completata!'
+            : 'Premi il pulsante per registrare',
+        _ => 'Stato sconosciuto',
+      };
+    });
+  }
+
   Future<void> _loadNewExercise() async {
     if (!mounted) return;
 
@@ -107,8 +129,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         _isProcessing = false;
         _currentExercise++;
       });
-      debugPrint(
-          '[ReadingExerciseScreen] Nuovo esercizio caricato: $_currentWord');
+      debugPrint('[ReadingExerciseScreen] Nuovo esercizio caricato: $_currentWord');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -147,11 +168,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         throw Exception("Nessun profilo attivo.");
       }
 
-      final crystalsEarned = await _exerciseManager.processExerciseResult(
-          result);
+      final crystalsEarned = await _exerciseManager.processExerciseResult(result);
       setState(() => _totalCrystals += crystalsEarned);
-      debugPrint(
-          '[ReadingExerciseScreen] Risultato processato. Cristalli guadagnati: $crystalsEarned');
+      debugPrint('[ReadingExerciseScreen] Risultato processato. Cristalli guadagnati: $crystalsEarned');
 
       await _showFeedbackPopup(result, crystalsEarned, player.currentLevel);
 
@@ -169,19 +188,17 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
-  Future<void> _showFeedbackPopup(RecognitionResult result, int crystalsEarned,
-      int level) async {
+  Future<void> _showFeedbackPopup(RecognitionResult result, int crystalsEarned, int level) async {
     if (!mounted) return;
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          CrystalPopup(
-            earnedCrystals: crystalsEarned,
-            level: level,
-            progress: result.similarity,
-            recognitionResult: result,
-          ),
+      builder: (context) => CrystalPopup(
+        earnedCrystals: crystalsEarned,
+        level: level,
+        progress: result.similarity,
+        recognitionResult: result,
+      ),
     );
   }
 
@@ -195,20 +212,19 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       final shouldContinue = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) =>
-            CrystalPopup(
-              earnedCrystals: _totalCrystals,
-              level: currentLevel,
-              progress: overallAccuracy,
-              isSessionSummary: true,
-              recognitionResult: RecognitionResult(
-                text: '',
-                confidence: 1.0,
-                similarity: overallAccuracy,
-                isCorrect: overallAccuracy >= 0.75,
-                duration: const Duration(seconds: 1),
-              ),
-            ),
+        builder: (context) => CrystalPopup(
+          earnedCrystals: _totalCrystals,
+          level: currentLevel,
+          progress: overallAccuracy,
+          isSessionSummary: true,
+          recognitionResult: RecognitionResult(
+            text: '',
+            confidence: 1.0,
+            similarity: overallAccuracy,
+            isCorrect: overallAccuracy >= 0.75,
+            duration: const Duration(seconds: 1),
+          ),
+        ),
       );
 
       if (!mounted) return;
@@ -245,7 +261,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // [Prima parte del build per il loading rimane invariata]
     if (!_isInitialized || !_isSessionStarted) {
       return Scaffold(
         appBar: AppBar(
@@ -305,7 +320,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       );
     }
 
-    // UI principale dell'esercizio
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -344,7 +358,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              // Barra di progresso
                               LinearProgressIndicator(
                                 value: _currentExercise / _totalExercises,
                                 backgroundColor: Colors.grey[300],
@@ -362,8 +375,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                   color: Colors.white,
                                 ),
                               ),
-
-                              // Carta con la parola da leggere
                               Card(
                                 elevation: 4,
                                 shape: RoundedRectangleBorder(
@@ -384,8 +395,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                   ),
                                 ),
                               ),
-
-                              // Indicatore di registrazione
                               if (_speechService.currentState == RecognitionState.recording)
                                 TweenAnimationBuilder<double>(
                                   tween: Tween<double>(begin: 1.0, end: 1.0 + _volumeLevel * 0.5),
@@ -400,8 +409,22 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                     targetText: _currentWord,
                                   ),
                                 ),
-
-                              // Pulsante di registrazione
+                              if (_speechService.currentState == RecognitionState.processing)
+                                Column(
+                                  children: const [
+                                    SizedBox(height: 20),
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 10),
+                                    Text(
+                                      'Elaborazione in corso...',
+                                      style: TextStyle(
+                                        fontFamily: 'OpenDyslexic',
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               if (!_isProcessing)
                                 ElevatedButton(
                                   onPressed: _onRecordButtonPressed,
@@ -427,8 +450,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                 CircularProgressIndicator(
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.yellowAccent.shade700),
                                 ),
-
-                              // Messaggio di errore
                               if (_errorMessage != null)
                                 Text(
                                   _errorMessage!,
@@ -446,8 +467,6 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                 ),
               ),
             ),
-
-            // Overlay per lo stato del download
             if (_downloadStatusMessage.isNotEmpty)
               Positioned(
                 top: 0,

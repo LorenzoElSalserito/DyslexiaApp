@@ -1,30 +1,30 @@
 // lib/services/speech_recognition_service.dart
+
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../models/recognition_result.dart';
 import '../services/audio_service.dart';
 import '../services/vosk_service.dart';
+import '../models/enums.dart';
 
-/// Stati del processo di riconoscimento vocale
+/// Stati possibili del riconoscimento vocale
 enum RecognitionState {
   idle,         // In attesa di iniziare
-  initializing, // Inizializzazione dei servizi
+  initializing, // Inizializzazione in corso
   recording,    // Registrazione in corso
-  processing,   // Elaborazione del risultato
-  waiting,      // In attesa della prossima registrazione
-  completed,    // Riconoscimento completato
-  error         // Errore durante il processo
+  processing,   // Elaborazione audio
+  waiting,      // In attesa del prossimo tentativo
+  completed,    // Sessione completata
+  error,        // Errore nel riconoscimento
 }
 
-/// Servizio che coordina il processo di riconoscimento vocale,
-/// utilizzando flutter_sound per la registrazione e VOSK per il riconoscimento.
 class SpeechRecognitionService {
   // Servizi di base
   final VoskService _voskService;
   final AudioService _audioService;
 
-  // Gestione dello stato
+  // Stato del servizio
   RecognitionState _state = RecognitionState.idle;
   String? _currentTargetText;
   DateTime? _sessionStartTime;
@@ -32,7 +32,7 @@ class SpeechRecognitionService {
   int _currentAttempt = 0;
   bool _isProcessing = false;
   bool _hasDetectedSpeech = false;
-  double _volumeThreshold = 0.1; // Soglia minima di volume per considerare parlato
+  double _volumeThreshold = AppConfig.volumeThreshold;
 
   // Stream controllers
   final _stateController = StreamController<RecognitionState>.broadcast();
@@ -41,113 +41,160 @@ class SpeechRecognitionService {
   final _progressController = StreamController<int>.broadcast();
   final _errorController = StreamController<String>.broadcast();
 
-  // Sottoscrizioni agli stream
+  // Subscriptions
   StreamSubscription? _volumeSubscription;
+  StreamSubscription? _audioStateSubscription;
+
+  // Mutex per operazioni mutualmente esclusive
+  bool _operationInProgress = false;
+  final List<Completer<void>> _operationQueue = [];
 
   SpeechRecognitionService()
       : _voskService = VoskService.instance,
         _audioService = AudioService() {
-    debugPrint('SpeechRecognitionService: Inizializzazione del servizio.');
+    debugPrint('SpeechRecognitionService: Inizializzazione');
+    _setupAudioSubscriptions();
   }
 
-  Future<void> initialize(BuildContext context) async {
-    if (_state == RecognitionState.initializing) return;
-
-    _updateState(RecognitionState.initializing);
-    debugPrint('SpeechRecognitionService: Inizializzazione in corso...');
-
-    try {
-      // Inizializza VOSK
-      await _voskService.initialize();
-
-      // Inizializza il servizio audio
-      await _audioService.initialize();
-
-      // Configura il listener per il volume
-      _volumeSubscription = _audioService.volumeLevel.listen((volume) {
+  void _setupAudioSubscriptions() {
+    _volumeSubscription = _audioService.volumeLevel.listen(
+          (volume) {
         _volumeController.add(volume);
         if (volume > _volumeThreshold) {
           _hasDetectedSpeech = true;
         }
-      });
+      },
+      onError: (error) {
+        debugPrint('Errore nel monitoraggio del volume: $error');
+        _handleError('Errore nel monitoraggio del volume: $error');
+      },
+    );
 
-      _updateState(RecognitionState.idle);
-      debugPrint('SpeechRecognitionService: Inizializzazione completata.');
-    } catch (e) {
-      _handleError('Errore nell\'inizializzazione: $e');
-    }
+    _audioStateSubscription = _audioService.audioState.listen(
+          (audioState) {
+        switch (audioState) {
+          case AudioState.recording:
+            _updateState(RecognitionState.recording);
+            break;
+          case AudioState.waitingNext:
+            _updateState(RecognitionState.waiting);
+            break;
+          case AudioState.stopped:
+            if (_audioService.isSessionComplete) {
+              _updateState(RecognitionState.completed);
+            } else {
+              _updateState(RecognitionState.idle);
+            }
+            break;
+          case AudioState.paused:
+            _updateState(RecognitionState.waiting);
+            break;
+        }
+      },
+      onError: (error) {
+        debugPrint('Errore nel monitoraggio dello stato audio: $error');
+        _handleError('Errore nel monitoraggio dello stato audio: $error');
+      },
+    );
+  }
+
+  Future<void> initialize(BuildContext context) async {
+    await _executeExclusive(() async {
+      if (_state == RecognitionState.initializing) return;
+
+      _updateState(RecognitionState.initializing);
+      debugPrint('SpeechRecognitionService: Inizializzazione in corso...');
+
+      try {
+        await _voskService.initialize(context: context);
+        await _audioService.initialize();
+
+        _updateState(RecognitionState.idle);
+        debugPrint('SpeechRecognitionService: Inizializzazione completata');
+      } catch (e) {
+        _handleError('Errore nell\'inizializzazione: $e');
+        _updateState(RecognitionState.error);
+        rethrow;
+      }
+    });
   }
 
   Future<void> startRecognition(String targetText) async {
-    debugPrint('SpeechRecognitionService: startRecognition() chiamato per target: $targetText');
+    await _executeExclusive(() async {
+      debugPrint('SpeechRecognitionService: Avvio riconoscimento per: $targetText');
 
-    if (_state != RecognitionState.idle && _state != RecognitionState.completed) {
-      debugPrint('SpeechRecognitionService: Stato non valido per avviare il riconoscimento: $_state');
-      return;
-    }
-
-    try {
-      _currentTargetText = targetText;
-      _sessionStartTime = DateTime.now();
-      _hasDetectedSpeech = false;
-      _updateState(RecognitionState.recording);
-
-      final recordingPath = await _audioService.startRecording();
-      if (recordingPath.isEmpty) {
-        throw Exception('Percorso registrazione non valido');
-      }
-
-      debugPrint('SpeechRecognitionService: Registrazione avviata.');
-    } catch (e) {
-      _handleError('Errore nell\'avvio del riconoscimento: $e');
-    }
-  }
-
-  Future<void> stopRecognition() async {
-    debugPrint('SpeechRecognitionService: stopRecognition() chiamato.');
-
-    if (_state != RecognitionState.recording) {
-      debugPrint('SpeechRecognitionService: Stato non valido per fermare il riconoscimento: $_state');
-      return;
-    }
-
-    try {
-      _isProcessing = true;
-      _updateState(RecognitionState.processing);
-
-      final audioPath = await _audioService.stopRecording();
-      debugPrint('SpeechRecognitionService: Registrazione fermata. File audio: $audioPath');
-
-      if (!_hasDetectedSpeech) {
-        debugPrint('SpeechRecognitionService: Nessun parlato rilevato durante la registrazione');
-        _handleNoSpeechDetected();
+      if (_state != RecognitionState.idle && _state != RecognitionState.completed) {
+        debugPrint('SpeechRecognitionService: Stato non valido per avvio: $_state');
         return;
       }
 
-      if (audioPath.isNotEmpty && _currentTargetText != null) {
-        final result = await _voskService.startRecognition(_currentTargetText!);
-        debugPrint('SpeechRecognitionService: Risultato ottenuto: ${result.text}');
-        debugPrint('SpeechRecognitionService: Similarità: ${result.similarity}');
+      try {
+        _currentTargetText = targetText;
+        _sessionStartTime = DateTime.now();
+        _hasDetectedSpeech = false;
+        _isProcessing = false;
 
-        _resultController.add(result);
-        _currentSessionResults.add(result);
+        await _audioService.startRecording();
 
-        if (_audioService.isSessionComplete) {
-          _updateState(RecognitionState.completed);
-        } else {
-          _updateState(RecognitionState.waiting);
-        }
-      } else {
-        throw Exception('File audio vuoto o testo target non impostato');
+        _updateState(RecognitionState.recording);
+        debugPrint('SpeechRecognitionService: Registrazione avviata');
+      } catch (e) {
+        _handleError('Errore nell\'avvio del riconoscimento: $e');
+        _updateState(RecognitionState.error);
       }
-    } catch (e) {
-      _handleError('Errore nello stop del riconoscimento: $e');
-    } finally {
-      _isProcessing = false;
-    }
+    });
+  }
+
+  Future<void> stopRecognition() async {
+    await _executeExclusive(() async {
+      debugPrint('SpeechRecognitionService: Stop riconoscimento');
+
+      if (_state != RecognitionState.recording) {
+        debugPrint('SpeechRecognitionService: Stato non valido per stop: $_state');
+        return;
+      }
+
+      try {
+        _isProcessing = true;
+        _updateState(RecognitionState.processing);
+
+        final audioPath = await _audioService.stopRecording();
+        debugPrint('SpeechRecognitionService: Registrazione fermata: $audioPath');
+
+        if (!_hasDetectedSpeech) {
+          debugPrint('SpeechRecognitionService: Nessun parlato rilevato');
+          _handleNoSpeechDetected();
+          return;
+        }
+
+        if (audioPath.isNotEmpty && _currentTargetText != null) {
+          final result = await _voskService.startRecognition(_currentTargetText!);
+          debugPrint('SpeechRecognitionService: Risultato ottenuto: ${result.text}');
+          debugPrint('SpeechRecognitionService: Similarità: ${result.similarity}');
+
+          _resultController.add(result);
+          _currentSessionResults.add(result);
+
+          if (_audioService.isSessionComplete) {
+            _updateState(RecognitionState.completed);
+          } else {
+            _updateState(RecognitionState.waiting);
+          }
+        } else {
+          throw Exception('File audio o testo target non validi');
+        }
+      } catch (e) {
+        _handleError('Errore nello stop del riconoscimento: $e');
+        _updateState(RecognitionState.error);
+      } finally {
+        _isProcessing = false;
+      }
+    });
   }
 
   void _handleNoSpeechDetected() {
+    debugPrint('SpeechRecognitionService: Gestione assenza parlato');
+
     final emptyResult = RecognitionResult(
       text: '',
       confidence: 0.0,
@@ -167,20 +214,22 @@ class SpeechRecognitionService {
   }
 
   Future<void> reset() async {
-    debugPrint('SpeechRecognitionService: Reset chiamato.');
-    _currentTargetText = null;
-    _sessionStartTime = null;
-    _currentSessionResults.clear();
-    _currentAttempt = 0;
-    _isProcessing = false;
-    _hasDetectedSpeech = false;
+    await _executeExclusive(() async {
+      debugPrint('SpeechRecognitionService: Reset chiamato');
 
-    // Reinizializza i servizi
-    await _audioService.dispose();
-    await _audioService.initialize();
+      _currentTargetText = null;
+      _sessionStartTime = null;
+      _currentSessionResults.clear();
+      _currentAttempt = 0;
+      _isProcessing = false;
+      _hasDetectedSpeech = false;
 
-    _updateState(RecognitionState.idle);
-    debugPrint('SpeechRecognitionService: Reset completato.');
+      await _audioService.dispose();
+      await _audioService.initialize();
+
+      _updateState(RecognitionState.idle);
+      debugPrint('SpeechRecognitionService: Reset completato');
+    });
   }
 
   void _updateState(RecognitionState newState) {
@@ -192,12 +241,33 @@ class SpeechRecognitionService {
   void _handleError(String error) {
     debugPrint('SpeechRecognitionService Error: $error');
     _errorController.add(error);
-    _updateState(RecognitionState.error);
+  }
+
+  Future<void> _executeExclusive(Future<void> Function() operation) async {
+    if (_operationInProgress) {
+      final completer = Completer<void>();
+      _operationQueue.add(completer);
+      await completer.future;
+    }
+
+    _operationInProgress = true;
+    try {
+      await operation();
+    } finally {
+      _operationInProgress = false;
+      if (_operationQueue.isNotEmpty) {
+        final nextOperation = _operationQueue.removeAt(0);
+        nextOperation.complete();
+      }
+    }
   }
 
   Future<void> dispose() async {
-    debugPrint('SpeechRecognitionService: Dispose chiamato.');
+    debugPrint('SpeechRecognitionService: Dispose chiamato');
+
     await _volumeSubscription?.cancel();
+    await _audioStateSubscription?.cancel();
+
     await Future.wait([
       _stateController.close(),
       _volumeController.close(),
@@ -205,8 +275,9 @@ class SpeechRecognitionService {
       _progressController.close(),
       _errorController.close(),
     ]);
+
     await _audioService.dispose();
-    debugPrint('SpeechRecognitionService: Dispose completato.');
+    debugPrint('SpeechRecognitionService: Dispose completato');
   }
 
   // Getters pubblici
@@ -220,4 +291,5 @@ class SpeechRecognitionService {
   String? get currentTargetText => _currentTargetText;
   int get currentAttempt => _currentAttempt;
   List<RecognitionResult> get currentResults => List.unmodifiable(_currentSessionResults);
+  AudioService get audioService => _audioService;
 }
