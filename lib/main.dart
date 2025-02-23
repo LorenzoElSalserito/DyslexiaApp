@@ -19,6 +19,7 @@ import 'screens/profile_creation_screen.dart';
 import 'screens/store_screen.dart';
 import 'screens/reading_exercise_screen.dart';
 import 'config/theme_config.dart';
+import 'dart:io' show Platform;
 
 /// Punto di ingresso principale dell'applicazione.
 void main() async {

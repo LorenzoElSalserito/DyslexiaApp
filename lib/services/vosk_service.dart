@@ -14,6 +14,7 @@ import '../models/recognition_result.dart';
 import '../config/app_config.dart';
 import 'permission_service.dart';
 import 'audio_service.dart';
+import '../utils/linux_permission.dart';
 
 /// Servizio per il riconoscimento vocale utilizzando VOSK.
 /// Gestisce il caricamento del modello, la preparazione dei dati audio
@@ -132,20 +133,26 @@ class VoskService {
   Future<void> _initializeWithRetry({required BuildContext context}) async {
     _logEvent('Inizio inizializzazione con retry');
 
-    // Verifica permessi
-    if (Platform.isAndroid || Platform.isIOS) {
-      bool hasPermissions = await _permissionService.checkAllPermissions();
-      if (!hasPermissions) {
-        hasPermissions =
-        await _permissionService.requestAllPermissions(context);
+    // Verifica permessi solo su piattaforme non Linux
+    if (!Platform.isLinux) {
+      // Verifica permessi
+      if (Platform.isAndroid || Platform.isIOS) {
+        bool hasPermissions = await _permissionService.checkAllPermissions();
         if (!hasPermissions) {
-          throw Exception('Permessi necessari non concessi');
+          hasPermissions = await _permissionService.requestAllPermissions(context);
+          if (!hasPermissions) {
+            throw Exception('Permessi necessari non concessi');
+          }
         }
       }
     } else {
-      // Su Linux, macOS e Windows di solito non servono
-      // richieste di permessi microfono con plugin mobile.
-      debugPrint('VoskService: Nessuna richiesta permessi su ${Platform.operatingSystem}');
+      debugPrint('VoskService: Verifica permessi su Linux');
+      final hasAudioAccess = await LinuxPermissions.checkMicrophoneAccess();
+      final hasStorageAccess = await LinuxPermissions.checkStorageAccess();
+
+      if (!hasAudioAccess || !hasStorageAccess) {
+        throw Exception('Permessi Linux non disponibili: Audio=$hasAudioAccess, Storage=$hasStorageAccess');
+      }
     }
 
     // Prepara il modello
@@ -164,7 +171,15 @@ class VoskService {
       model: _model!,
       sampleRate: AppConfig.sampleRate,
     );
-    _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+
+    // Su Linux, inizializza il servizio di riconoscimento direttamente
+    if (Platform.isLinux) {
+      _permissionService.requestAllPermissions(context);
+      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+    } else {
+      _permissionService.requestAllPermissions(context);
+      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+    }
 
     // Configura il riconoscitore
     if (_speechRecognizer != null) {

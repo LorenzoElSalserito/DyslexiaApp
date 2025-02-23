@@ -56,8 +56,9 @@ dev_dependencies:
   build_runner: ^2.4.7
 
 dependency_overrides:
+  permission_handler: '11.3.1'
+  permission_handler_platform_interface: '^4.2.0'
   web: ^1.0.0
-  permission_handler: ^11.3.1
 
 # Configurazione icone applicazione
 flutter_icons:

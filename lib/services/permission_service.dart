@@ -1,82 +1,128 @@
+// lib/services/permission_service.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
+
+/// Importa permission_handler solo su piattaforme non Linux
+import 'package:permission_handler/permission_handler.dart'
+if (dart.library.io) 'package:permission_handler/permission_handler.dart'
+if (dart.library.html) 'package:permission_handler/permission_handler.dart';
 
 /// Servizio centralizzato per la gestione dei permessi dell'applicazione.
-/// Gestisce i permessi in modo diverso per piattaforme mobile e desktop.
+/// Gestisce i permessi in modo diverso per ogni piattaforma supportata:
+/// - Android/iOS: Usa permission_handler
+/// - Linux: Usa controlli nativi del filesystem
+/// - Web: Usa le API del browser
+/// - Windows/macOS: Usa permission_handler
 class PermissionService {
+  // Singleton pattern
   static final PermissionService _instance = PermissionService._internal();
   factory PermissionService() => _instance;
 
+  // Stato interno e logging
   final List<String> _permissionLogs = [];
+  bool _isInitialized = false;
 
   PermissionService._internal() {
     _logPermissionEvent('PermissionService inizializzato');
   }
 
-  /// Verifica se la piattaforma corrente richiede la gestione dei permessi.
-  /// In questo caso, solo Android o iOS.
+  /// Determina se la piattaforma richiede gestione esplicita dei permessi
   bool get _requiresPermissionHandling {
-    return Platform.isAndroid || Platform.isIOS;
+    return Platform.isAndroid || Platform.isIOS || Platform.isWindows || Platform.isMacOS;
   }
 
-  /// Richiede tutti i permessi necessari per l'applicazione (solo Android/iOS).
+  /// Verifica se siamo su Linux
+  bool get _isLinux => Platform.isLinux;
+
+  /// Richiede tutti i permessi necessari per l'applicazione
   Future<bool> requestAllPermissions(BuildContext context) async {
     _logPermissionEvent('Inizio richiesta permessi');
 
-    // Su desktop (Linux, macOS, Windows) e altre piattaforme, i permessi sono
-    // gestiti dal sistema operativo o non necessari. Quindi si esce subito.
-    if (!_requiresPermissionHandling) {
-      _logPermissionEvent('Piattaforma non mobile, skip richiesta permessi');
-      return true;
-    }
-
     try {
-      // Permessi da richiedere su Android/iOS (adatta se ti servono altri).
+      if (_isLinux) {
+        return await _handleLinuxPermissions();
+      } else if (!_requiresPermissionHandling) {
+        _logPermissionEvent('Piattaforma non gestita, assumo permessi OK');
+        return true;
+      }
+
+      // Lista dei permessi da richiedere
       final permissions = <Permission>[
         Permission.microphone,
         Permission.storage,
       ];
 
-      _logPermissionEvent('Verifica permessi su piattaforma mobile');
+      _logPermissionEvent('Verifica permessi su ${Platform.operatingSystem}');
 
-      // Controlla uno per uno lo stato dei permessi e, se negati, richiedili.
+      // Richiedi ogni permesso necessario
       for (final permission in permissions) {
-        final status = await permission.status;
-        _logPermissionEvent('Stato corrente $permission: $status');
-
-        if (status.isDenied) {
-          _logPermissionEvent('Richiesta permesso $permission');
-          final result = await permission.request();
-          _logPermissionEvent('Risultato richiesta: $result');
-
-          // Se l’utente ha negato in modo permanente, mostriamo un dialog
-          // con l’opzione di aprire le impostazioni.
-          if (result.isPermanentlyDenied && context.mounted) {
-            _logPermissionEvent('Permesso negato permanentemente per $permission');
-            await _showPermissionDialog(context, permission);
-          }
-        }
+        await _handlePermissionRequest(context, permission);
       }
 
-      // Dopo la richiesta, controlliamo se tutti i permessi sono ora concessi.
+      // Verifica finale
       final allGranted = await checkAllPermissions();
       _logPermissionEvent('Verifica finale permessi: ${allGranted ? 'OK' : 'NON OK'}');
-
       return allGranted;
+
     } catch (e) {
       _logPermissionEvent('Errore nella richiesta permessi: $e');
       return false;
     }
   }
 
-  /// Verifica lo stato di tutti i permessi necessari (solo Android/iOS).
+  /// Gestisce la richiesta di un singolo permesso
+  Future<void> _handlePermissionRequest(BuildContext context, Permission permission) async {
+    final status = await permission.status;
+    _logPermissionEvent('Stato corrente $permission: $status');
+
+    if (status.isDenied) {
+      _logPermissionEvent('Richiesta permesso $permission');
+      final result = await permission.request();
+      _logPermissionEvent('Risultato richiesta: $result');
+
+      if (result.isPermanentlyDenied && context.mounted) {
+        _logPermissionEvent('Permesso negato permanentemente per $permission');
+        await _showPermissionDialog(context, permission);
+      }
+    }
+  }
+
+  /// Gestisce i permessi su Linux usando controlli nativi
+  Future<bool> _handleLinuxPermissions() async {
+    try {
+      // Verifica accesso al microfono
+      final micDevice = File('/dev/snd/pcmC0D0c');
+      final micAccess = await micDevice.exists() &&
+          await micDevice.stat().then((stat) =>
+          (stat.mode & 0x4) != 0);
+
+      // Verifica accesso allo storage
+      final homeDir = Directory(Platform.environment['HOME'] ?? '');
+      final storageAccess = await homeDir.exists() &&
+          await homeDir.stat().then((stat) =>
+          (stat.mode & 0x2) != 0);
+
+      _logPermissionEvent('Linux - Microfono: $micAccess, Storage: $storageAccess');
+      return micAccess && storageAccess;
+
+    } catch (e) {
+      _logPermissionEvent('Errore nei permessi Linux: $e');
+      return false;
+    }
+  }
+
+  /// Verifica tutti i permessi necessari
   Future<bool> checkAllPermissions() async {
     _logPermissionEvent('Verifica stato permessi');
 
-    // Su desktop e altre piattaforme, assumiamo che non ci sia nulla da gestire.
+    if (_isLinux) {
+      return _handleLinuxPermissions();
+    }
+
     if (!_requiresPermissionHandling) {
-      _logPermissionEvent('Piattaforma non mobile, permessi gestiti dal sistema');
+      _logPermissionEvent('Piattaforma non gestita, permessi OK');
       return true;
     }
 
@@ -94,34 +140,14 @@ class PermissionService {
     }
   }
 
-  /// Mostra un dialogo informativo se un permesso è stato negato permanentemente.
+  /// Mostra un dialogo quando un permesso viene negato permanentemente
   Future<void> _showPermissionDialog(BuildContext context, Permission permission) async {
-    // Su piattaforme non mobile, non facciamo nulla.
-    if (!_requiresPermissionHandling) return;
+    if (_isLinux) return;  // Non necessario su Linux
 
     _logPermissionEvent('Mostro dialogo per $permission');
 
-    String permissionName;
-    String explanation;
+    final permissionDetails = _getPermissionDetails(permission);
 
-    switch (permission) {
-      case Permission.microphone:
-        permissionName = 'Microfono';
-        explanation = 'Il microfono è necessario per il riconoscimento vocale '
-            'durante gli esercizi di lettura.';
-        break;
-      case Permission.storage:
-        permissionName = 'Storage';
-        explanation = 'L\'accesso allo storage è necessario per salvare i '
-            'file di configurazione.';
-        break;
-      default:
-        permissionName = 'Richiesto';
-        explanation = 'Questo permesso è necessario per il corretto '
-            'funzionamento dell\'app.';
-    }
-
-    // Se la pagina è ancora montata, mostriamo il dialogo.
     if (context.mounted) {
       await showDialog<void>(
         context: context,
@@ -129,7 +155,7 @@ class PermissionService {
         builder: (BuildContext dialogContext) {
           return AlertDialog(
             title: Text(
-              'Permesso $permissionName Necessario',
+              'Permesso ${permissionDetails.name} Necessario',
               style: const TextStyle(fontFamily: 'OpenDyslexic'),
             ),
             content: Column(
@@ -137,7 +163,7 @@ class PermissionService {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  explanation,
+                  permissionDetails.explanation,
                   style: const TextStyle(fontFamily: 'OpenDyslexic'),
                 ),
                 const SizedBox(height: 16),
@@ -154,7 +180,9 @@ class PermissionService {
               TextButton(
                 onPressed: () async {
                   _logPermissionEvent('Apertura impostazioni');
-                  await openAppSettings();
+                  if (!_isLinux) {
+                    await openAppSettings();
+                  }
                   if (dialogContext.mounted) {
                     Navigator.of(dialogContext).pop();
                   }
@@ -171,25 +199,60 @@ class PermissionService {
     }
   }
 
-  /// Registra un evento nel log dei permessi (con timestamp).
+  /// Ottiene i dettagli per un tipo di permesso
+  _PermissionDetails _getPermissionDetails(Permission permission) {
+    switch (permission) {
+      case Permission.microphone:
+        return _PermissionDetails(
+            name: 'Microfono',
+            explanation: 'Il microfono è necessario per il riconoscimento vocale '
+                'durante gli esercizi di lettura.'
+        );
+      case Permission.storage:
+        return _PermissionDetails(
+            name: 'Storage',
+            explanation: 'L\'accesso allo storage è necessario per salvare i '
+                'file di configurazione.'
+        );
+      default:
+        return _PermissionDetails(
+            name: 'Richiesto',
+            explanation: 'Questo permesso è necessario per il corretto '
+                'funzionamento dell\'app.'
+        );
+    }
+  }
+
+  /// Registra un evento nel log dei permessi
   void _logPermissionEvent(String event) {
     final timestamp = DateTime.now().toIso8601String();
     final logEntry = '[$timestamp] $event';
     debugPrint('PermissionService: $logEntry');
     _permissionLogs.add(logEntry);
 
-    // Mantieni la dimensione dei log entro 100 entry.
+    // Mantieni massimo 100 log
     if (_permissionLogs.length > 100) {
       _permissionLogs.removeAt(0);
     }
   }
 
-  /// Restituisce una copia immutabile del log dei permessi.
+  /// Restituisce i log dei permessi
   List<String> getPermissionLogs() => List.unmodifiable(_permissionLogs);
 
-  /// Pulisce i log degli eventi.
+  /// Pulisce i log
   void clearPermissionLogs() {
     _permissionLogs.clear();
     _logPermissionEvent('Log puliti');
   }
+}
+
+/// Classe interna per i dettagli dei permessi
+class _PermissionDetails {
+  final String name;
+  final String explanation;
+
+  const _PermissionDetails({
+    required this.name,
+    required this.explanation,
+  });
 }
