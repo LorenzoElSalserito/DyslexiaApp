@@ -12,9 +12,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:vosk_flutter/vosk_flutter.dart';
 import '../models/recognition_result.dart';
 import '../config/app_config.dart';
+import '../utils/permission_handler.dart';
 import 'permission_service.dart';
 import 'audio_service.dart';
-import '../utils/linux_permission.dart';
+import '../utils/desktop_permission.dart';
 
 /// Servizio per il riconoscimento vocale utilizzando VOSK.
 /// Gestisce il caricamento del modello, la preparazione dei dati audio
@@ -133,25 +134,28 @@ class VoskService {
   Future<void> _initializeWithRetry({required BuildContext context}) async {
     _logEvent('Inizio inizializzazione con retry');
 
-    // Verifica permessi solo su piattaforme non Linux
-    if (!Platform.isLinux) {
-      // Verifica permessi
-      if (Platform.isAndroid || Platform.isIOS) {
-        bool hasPermissions = await _permissionService.checkAllPermissions();
+    // Distinzione piattaforme: su Android/iOS -> permission_handler
+    // su Linux/Windows/macOS -> LinuxPermissions
+    if (Platform.isAndroid || Platform.isIOS) {
+      // Verifica permessi con _permissionService (solo su Android/iOS)
+      bool hasPermissions = await _permissionService.checkAllPermissions();
+      if (!hasPermissions) {
+        hasPermissions = await _permissionService.requestAllPermissions(context);
         if (!hasPermissions) {
-          hasPermissions = await _permissionService.requestAllPermissions(context);
-          if (!hasPermissions) {
-            throw Exception('Permessi necessari non concessi');
-          }
+          throw Exception('Permessi necessari non concessi su Android/iOS');
         }
       }
     } else {
-      debugPrint('VoskService: Verifica permessi su Linux');
-      final hasAudioAccess = await LinuxPermissions.checkMicrophoneAccess();
-      final hasStorageAccess = await LinuxPermissions.checkStorageAccess();
+      // Siamo su Linux, macOS o Windows: Verifica permessi desktop
+      debugPrint('VoskService: Verifica permessi su Linux/Windows/macOS');
+      final hasAudioAccess = await DesktopPermission.checkMicrophoneAccess();
+      final hasStorageAccess = await DesktopPermission.checkStorageAccess();
 
       if (!hasAudioAccess || !hasStorageAccess) {
-        throw Exception('Permessi Linux non disponibili: Audio=$hasAudioAccess, Storage=$hasStorageAccess');
+        throw Exception(
+          'Permessi non disponibili su Desktop: '
+              'Audio=$hasAudioAccess, Storage=$hasStorageAccess',
+        );
       }
     }
 
@@ -159,11 +163,12 @@ class VoskService {
     _modelPath = await _findModelPath();
     _logEvent('Percorso del modello impostato: $_modelPath');
 
+    // Verifica integrità del modello
     if (!await _verifyModelIntegrity(_modelPath)) {
       throw Exception('Integrità del modello non verificata in $_modelPath');
     }
 
-    // Inizializza componenti VOSK
+    // Inizializza componenti VOSK (comune a tutte le piattaforme)
     _logEvent('Inizializzazione componenti VOSK');
     _recognizer = VoskFlutterPlugin.instance();
     _model = await _recognizer!.createModel(_modelPath);
@@ -172,16 +177,30 @@ class VoskService {
       sampleRate: AppConfig.sampleRate,
     );
 
-    // Su Linux, inizializza il servizio di riconoscimento direttamente
-    if (Platform.isLinux) {
-      _permissionService.requestAllPermissions(context);
-      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+    // **Inizializzazione condizionale SpeechService per Android/iOS**
+    if (Platform.isAndroid || Platform.isIOS) {
+      // **VERIFICA ESPLICITA DEL PERMESSO MICROFONO SUBITO PRIMA DI initSpeechService (Mobile)**
+      bool microphonePermissionGranted = await PermissionsHandler.checkMicrophonePermission();
+      if (!microphonePermissionGranted) {
+        _logEvent("Permesso microfono NON concesso prima di initSpeechService!");
+        throw Exception("Permesso microfono non concesso, impossibile inizializzare SpeechService.");
+      }
+
+      if (microphonePermissionGranted) {
+        _logEvent('Initializing SpeechService...');
+        _speechService = await _recognizer!.initSpeechService(_speechRecognizer!); // Problematica su Desktop
+      } else {
+        _logEvent("Inizializzazione di SpeechService saltata (permesso negato su mobile).");
+        _speechService = null; // Imposta a null o gestisci diversamente se necessario
+      }
     } else {
-      _permissionService.requestAllPermissions(context);
-      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+      // **Salta initSpeechService su Desktop**
+      _logEvent("Salta initSpeechService su Desktop platforms.");
+      _speechService = null; // Imposta a null su Desktop
     }
 
-    // Configura il riconoscitore
+
+    // Configura il riconoscitore (comune a tutte le piattaforme)
     if (_speechRecognizer != null) {
       await _speechRecognizer!.setMaxAlternatives(3);
       await _speechRecognizer!.setPartialWords(partialWords: true);
@@ -191,6 +210,7 @@ class VoskService {
     _isInitialized = true;
     _logEvent('Inizializzazione completata con successo');
   }
+
 
   /// Trova il percorso del modello VOSK
   Future<String> _findModelPath() async {

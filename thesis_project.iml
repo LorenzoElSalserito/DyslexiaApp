@@ -30,6 +30,9 @@
       <excludeFolder url="file://$MODULE_DIR$/no_op_permission_handler_linux_backup/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/no_op_permission_handler_linux_backup/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/no_op_permission_handler_linux_backup/build" />
+      <excludeFolder url="file://$MODULE_DIR$/no_op_permission_handler_linux/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/no_op_permission_handler_linux/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/no_op_permission_handler_linux/build" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Dart SDK" level="project" />

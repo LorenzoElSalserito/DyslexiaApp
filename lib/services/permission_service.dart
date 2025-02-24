@@ -30,7 +30,7 @@ class PermissionService {
 
   /// Determina se la piattaforma richiede gestione esplicita dei permessi
   bool get _requiresPermissionHandling {
-    return Platform.isAndroid || Platform.isIOS || Platform.isWindows || Platform.isMacOS;
+    return Platform.isAndroid || Platform.isIOS || Platform.isWindows || Platform.isMacOS || Platform.isLinux;
   }
 
   /// Verifica se siamo su Linux

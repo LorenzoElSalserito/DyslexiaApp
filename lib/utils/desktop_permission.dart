@@ -3,8 +3,8 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
-/// Gestisce i permessi in modo nativo su Linux
-class LinuxPermissions {
+/// Gestisce i permessi in modo nativo su Desktop
+class DesktopPermission {
   /// Verifica se il microfono è disponibile
   static Future<bool> checkMicrophoneAccess() async {
     try {

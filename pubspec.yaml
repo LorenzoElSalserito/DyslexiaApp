@@ -58,6 +58,7 @@ dev_dependencies:
 dependency_overrides:
   permission_handler: '11.3.1'
   permission_handler_platform_interface: '^4.2.0'
+
   web: ^1.0.0
 
 # Configurazione icone applicazione
