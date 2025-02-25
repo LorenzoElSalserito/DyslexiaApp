@@ -1,3 +1,5 @@
+// Modifiche da applicare al file lib/screens/reading_exercise_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -46,41 +48,130 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
   String _statusMessage = '';
 
+  // Aggiungiamo un timer per gestire eventuali timeout
+  Timer? _initTimeoutTimer;
+  int _initAttempts = 0;
+  final int _maxInitAttempts = 3;
+
   @override
   void initState() {
     super.initState();
     _exerciseManager = Provider.of<ExerciseManager>(context, listen: false);
     _speechService = SpeechRecognitionService();
-    _initializeSession();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Inizializziamo qui per avere accesso al BuildContext
+    if (!_isInitialized) {
+      _initializeSession();
+    }
   }
 
   Future<void> _initializeSession() async {
     if (!mounted) return;
+
+    setState(() {
+      _downloadStatusMessage = "Inizializzazione in corso...";
+      _initAttempts++;
+    });
+
+    // Impostazione di un timeout per evitare blocchi indefiniti
+    _initTimeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted && !_isInitialized) {
+        // Se siamo ancora in attesa dopo 15 secondi
+        if (_initAttempts < _maxInitAttempts) {
+          debugPrint("Timeout nell'inizializzazione. Nuovo tentativo ${_initAttempts + 1}/$_maxInitAttempts");
+          _initializeSession(); // Ritenta
+        } else {
+          setState(() {
+            _errorMessage = "Timeout nell'inizializzazione. Riprova più tardi.";
+            _downloadStatusMessage = "";
+          });
+        }
+      }
+    });
+
     try {
       // Richiedi i permessi di storage PRIMA di inizializzare i servizi
-      bool storageGranted = await PermissionsHandler.requestStoragePermission();
+      bool storageGranted = await PermissionsHandler.requestStoragePermission()
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        debugPrint("Timeout nella richiesta permessi di storage");
+        return false;
+      });
+
       if (!storageGranted) {
         throw Exception("Permesso di scrittura/lettura su disco non concesso.");
       }
       debugPrint("Permesso di storage concesso.");
 
       // Inizializza il servizio di riconoscimento vocale
-      await _speechService.initialize(context);
-      // Avvia la nuova sessione di esercizi
-      await _exerciseManager.startNewSession();
+      if (!mounted) return;
+      await _speechService.initialize(context)
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        debugPrint("Timeout nell'inizializzazione del speech service");
+        throw Exception("Timeout nell'inizializzazione del riconoscimento vocale");
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _downloadStatusMessage = "Configurazione del riconoscimento vocale...";
+      });
+
+      // Imposta il contesto nell'ExerciseManager prima di avviare la sessione
+      _exerciseManager.setContext(context);
+
+      // Pausa breve per consentire il completamento dell'inizializzazione
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+      setState(() {
+        _downloadStatusMessage = "Avvio sessione esercizi...";
+      });
+
+      // Avvia la nuova sessione di esercizi con timeout
+      await _exerciseManager.startNewSession()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        debugPrint("Timeout nell'avvio della sessione");
+        throw Exception("Timeout nell'avvio della sessione di esercizi");
+      });
+
       _isSessionStarted = true;
+
+      if (!mounted) return;
+
+      // Ancora una breve pausa prima di caricare il primo esercizio
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
       await _loadNewExercise();
 
-      if (mounted) setState(() => _isInitialized = true);
-      debugPrint('[ReadingExerciseScreen] Sessione inizializzata.');
+      _initTimeoutTimer?.cancel();
+      _initTimeoutTimer = null;
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _downloadStatusMessage = "";
+        });
+        debugPrint('[ReadingExerciseScreen] Sessione inizializzata.');
+      }
 
       _setupSubscriptions();
     } catch (e) {
+      _initTimeoutTimer?.cancel();
+      _initTimeoutTimer = null;
+
       if (!mounted) return;
+
       setState(() {
         _isInitialized = false;
         _errorMessage = 'Errore nell\'inizializzazione: $e';
+        _downloadStatusMessage = "";
       });
+
+      debugPrint('[ReadingExerciseScreen] Errore inizializzazione: $e');
     }
   }
 
@@ -118,23 +209,41 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     if (!mounted) return;
 
     try {
+      setState(() {
+        _isProcessing = true;
+        _downloadStatusMessage = "Caricamento esercizio...";
+      });
+
       // Reset del servizio di riconoscimento prima del nuovo esercizio
       await _speechService.reset();
 
-      final exercise = await _exerciseManager.generateExercise();
+      // Utilizziamo un timeout per evitare blocchi
+      final exercise = await _exerciseManager.generateExercise()
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        debugPrint("Timeout nella generazione dell'esercizio");
+        throw Exception("Timeout nel caricamento dell'esercizio");
+      });
+
       if (!mounted) return;
 
       setState(() {
         _currentWord = exercise.content;
         _isProcessing = false;
         _currentExercise++;
+        _downloadStatusMessage = "";
       });
+
       debugPrint('[ReadingExerciseScreen] Nuovo esercizio caricato: $_currentWord');
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _errorMessage = 'Errore nel caricamento dell\'esercizio: $e';
+        _isProcessing = false;
+        _downloadStatusMessage = "";
       });
+
+      debugPrint('[ReadingExerciseScreen] Errore caricamento: $e');
     }
   }
 
@@ -147,6 +256,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         setState(() {
           _errorMessage = 'Errore nell\'avvio del riconoscimento: $e';
         });
+        debugPrint('[ReadingExerciseScreen] Errore avvio riconoscimento: $e');
       }
     } else if (_speechService.currentState == RecognitionState.recording) {
       try {
@@ -155,6 +265,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         setState(() {
           _errorMessage = 'Errore nello stop del riconoscimento: $e';
         });
+        debugPrint('[ReadingExerciseScreen] Errore stop riconoscimento: $e');
       }
     }
   }
@@ -162,6 +273,10 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   Future<void> _handleRecognitionResult(RecognitionResult result) async {
     if (!mounted) return;
     try {
+      setState(() {
+        _isProcessing = true;
+      });
+
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
       final player = playerManager.currentProfile;
       if (player == null) {
@@ -169,7 +284,11 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       }
 
       final crystalsEarned = await _exerciseManager.processExerciseResult(result);
-      setState(() => _totalCrystals += crystalsEarned);
+      setState(() {
+        _totalCrystals += crystalsEarned;
+        _isProcessing = false;
+      });
+
       debugPrint('[ReadingExerciseScreen] Risultato processato. Cristalli guadagnati: $crystalsEarned');
 
       await _showFeedbackPopup(result, crystalsEarned, player.currentLevel);
@@ -181,15 +300,19 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _errorMessage = 'Errore nell\'elaborazione del risultato: $e';
         _isProcessing = false;
       });
+
+      debugPrint('[ReadingExerciseScreen] Errore elaborazione risultato: $e');
     }
   }
 
   Future<void> _showFeedbackPopup(RecognitionResult result, int crystalsEarned, int level) async {
     if (!mounted) return;
+
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -204,6 +327,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
   Future<void> _showSessionSummary() async {
     if (!mounted) return;
+
     try {
       final overallAccuracy = _exerciseManager.overallAccuracy;
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
@@ -234,6 +358,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
           _currentExercise = 0;
           _totalCrystals = 0;
           _isSessionStarted = false;
+          _isInitialized = false;
         });
         await _initializeSession();
       } else {
@@ -241,14 +366,18 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _errorMessage = 'Errore nel mostrare il riepilogo: $e';
       });
+
+      debugPrint('[ReadingExerciseScreen] Errore mostra riepilogo: $e');
     }
   }
 
   @override
   void dispose() {
+    _initTimeoutTimer?.cancel();
     _volumeSubscription?.cancel();
     _speechStateSubscription?.cancel();
     _resultSubscription?.cancel();
@@ -268,6 +397,22 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
             'OpenDSA: Reading',
             style: TextStyle(fontFamily: 'OpenDyslexic'),
           ),
+          // Aggiungiamo un pulsante per riprovare
+          actions: [
+            if (_errorMessage != null)
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  setState(() {
+                    _errorMessage = null;
+                    _downloadStatusMessage = "Inizializzazione in corso...";
+                    _initAttempts = 0;
+                  });
+                  _initializeSession();
+                },
+                tooltip: 'Riprova',
+              ),
+          ],
         ),
         body: Center(
           child: Column(
@@ -304,15 +449,47 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                     ),
                   ),
                 ),
-              ] else if (_errorMessage != null)
+              ] else if (_errorMessage != null) ...[
+                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                const SizedBox(height: 16),
                 Text(
                   _errorMessage!,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.red[700],
                     fontFamily: 'OpenDyslexic',
                   ),
-                )
-              else
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _errorMessage = null;
+                      _downloadStatusMessage = "Inizializzazione in corso...";
+                      _initAttempts = 0;
+                    });
+                    _initializeSession();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Riprova',
+                    style: TextStyle(fontFamily: 'OpenDyslexic'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text(
+                    'Torna al menu',
+                    style: TextStyle(fontFamily: 'OpenDyslexic'),
+                  ),
+                ),
+              ] else
                 const CircularProgressIndicator(),
             ],
           ),

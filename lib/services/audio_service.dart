@@ -68,7 +68,12 @@ class AudioService {
 
       // Verifica i permessi di registrazione (solo per Android/iOS)
       if (Platform.isAndroid || Platform.isIOS) {
-        final hasPermission = await _audioRecorder.hasPermission();
+        final hasPermission = await _audioRecorder.hasPermission()
+            .timeout(const Duration(seconds: 3), onTimeout: () {
+          debugPrint('AudioService: Timeout nella verifica dei permessi');
+          return false;
+        });
+
         if (!hasPermission) {
           throw Exception('Permessi audio non concessi');
         }
@@ -79,12 +84,22 @@ class AudioService {
       }
 
       // Prepara la directory per le registrazioni
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final recordingsDir = Directory(p.join(appDocDir.path, 'OpenDSA_recordings'));
+      final appDocDir = await getApplicationDocumentsDirectory()
+          .timeout(const Duration(seconds: 3), onTimeout: () {
+        debugPrint('AudioService: Timeout nell\'ottenimento della directory');
+        throw Exception('Timeout nell\'accesso al filesystem');
+      });
+
+      final recordingsDir = Directory('${appDocDir.path}/OpenDSA_recordings');
       if (!await recordingsDir.exists()) {
-        await recordingsDir.create(recursive: true);
+        await recordingsDir.create(recursive: true)
+            .timeout(const Duration(seconds: 3), onTimeout: () {
+          debugPrint('AudioService: Timeout nella creazione della directory');
+          throw Exception('Timeout nella creazione della directory');
+        });
       }
-      _recordingPath = p.join(recordingsDir.path, 'recording.wav');
+
+      _recordingPath = '${recordingsDir.path}/recording.wav';
 
       _isInitialized = true;
       _updateState(AudioState.stopped);
@@ -98,8 +113,17 @@ class AudioService {
   /// Avvia una nuova registrazione audio
   Future<String> startRecording() async {
     if (!_isInitialized) {
-      throw Exception('AudioService non inizializzato. Chiama initialize() prima di registrare.');
+      try {
+        await initialize().timeout(const Duration(seconds: 3), onTimeout: () {
+          debugPrint('AudioService: Timeout nell\'inizializzazione');
+          return;
+        });
+      } catch (e) {
+        debugPrint('AudioService: Errore nell\'inizializzazione: $e');
+        return '';
+      }
     }
+
     if (_isRecording) {
       // Se stiamo già registrando, restituiamo semplicemente il path
       return _recordingPath;
@@ -109,14 +133,27 @@ class AudioService {
       _currentAttempt++;
       _progressController.add(_currentAttempt);
 
-      // Configura e avvia la registrazione
+      try {
+        // Verificare se la registrazione precedente è ancora attiva e fermarla
+        if (await _audioRecorder.isRecording()) {
+          await stopRecording();
+        }
+      } catch (e) {
+        // Ignora gli errori qui, potrebbe non esserci una registrazione attiva
+        debugPrint('AudioService: Errore durante la verifica/stop della registrazione precedente: $e');
+      }
+
+      // Configura e avvia la registrazione con timeout
       await _audioRecorder.start(
         encoder: AudioEncoder.wav,
         bitRate: _defaultBitRate,
         samplingRate: _defaultSampleRate,
         numChannels: _defaultNumChannels,
         path: _recordingPath,
-      );
+      ).timeout(const Duration(seconds: 3), onTimeout: () {
+        debugPrint('AudioService: Timeout nell\'avvio della registrazione');
+        return;
+      });
 
       _isRecording = true;
       _updateState(AudioState.recording);
@@ -126,7 +163,8 @@ class AudioService {
       return _recordingPath;
     } catch (e) {
       debugPrint('AudioService: Errore nell\'avvio della registrazione: $e');
-      rethrow;
+      // Ritorniamo un path vuoto per segnalare il fallimento
+      return '';
     }
   }
 
@@ -139,7 +177,26 @@ class AudioService {
 
     try {
       _stopVolumeMonitoring();
-      await _audioRecorder.stop();
+
+      // Gestione degli errori migliorata per le piattaforme Linux
+      try {
+        await _audioRecorder.stop().timeout(const Duration(seconds: 3), onTimeout: () {
+          debugPrint('AudioService: Timeout nello stop della registrazione');
+          return null;
+        });
+      } catch (e) {
+        // Su Linux, potrebbe esserci un problema con fmedia, ma possiamo continuare
+        debugPrint('AudioService: Errore nella chiamata a stop, ma continuiamo: $e');
+        // Creare un file vuoto se necessario per evitare errori successivi
+        try {
+          final recordingFile = File(_recordingPath);
+          if (!await recordingFile.exists()) {
+            await recordingFile.writeAsBytes([]);
+          }
+        } catch (fileError) {
+          debugPrint('AudioService: Errore nella creazione del file vuoto: $fileError');
+        }
+      }
 
       _isRecording = false;
       _updateState(AudioState.stopped);
@@ -148,7 +205,9 @@ class AudioService {
       return _recordingPath;
     } catch (e) {
       debugPrint('AudioService: Errore nello stop della registrazione: $e');
-      rethrow;
+      _isRecording = false;
+      _updateState(AudioState.stopped);
+      return '';
     }
   }
 
@@ -167,7 +226,8 @@ class AudioService {
           final volume = (amplitude.current + 160) / 160;
           _volumeController.add(volume.clamp(0.0, 1.0));
         } catch (err) {
-          debugPrint('AudioService: Errore nel monitoraggio del volume: $err');
+          // Ignora errori nel monitoraggio del volume
+          _volumeController.add(0.5); // Valore predefinito se c'è un errore
         }
       },
     );
@@ -183,13 +243,43 @@ class AudioService {
     _stateController.add(newState);
   }
 
+  /// Reimposta lo stato del servizio
+  Future<void> reset() async {
+    try {
+      debugPrint('AudioService: Reset chiamato');
+      if (_isRecording) {
+        try {
+          await stopRecording();
+        } catch (e) {
+          debugPrint('AudioService: Errore nello stop della registrazione durante reset: $e');
+          // Continuiamo anche in caso di errore nel fermare la registrazione
+          _isRecording = false;
+          _updateState(AudioState.stopped);
+        }
+      }
+      _currentAttempt = 0;
+      _progressController.add(_currentAttempt);
+    } catch (e) {
+      debugPrint('AudioService: Errore nel reset: $e');
+    }
+  }
+
   /// Rilascia le risorse
   Future<void> dispose() async {
     if (_isRecording) {
-      await stopRecording();
+      try {
+        await stopRecording();
+      } catch (e) {
+        debugPrint('AudioService: Errore nello stop della registrazione durante dispose: $e');
+      }
     }
 
-    await _audioRecorder.dispose();
+    try {
+      await _audioRecorder.dispose();
+    } catch (e) {
+      debugPrint('AudioService: Errore nel dispose del recorder: $e');
+    }
+
     await _volumeController.close();
     await _stateController.close();
     await _progressController.close();

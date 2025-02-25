@@ -6,6 +6,7 @@ import '../config/app_config.dart';
 import '../services/content_service.dart';
 import '../services/player_manager.dart';
 import 'profile_selection_screen.dart';
+import '../services/ui_error_logger.dart';
 
 class SplashScreenWidget extends StatefulWidget {
   const SplashScreenWidget({Key? key}) : super(key: key);
@@ -27,6 +28,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
 
   Future<void> _initializeApp() async {
     if (!mounted) return;
+    final logger = UIErrorLogger();
 
     setState(() {
       _isLoading = true;
@@ -35,23 +37,28 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
     });
 
     try {
-      final contentService =
-      Provider.of<ContentService>(context, listen: false);
-      final playerManager =
-      Provider.of<PlayerManager>(context, listen: false);
+      logger.logInfo('[SplashScreen] Inizio inizializzazione applicazione');
+
+      final contentService = Provider.of<ContentService>(context, listen: false);
+      final playerManager = Provider.of<PlayerManager>(context, listen: false);
 
       // Fase 1: Inizializzazione dei contenuti del gioco
       setState(() => _loadingText = 'Caricamento contenuti...');
+      logger.logInfo('[SplashScreen] Inizio caricamento contenuti');
       await contentService.initialize();
+      logger.logInfo('[SplashScreen] Contenuti caricati con successo');
 
       // Fase 2: Inizializzazione del sistema di gestione dei profili
       setState(() => _loadingText = 'Caricamento profili...');
+      logger.logInfo('[SplashScreen] Inizio caricamento profili');
       await playerManager.initialize();
+      logger.logInfo('[SplashScreen] Profili caricati con successo');
 
       // Piccola pausa per mostrare l'ultima animazione di caricamento
       await Future.delayed(const Duration(milliseconds: 800));
 
       if (!mounted) return;
+      logger.logInfo('[SplashScreen] Inizializzazione completata, navigazione alla schermata di selezione profilo');
 
       // Naviga alla schermata di selezione profilo
       Navigator.of(context).pushReplacement(
@@ -59,13 +66,13 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
           builder: (context) => const ProfileSelectionScreen(),
         ),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (!mounted) return;
+      logger.logError('[SplashScreen] Errore durante l\'inizializzazione', e, stackTrace);
 
       setState(() {
         _isLoading = false;
-        _errorMessage =
-        'Si è verificato un errore durante il caricamento: $e';
+        _errorMessage = 'Si è verificato un errore durante il caricamento: $e';
       });
     }
   }
@@ -109,7 +116,7 @@ class _SplashScreenWidgetState extends State<SplashScreenWidget> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(16.0),
                                   child: Text(
-                                    'OpenDSA: Reading   Dyslexia Helper App',
+                                    'OpenDSA: Reading App',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       color: Colors.blueGrey,

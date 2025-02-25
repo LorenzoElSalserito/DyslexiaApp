@@ -9,6 +9,7 @@ import 'profile_creation_screen.dart';
 import 'game_screen.dart';
 import '../widgets/adaptive_profile_card.dart';
 import 'dart:math' show min;
+import '../services/ui_error_logger.dart';
 
 class ProfileSelectionScreen extends StatefulWidget {
   const ProfileSelectionScreen({Key? key}) : super(key: key);
@@ -161,23 +162,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          Consumer<PlayerManager>(
-            builder: (context, playerManager, child) {
-              final hasProfiles = playerManager.profiles.isNotEmpty;
-              return Text(
-                hasProfiles
-                    ? 'Seleziona il tuo profilo per iniziare'
-                    : 'Crea il tuo primo profilo',
-                style: TextStyle(
-                  fontSize: screenWidth < 360 ? 14 : AppConfig.subtitle,
-                  color: Colors.white70,
-                  fontFamily: 'OpenDyslexic',
-                ),
-                textAlign: TextAlign.center,
-              );
-            },
-          ),
         ],
       ),
     );
@@ -282,11 +266,15 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   }
 
   Future<void> _selectProfile(Player profile) async {
+    final logger = UIErrorLogger();
+    logger.logInfo('[ProfileSelectionScreen] Selezione profilo: ${profile.id}');
+
     try {
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
       await playerManager.selectProfile(profile);
 
       if (!mounted) return;
+      logger.logInfo('[ProfileSelectionScreen] Profilo selezionato con successo, navigazione alla GameScreen');
 
       // Animazione di uscita
       await _animationController.reverse();
@@ -297,7 +285,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
         context,
         MaterialPageRoute(builder: (context) => const GameScreen()),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      logger.logError('[ProfileSelectionScreen] Errore nella selezione del profilo', e, stackTrace);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -411,7 +401,11 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   }
 
   Future<void> _deleteSelectedProfiles(PlayerManager playerManager) async {
+    final logger = UIErrorLogger();
+
     if (_selectedProfiles.isEmpty) return;
+
+    logger.logInfo('[ProfileSelectionScreen] Tentativo di eliminazione profili: $_selectedProfiles');
 
     // Mostriamo un dialog di conferma
     final shouldDelete = await showDialog<bool>(
@@ -474,9 +468,11 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
 
     try {
       // Effettuiamo l'eliminazione
+      logger.logInfo('[ProfileSelectionScreen] Eliminazione profili confermata: $_selectedProfiles');
       await playerManager.deleteProfiles(List.from(_selectedProfiles));
 
       if (!mounted) return;
+      logger.logInfo('[ProfileSelectionScreen] Profili eliminati con successo');
 
       // Mostriamo un feedback di successo
       ScaffoldMessenger.of(context).showSnackBar(
@@ -494,7 +490,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
         _selectedProfiles.clear();
         _isSelectMode = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      logger.logError('[ProfileSelectionScreen] Errore durante l\'eliminazione dei profili', e, stackTrace);
+
       if (!mounted) return;
 
       // Mostriamo un messaggio di errore

@@ -20,93 +20,137 @@ import 'screens/store_screen.dart';
 import 'screens/reading_exercise_screen.dart';
 import 'config/theme_config.dart';
 import 'dart:io' show Platform;
+import 'services/ui_error_logger.dart';
 
 /// Punto di ingresso principale dell'applicazione.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inizializzazione delle SharedPreferences.
-  final prefs = await SharedPreferences.getInstance();
+  // Inizializza il logger prima di tutto
+  final logger = UIErrorLogger();
+  logger.logInfo('Avvio applicazione OpenDSA: Reading');
 
-  runApp(
-    MultiProvider(
-      providers: [
-        // Provider per la gestione dei profili utente.
-        ChangeNotifierProvider<PlayerManager>(
-          create: (_) => PlayerManager(prefs),
-        ),
-        // Provider per il servizio dei contenuti.
-        ChangeNotifierProvider<ContentService>(
-          create: (_) => ContentService(),
-          lazy: false, // Inizializza subito per caricare i contenuti.
-        ),
-        // Provider per il servizio di analytics.
-        Provider<LearningAnalyticsService>(
-          create: (_) => LearningAnalyticsService(prefs),
-        ),
-        // Provider per il gestore degli esercizi: ora si basa sul PlayerManager.
-        ChangeNotifierProxyProvider2<PlayerManager, ContentService, ExerciseManager>(
-          create: (context) {
-            final pm = context.read<PlayerManager>();
-            // Se non c'è ancora un profilo attivo, creiamo un dummy (ma in seguito verrà aggiornato)
-            return ExerciseManager(
-              player: pm.currentProfile ?? Player(),
-              contentService: context.read<ContentService>(),
-              analyticsService: context.read<LearningAnalyticsService>(),
-            );
-          },
-          update: (context, playerManager, contentService, previous) {
-            final current = playerManager.currentProfile;
-            if (current != null) {
-              previous!.updatePlayer(current);
-            }
-            return previous!;
-          },
-        ),
-        // Provider per il servizio di gioco: ora si basa sul PlayerManager.
-        ChangeNotifierProxyProvider3<PlayerManager, ContentService, ExerciseManager, GameService>(
-          create: (context) {
-            final pm = context.read<PlayerManager>();
-            return GameService(
-              player: pm.currentProfile ?? Player(),
-              contentService: context.read<ContentService>(),
-              exerciseManager: context.read<ExerciseManager>(),
-            );
-          },
-          update: (context, playerManager, contentService, exerciseManager, previous) {
-            final current = playerManager.currentProfile;
-            if (current != null) {
-              previous!.updatePlayer(current);
-            }
-            if (!previous!.isInitialized) {
-              // Avvia l'inizializzazione in una microtask per evitare conflitti durante il build.
-              Future.microtask(() => previous.initialize());
-            }
-            return previous;
-          },
-        ),
-        // Provider per il servizio delle sfide.
-        ChangeNotifierProxyProvider<PlayerManager, ChallengeService>(
-          create: (context) => ChallengeService(
-            prefs,
-            context.read<PlayerManager>().currentProfile ?? Player(),
+  try {
+    // Inizializzazione delle SharedPreferences.
+    final prefs = await SharedPreferences.getInstance();
+
+    runApp(
+      MultiProvider(
+        providers: [
+          // Provider per la gestione dei profili utente.
+          ChangeNotifierProvider<PlayerManager>(
+            create: (_) => PlayerManager(prefs),
           ),
-          update: (context, playerManager, previous) =>
-          previous ?? ChallengeService(prefs, playerManager.currentProfile ?? Player()),
-        ),
-        // Provider per il servizio del negozio.
-        ChangeNotifierProxyProvider<PlayerManager, StoreService>(
-          create: (context) => StoreService(
-            prefs,
-            context.read<PlayerManager>().currentProfile ?? Player(),
+          // Provider per il servizio dei contenuti.
+          ChangeNotifierProvider<ContentService>(
+            create: (_) => ContentService(),
+            lazy: false, // Inizializza subito per caricare i contenuti.
           ),
-          update: (context, playerManager, previous) =>
-          previous ?? StoreService(prefs, playerManager.currentProfile ?? Player()),
+          // Provider per il servizio di analytics.
+          Provider<LearningAnalyticsService>(
+            create: (_) => LearningAnalyticsService(prefs),
+          ),
+          // Provider per il gestore degli esercizi: ora si basa sul PlayerManager.
+          ChangeNotifierProxyProvider2<PlayerManager,
+              ContentService,
+              ExerciseManager>(
+            create: (context) {
+              final pm = context.read<PlayerManager>();
+              logger.logInfo(
+                  'Creazione ExerciseManager con player: ${pm.currentProfile
+                      ?.toJson() ?? 'null'}');
+              // Se non c'è ancora un profilo attivo, creiamo un dummy (ma in seguito verrà aggiornato)
+              return ExerciseManager(
+                player: pm.currentProfile ?? Player(),
+                contentService: context.read<ContentService>(),
+                analyticsService: context.read<LearningAnalyticsService>(),
+              );
+            },
+            update: (context, playerManager, contentService, previous) {
+              final current = playerManager.currentProfile;
+              if (current != null) {
+                previous!.updatePlayer(current);
+              }
+              return previous!;
+            },
+          ),
+          // Provider per il servizio di gioco: ora si basa sul PlayerManager.
+          ChangeNotifierProxyProvider3<PlayerManager,
+              ContentService,
+              ExerciseManager,
+              GameService>(
+            create: (context) {
+              final pm = context.read<PlayerManager>();
+              logger.logInfo(
+                  'Creazione GameService con player: ${pm.currentProfile
+                      ?.toJson() ?? 'null'}');
+              return GameService(
+                player: pm.currentProfile ?? Player(),
+                contentService: context.read<ContentService>(),
+                exerciseManager: context.read<ExerciseManager>(),
+              );
+            },
+            update: (context, playerManager, contentService, exerciseManager,
+                previous) {
+              final current = playerManager.currentProfile;
+              if (current != null) {
+                previous!.updatePlayer(current);
+              }
+              if (!previous!.isInitialized) {
+                // Avvia l'inizializzazione in una microtask per evitare conflitti durante il build.
+                Future.microtask(() => previous.initialize());
+              }
+              return previous;
+            },
+          ),
+          // Provider per il servizio delle sfide.
+          ChangeNotifierProxyProvider<PlayerManager, ChallengeService>(
+            create: (context) =>
+                ChallengeService(
+                  prefs,
+                  context
+                      .read<PlayerManager>()
+                      .currentProfile ?? Player(),
+                ),
+            update: (context, playerManager, previous) =>
+            previous ??
+                ChallengeService(
+                    prefs, playerManager.currentProfile ?? Player()),
+          ),
+          // Provider per il servizio del negozio.
+          ChangeNotifierProxyProvider<PlayerManager, StoreService>(
+            create: (context) =>
+                StoreService(
+                  prefs,
+                  context
+                      .read<PlayerManager>()
+                      .currentProfile ?? Player(),
+                ),
+            update: (context, playerManager, previous) =>
+            previous ??
+                StoreService(prefs, playerManager.currentProfile ?? Player()),
+          ),
+        ],
+        child: const OpenDSAApp(),
+      ),
+    );
+    logger.logInfo('Applicazione avviata con successo');
+  } catch (e, stackTrace) {
+    logger.logError(
+        'Errore fatale all\'avvio dell\'applicazione', e, stackTrace);
+// In caso di errore grave, mostra un widget di errore semplice
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Text(
+            'Si è verificato un errore all\'avvio: $e\n\nRiavvia l\'applicazione.',
+            style: TextStyle(fontFamily: 'OpenDyslexic'),
+            textAlign: TextAlign.center,
+          ),
         ),
-      ],
-      child: const OpenDSAApp(),
-    ),
-  );
+      ),
+    ));
+  }
 }
 
 /// Widget principale dell'applicazione.

@@ -287,7 +287,7 @@ class VoskService {
         final int sampleCount = rawData.length ~/ 2; // 16-bit per campione
         final Float32List floatData = Float32List(sampleCount);
 
-        // Processa i campioni come int16 e convertili in float32
+        // Processa i campioni come int16 e li converte in float32
         for (int i = 0; i < sampleCount; i++) {
           // Leggi due byte consecutivi (little endian)
           int low = rawData[i * 2] & 0xFF;
@@ -335,7 +335,7 @@ class VoskService {
     }
   }
 
-  /// Esegue il riconoscimento vocale
+  /// Esegue il riconoscimento vocale con timeouts e fallbacks
   Future<RecognitionResult> startRecognition(String targetText) async {
     _logEvent('Avvio riconoscimento vocale per target: $targetText');
 
@@ -352,62 +352,177 @@ class VoskService {
     _isProcessing = true;
 
     try {
-      final audioPath = await _audioService.startRecording();
+      // Aggiunto timeout per evitare blocchi infiniti nella registrazione
+      final audioPath = await _audioService.startRecording()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        _logEvent('Timeout nel processo di avvio registrazione');
+        return ""; // Path vuoto in caso di timeout
+      });
+
       if (audioPath.isEmpty) {
-        throw Exception('Percorso registrazione non valido');
-      }
-
-      // Attendi il completamento della registrazione
-      await Future.delayed(const Duration(seconds: AppConfig.maxRecordingDuration));
-      await _audioService.stopRecording();
-
-      // Preprocessa l'audio
-      final audioData = await _preprocessAudio(audioPath);
-      if (audioData.isEmpty) {
-        _logEvent('Nessun dato audio valido');
+        _logEvent('Percorso registrazione non valido o timeout');
         return _createEmptyResult(startTime);
       }
 
-      // Esegui il riconoscimento utilizzando i dati in formato float
-      await _speechRecognizer!.acceptWaveformFloats(audioData);
-      final resultJson = await _speechRecognizer!.getFinalResult();
+      // Timeout per la durata della registrazione
+      await Future.delayed(const Duration(seconds: 3))
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        _logEvent('Timeout nella durata della registrazione');
+        return;
+      });
+
+      // Timeout per lo stop della registrazione
+      await _audioService.stopRecording()
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        _logEvent('Timeout nello stop della registrazione');
+        return "";
+      });
+
+      // Preprocessa l'audio con timeout
+      final audioData = await _preprocessAudio(audioPath)
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        _logEvent('Timeout nel preprocessamento dell\'audio');
+        return Float32List(0);
+      });
+
+      if (audioData.isEmpty) {
+        _logEvent('Nessun dato audio valido o timeout');
+        return _createEmptyResult(startTime);
+      }
+
+      // Esegui il riconoscimento con timeout
+      String resultJson = "{}";
+      try {
+        await _speechRecognizer!.acceptWaveformFloats(audioData)
+            .timeout(const Duration(seconds: AppConfig.maxRecordingDuration), onTimeout: () {
+          _logEvent('Timeout nell\'accettazione waveform');
+          return false;
+        });
+
+        resultJson = await _speechRecognizer!.getFinalResult()
+            .timeout(const Duration(seconds: 5), onTimeout: () {
+          _logEvent('Timeout nell\'ottenimento del risultato finale');
+          return "{}";
+        });
+      } catch (e) {
+        _logEvent('Errore nel riconoscimento VOSK: $e');
+        resultJson = "{}";
+      }
 
       _logEvent('Elaborazione VOSK completata');
       _logEvent('Risultato raw da VOSK: $resultJson');
 
-      final Map<String, dynamic> result = jsonDecode(resultJson);
-      double totalConfidence = 0.0;
-      String recognizedText = '';
+      RecognitionResult result;
+      try {
+        // Correggi il formato del JSON se necessario
+        String cleanJson = resultJson;
+        cleanJson = cleanJson.replaceAll(RegExp(r'(\d+),(\d+)'), r'$1.$2'); // Sostituisci comma con punto decimale
 
-      if (result.containsKey('result')) {
-        final List<dynamic> words = result['result'] as List<dynamic>;
-        for (var word in words) {
-          recognizedText += '${word['word']} ';
-          totalConfidence += (word['conf'] as num).toDouble();
+        // Aggiungi handling per altre potenziali correzioni di formato
+        cleanJson = cleanJson.replaceAll("'", '"'); // Sostituisci eventuali apici singoli
+
+        debugPrint('VoskService: JSON pulito: $cleanJson');
+
+        Map<String, dynamic> jsonResult;
+        try {
+          jsonResult = jsonDecode(cleanJson);
+        } catch (jsonError) {
+          debugPrint('VoskService: Errore nel parsing anche dopo la pulizia: $jsonError');
+          // Crea un risultato vuoto ma valido
+          jsonResult = {"text": "", "alternatives": [{"text": "", "confidence": 0.0}]};
         }
-        recognizedText = recognizedText.trim();
-        totalConfidence = words.isEmpty ? 0.0 : totalConfidence / words.length;
-      } else if (result.containsKey('text')) {
-        recognizedText = result['text'];
-        totalConfidence = 1.0;
-      } else {
-        _logEvent('Nessun risultato dal riconoscimento');
-        return _createEmptyResult(startTime);
+
+        double totalConfidence = 0.0;
+        String recognizedText = '';
+
+        if (jsonResult.containsKey('result')) {
+          final List<dynamic> words = jsonResult['result'] as List<dynamic>;
+          for (var word in words) {
+            if (word is Map && word.containsKey('word')) {
+              recognizedText += '${word['word']} ';
+              // Estrai la confidenza in modo sicuro
+              if (word.containsKey('conf')) {
+                try {
+                  var conf = word['conf'];
+                  if (conf is num) {
+                    totalConfidence += conf.toDouble();
+                  } else if (conf is String) {
+                    totalConfidence += double.tryParse(conf.replaceAll(',', '.')) ?? 0.0;
+                  }
+                } catch (e) {
+                  debugPrint('VoskService: Errore nell\'estrazione della confidenza: $e');
+                }
+              }
+            }
+          }
+          recognizedText = recognizedText.trim();
+          totalConfidence = words.isEmpty ? 0.0 : totalConfidence / words.length;
+        } else if (jsonResult.containsKey('text')) {
+          recognizedText = jsonResult['text'] as String? ?? '';
+
+          // Se c'è un campo alternatives, prova a prendere la confidenza da lì
+          if (jsonResult.containsKey('alternatives') &&
+              jsonResult['alternatives'] is List &&
+              (jsonResult['alternatives'] as List).isNotEmpty) {
+            var alt = (jsonResult['alternatives'] as List)[0];
+            if (alt is Map && alt.containsKey('confidence')) {
+              try {
+                var conf = alt['confidence'];
+                if (conf is num) {
+                  totalConfidence = conf.toDouble();
+                } else if (conf is String) {
+                  totalConfidence = double.tryParse(conf.replaceAll(',', '.')) ?? 0.0;
+                }
+              } catch (e) {
+                totalConfidence = 0.2; // Valore di fallback
+              }
+            }
+          } else {
+            totalConfidence = 0.2; // Valore di fallback se non troviamo alternative
+          }
+        } else {
+          // Nessun contenuto riconoscibile
+          recognizedText = '';
+          totalConfidence = 0.0;
+        }
+
+        // Normalizza la confidenza se necessario
+        if (totalConfidence > 1.0) {
+          totalConfidence = totalConfidence / 100.0; // Probabilmente era in percentuale
+        }
+        if (totalConfidence <= 0) {
+          totalConfidence = 0.1; // Valore minimo per evitare crash
+        }
+
+        result = _createResult(
+          recognizedText.isEmpty ? "nessun testo riconosciuto" : recognizedText,
+          targetText,
+          totalConfidence,
+          DateTime.now().difference(startTime),
+        );
+      } catch (e) {
+        _logEvent('Errore nella decodifica JSON del risultato: $e');
+        result = _createEmptyResult(startTime);
       }
 
-      return _createResult(
-        recognizedText,
-        targetText,
-        totalConfidence,
-        DateTime.now().difference(startTime),
-      );
-
+      return result;
     } catch (e) {
       _logEvent('Errore nel riconoscimento: $e');
       return _createEmptyResult(startTime);
     } finally {
       _isProcessing = false;
     }
+  }
+
+  /// Crea un risultato vuoto con feedback di fallback
+  RecognitionResult _createEmptyResult(DateTime startTime) {
+    return RecognitionResult(
+      text: 'nessun testo riconosciuto',
+      confidence: 0.0,
+      similarity: 0.2, // Valore minimo per consentire di continuare
+      isCorrect: false,
+      duration: DateTime.now().difference(startTime),
+    );
   }
 
   /// Crea un risultato di riconoscimento da testo e target
@@ -433,16 +548,6 @@ class VoskService {
     );
   }
 
-  /// Crea un risultato vuoto
-  RecognitionResult _createEmptyResult(DateTime startTime) {
-    return RecognitionResult(
-      text: '',
-      confidence: 0.0,
-      similarity: 0.0,
-      isCorrect: false,
-      duration: DateTime.now().difference(startTime),
-    );
-  }
 
   /// Calcola la similarità tra due testi considerando gli errori comuni della dislessia
   double _calculateTextSimilarity(String text1, String text2) {

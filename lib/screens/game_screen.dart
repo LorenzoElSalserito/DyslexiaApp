@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_config.dart';
-import '../models/player.dart'; // Import per la classe Player
+import '../models/player.dart';
 import '../services/game_service.dart';
 import '../services/store_service.dart';
 import '../services/challenge_service.dart';
@@ -11,6 +11,9 @@ import '../services/player_manager.dart';
 import '../models/challenge.dart';
 import '../widgets/progression_map.dart';
 import 'dart:math' show min;
+import '../services/ui_error_logger.dart';
+
+enum GameScreenLoadingState { initializing, loaded, error }
 
 class GameScreen extends StatefulWidget {
   const GameScreen({Key? key}) : super(key: key);
@@ -22,6 +25,9 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   bool _hasCheckedDailyBonus = false;
   bool _isInitialized = false;
+  GameScreenLoadingState _loadingState = GameScreenLoadingState.initializing;
+  String? _errorMessage;
+  final UIErrorLogger _logger = UIErrorLogger();
 
   @override
   void initState() {
@@ -33,48 +39,76 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initializeScreen() async {
-    debugPrint('[GameScreen] _initializeScreen: Avvio inizializzazione');
+    _logger.logInfo('[GameScreen] _initializeScreen: Avvio inizializzazione');
+
     if (!mounted) return;
+
+    setState(() {
+      _loadingState = GameScreenLoadingState.initializing;
+      _errorMessage = null;
+    });
 
     try {
       final playerManager = Provider.of<PlayerManager>(context, listen: false);
       final gameService = Provider.of<GameService>(context, listen: false);
 
+      if (playerManager.currentProfile == null) {
+        _logger.logWarning('[GameScreen] Nessun profilo attivo, reindirizzamento alla schermata di selezione');
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/profile_selection');
+        }
+        return;
+      }
+
       if (!gameService.isInitialized) {
-        debugPrint('[GameScreen] Inizializzo GameService...');
+        _logger.logInfo('[GameScreen] Inizializzazione GameService');
         await gameService.initialize();
       }
 
       if (!_hasCheckedDailyBonus) {
+        _logger.logInfo('[GameScreen] Verifica bonus giornaliero');
         await _checkDailyBonus();
       }
 
+      if (!mounted) return;
+      _logger.logInfo('[GameScreen] Inizializzazione completata con successo');
+
       setState(() {
         _isInitialized = true;
+        _loadingState = GameScreenLoadingState.loaded;
       });
-      debugPrint('[GameScreen] Inizializzazione completata');
-    } catch (e) {
-      debugPrint('[GameScreen] Errore nell\'inizializzazione: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Si è verificato un errore: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+    } catch (e, stackTrace) {
+      _logger.logError('[GameScreen] Errore nell\'inizializzazione', e, stackTrace);
+
+      if (!mounted) return;
+
+      setState(() {
+        _loadingState = GameScreenLoadingState.error;
+        _errorMessage = 'Si è verificato un errore: $e';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Si è verificato un errore: $e',
+            style: const TextStyle(fontFamily: 'OpenDyslexic'),
           ),
-        );
-      }
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
   Future<void> _checkDailyBonus() async {
-    debugPrint('[GameScreen] _checkDailyBonus: Verifica bonus giornaliero');
+    _logger.logInfo('[GameScreen] _checkDailyBonus: Verifica bonus giornaliero');
+
     if (_hasCheckedDailyBonus) return;
 
     try {
       final gameService = Provider.of<GameService>(context, listen: false);
       if (gameService.isDailyBonusAvailable) {
-        debugPrint('[GameScreen] Bonus giornaliero disponibile');
+        _logger.logInfo('[GameScreen] Bonus giornaliero disponibile');
         await gameService.resetDailyBonus();
         if (mounted) {
           await gameService.showDailyLoginBonus(context);
@@ -84,18 +118,75 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       setState(() {
         _hasCheckedDailyBonus = true;
       });
-      debugPrint('[GameScreen] Bonus giornaliero verificato');
-    } catch (e) {
-      debugPrint('[GameScreen] Errore nel controllo bonus giornaliero: $e');
+      _logger.logInfo('[GameScreen] Bonus giornaliero verificato');
+    } catch (e, stackTrace) {
+      _logger.logError('[GameScreen] Errore nel controllo bonus giornaliero', e, stackTrace);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Se stiamo caricando, mostra l'indicatore di caricamento
+    if (_loadingState == GameScreenLoadingState.initializing) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text(
+                'Caricamento OpenDSA: Reading...',
+                style: TextStyle(
+                  fontFamily: 'OpenDyslexic',
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Se c'è un errore, mostra un messaggio di errore
+    if (_loadingState == GameScreenLoadingState.error) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 60),
+              const SizedBox(height: 20),
+              Text(
+                _errorMessage ?? 'Si è verificato un errore sconosciuto',
+                style: const TextStyle(
+                  fontFamily: 'OpenDyslexic',
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _initializeScreen,
+                child: const Text(
+                  'Riprova',
+                  style: TextStyle(fontFamily: 'OpenDyslexic'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Consumer2<PlayerManager, GameService>(
       builder: (context, playerManager, gameService, _) {
         final player = playerManager.currentProfile;
-        if (!_isInitialized || player == null) {
+        if (player == null) {
+          // Se non c'è un profilo attivo, reindirizza alla schermata di selezione
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.of(context).pushReplacementNamed('/profile_selection');
+          });
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
@@ -104,8 +195,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         return Scaffold(
           body: LayoutBuilder(
             builder: (context, constraints) {
-              debugPrint(
-                  '[GameScreen] LayoutBuilder: constraints=$constraints');
+              _logger.logDebug('[GameScreen] LayoutBuilder: constraints=$constraints');
               return Container(
                 width: constraints.maxWidth,
                 height: constraints.maxHeight,
@@ -360,7 +450,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Modifica della funzione _buildButtonsSection
   Widget _buildButtonsSection(Player player) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -372,7 +461,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 child: _buildButton(
                   'Esercizio di Lettura',
                   Colors.green.shade700,
-                  () => Navigator.pushNamed(context, '/reading_exercise'),
+                      () => Navigator.pushNamed(context, '/reading_exercise'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -383,7 +472,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       child: _buildButton(
                         'Sfide',
                         const Color(0xFF4A148C),
-                        () => Navigator.pushNamed(context, '/challenges'),
+                            () => Navigator.pushNamed(context, '/challenges'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -391,7 +480,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       child: _buildButton(
                         'Negozio',
                         Colors.amber.shade900,
-                        () => Navigator.pushNamed(context, '/store'),
+                            () => Navigator.pushNamed(context, '/store'),
                       ),
                     ),
                   ],
@@ -407,7 +496,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         child: _buildButton(
                           'Level Up',
                           Colors.black87,
-                          () {
+                              () {
                             if (player.currentLevel < 7) {
                               player.levelUp();
                               showDialog(
@@ -416,12 +505,13 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                                   title: const Text(
                                     'Avanzamento di Livello',
                                     style:
-                                        TextStyle(fontFamily: 'OpenDyslexic'),
+                                    TextStyle(fontFamily: 'OpenDyslexic'),
                                   ),
                                   content: Text(
                                     'Sei avanzato al livello ${player.currentLevel}!',
-                                    style:
-                                        TextStyle(fontFamily: 'OpenDyslexic'),
+                                    style: const TextStyle(
+                                        fontFamily: 'OpenDyslexic'
+                                    ),
                                   ),
                                   actions: [
                                     TextButton(
@@ -444,7 +534,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         child: _buildButton(
                           'New Game+',
                           Colors.black87,
-                          () {
+                              () {
                             player.startNewGamePlus();
                             showDialog(
                               context: context,
@@ -455,7 +545,9 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                                 ),
                                 content: Text(
                                   'Hai avviato il New Game+ #${player.newGamePlusCount}!',
-                                  style: TextStyle(fontFamily: 'OpenDyslexic'),
+                                  style: const TextStyle(
+                                      fontFamily: 'OpenDyslexic'
+                                  ),
                                 ),
                                 actions: [
                                   TextButton(
@@ -463,7 +555,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                                     child: const Text(
                                       'OK',
                                       style:
-                                          TextStyle(fontFamily: 'OpenDyslexic'),
+                                      TextStyle(fontFamily: 'OpenDyslexic'),
                                     ),
                                   ),
                                 ],
@@ -484,7 +576,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       child: _buildButton(
                         'Menu',
                         Colors.blueGrey.shade900,
-                        () => Navigator.pushReplacementNamed(context, '/'),
+                            () => Navigator.pushReplacementNamed(context, '/'),
                       ),
                     ),
                   ],

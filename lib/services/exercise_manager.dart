@@ -1,4 +1,4 @@
-// lib/services/exercise_manager.dart
+//lib/services/exercise_manager.dart
 
 import 'package:flutter/foundation.dart';
 import 'dart:async';
@@ -11,6 +11,26 @@ import '../services/learning_analytics_service.dart';
 import '../models/enums.dart';
 import '../services/speech_recognition_service.dart';
 import '../services/audio_service.dart';
+import '../services/ui_error_logger.dart';
+
+/// Classe che rappresenta un singolo esercizio
+class Exercise {
+  final String content;
+  final ExerciseType type;
+  final Difficulty difficulty;
+  final int crystalValue;
+  final bool isBonus;
+  final Map<String, dynamic>? metadata;
+
+  Exercise({
+    required this.content,
+    required this.type,
+    required this.difficulty,
+    required this.crystalValue,
+    this.isBonus = false,
+    this.metadata,
+  });
+}
 
 /// Gestisce la creazione, esecuzione e valutazione degli esercizi di lettura.
 /// Coordina i vari servizi e mantiene lo stato della sessione di esercizi.
@@ -21,6 +41,7 @@ class ExerciseManager extends ChangeNotifier {
   final LearningAnalyticsService _analyticsService;
   final SpeechRecognitionService _speechService;
   final Random _random = Random();
+  final UIErrorLogger _logger = UIErrorLogger();
 
   // Costanti di configurazione
   static const int maxLevel = 6;
@@ -49,6 +70,9 @@ class ExerciseManager extends ChangeNotifier {
   bool _operationInProgress = false;
   final List<Completer<void>> _operationQueue = [];
 
+  // Timeout timer
+  Timer? _operationTimeoutTimer;
+
   // Getters pubblici
   Exercise? get currentExercise => _currentExercise;
   Difficulty get currentDifficulty => _currentDifficulty;
@@ -71,13 +95,14 @@ class ExerciseManager extends ChangeNotifier {
   })  : _contentService = contentService,
         _analyticsService = analyticsService,
         _speechService = SpeechRecognitionService() {
-    debugPrint('[ExerciseManager] Costruttore: Inizializzo ExerciseManager con player: ${player.toJson()}');
+    _logger.logInfo('[ExerciseManager] Costruttore: Inizializzo ExerciseManager con player: ${player.toJson()}');
     _player = player;
   }
 
   /// Imposta il BuildContext per l'inizializzazione
   void setContext(BuildContext context) {
     _context = context;
+    _logger.logInfo('[ExerciseManager] Context impostato');
     if (!_isInitialized) {
       _initialize();
     }
@@ -85,35 +110,42 @@ class ExerciseManager extends ChangeNotifier {
 
   void updatePlayer(Player newPlayer) async {
     await _executeExclusive(() async {
-      debugPrint('[ExerciseManager] updatePlayer: Aggiornamento player...');
+      _logger.logInfo('[ExerciseManager] updatePlayer: Aggiornamento player...');
       _player = newPlayer;
       await _player.loadProgress();
-      debugPrint('[ExerciseManager] updatePlayer: Nuovo player = ${_player.toJson()}');
+      _logger.logInfo('[ExerciseManager] updatePlayer: Nuovo player = ${_player.toJson()}');
       notifyListeners();
     });
   }
 
   Future<void> _initialize() async {
     if (_context == null) {
-      throw Exception('BuildContext non impostato. Chiamare setContext prima dell\'inizializzazione.');
+      final error = Exception('BuildContext non impostato. Chiamare setContext prima dell\'inizializzazione.');
+      _logger.logError('[ExerciseManager] Errore initialize: BuildContext non impostato', error);
+      throw error;
     }
 
-    debugPrint('[ExerciseManager] _initialize: Inizializzazione avviata.');
+    _logger.logInfo('[ExerciseManager] _initialize: Inizializzazione avviata.');
     try {
-      // Inizializza il servizio di riconoscimento vocale
-      await _speechService.initialize(_context!);
+      // Inizializza il servizio di riconoscimento vocale con timeout
+      await _speechService.initialize(_context!)
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        _logger.logError('[ExerciseManager] _initialize: Timeout durante l\'inizializzazione del riconoscimento vocale',
+            Exception('Timeout nell\'inizializzazione del riconoscimento vocale'));
+        throw Exception('Timeout nell\'inizializzazione del riconoscimento vocale');
+      });
 
-      debugPrint('[ExerciseManager] _initialize: Carico il progresso del giocatore...');
+      _logger.logInfo('[ExerciseManager] _initialize: Carico il progresso del giocatore...');
       await _player.loadProgress();
 
       // Configura gli ascoltatori per gli eventi di riconoscimento
       _setupRecognitionListeners();
 
       _isInitialized = true;
-      debugPrint('[ExerciseManager] _initialize: Inizializzazione completata.');
+      _logger.logInfo('[ExerciseManager] _initialize: Inizializzazione completata.');
       notifyListeners();
-    } catch (e) {
-      debugPrint('[ExerciseManager] _initialize: ERRORE durante l\'inizializzazione: $e');
+    } catch (e, stackTrace) {
+      _logger.logError('[ExerciseManager] _initialize: ERRORE durante l\'inizializzazione', e, stackTrace);
       rethrow;
     }
   }
@@ -126,97 +158,84 @@ class ExerciseManager extends ChangeNotifier {
 
     // Ascolta gli errori
     _speechService.errorStream.listen((error) {
-      debugPrint('[ExerciseManager] Errore dal servizio di riconoscimento: $error');
+      _logger.logWarning(error);
     });
 
     // Ascolta i cambiamenti di stato
     _speechService.stateStream.listen((state) {
-      debugPrint('[ExerciseManager] Cambio stato riconoscimento: $state');
+      _logger.logInfo('[ExerciseManager] Cambio stato riconoscimento: $state');
     });
   }
 
   Future<void> startNewSession() async {
     if (_context == null) {
-      throw Exception('BuildContext non impostato. Chiamare setContext prima di startNewSession.');
+      final error = Exception('BuildContext non impostato. Chiamare setContext prima di startNewSession.');
+      _logger.logError('[ExerciseManager] startNewSession: BuildContext non impostato', error);
+      throw error;
     }
 
     await _executeExclusive(() async {
-      debugPrint('[ExerciseManager] startNewSession: Avvio nuova sessione.');
+      _logger.logInfo('[ExerciseManager] startNewSession: Avvio nuova sessione.');
       if (!_isInitialized) {
-        debugPrint('[ExerciseManager] startNewSession: Manager non inizializzato. Chiamo _initialize()...');
+        _logger.logInfo('[ExerciseManager] startNewSession: Manager non inizializzato. Chiamo _initialize()...');
         await _initialize();
       }
 
-      debugPrint('[ExerciseManager] startNewSession: Pulizia sessione precedente.');
-      await cleanupSession();
+      _logger.logInfo('[ExerciseManager] startNewSession: Pulizia sessione precedente.');
+      // Implementiamo direttamente il reset dello stato senza chiamare altre funzioni _executeExclusive
 
-      _sessionResults.clear();
-      _currentSessionIndex = 0;
-      _sessionCrystals = 0;
-      _totalCrystals = 0;
-      _isSessionActive = true;
-      _usedContent.clear();
+      try {
+        // Reset diretto dello stato della sessione
+        await _speechService.reset();
+        _isSessionActive = true;
+        _sessionResults.clear();
+        _currentSessionIndex = 0;
+        _sessionCrystals = 0;
+        _totalCrystals = 0;
+        _usedContent.clear();
 
-      debugPrint('[ExerciseManager] startNewSession: Avvio sessione analytics.');
-      _analyticsService.startSession();
-      debugPrint('[ExerciseManager] startNewSession: Nuova sessione avviata.');
-      notifyListeners();
-    });
+        _logger.logInfo('[ExerciseManager] startNewSession: Avvio sessione analytics.');
+        _analyticsService.startSession();
+        _logger.logInfo('[ExerciseManager] startNewSession: Nuova sessione avviata.');
+        notifyListeners();
+      } catch (e) {
+        _logger.logError('[ExerciseManager] startNewSession: Errore durante la pulizia', e);
+        throw Exception('Errore nella preparazione della sessione: $e');
+      }
+    }, timeoutSeconds: 10); // Aggiunto timeout di 10 secondi
   }
 
   Future<Exercise> generateExercise() async {
     return await _executeExclusive<Exercise>(() async {
-      debugPrint('[ExerciseManager] generateExercise: Inizio generazione esercizio.');
+      _logger.logInfo('[ExerciseManager] generateExercise: Inizio generazione esercizio.');
       if (!_isInitialized) {
-        debugPrint('[ExerciseManager] generateExercise: Manager non inizializzato.');
-        throw Exception('ExerciseManager non inizializzato');
+        final error = Exception('ExerciseManager non inizializzato');
+        _logger.logError('[ExerciseManager] generateExercise: Manager non inizializzato', error);
+        throw error;
       }
       if (!_isSessionActive) {
-        debugPrint('[ExerciseManager] generateExercise: Sessione non attiva.');
-        throw Exception('Sessione non attiva. Chiamare startNewSession() prima.');
+        final error = Exception('Sessione non attiva. Chiamare startNewSession() prima.');
+        _logger.logError('[ExerciseManager] generateExercise: Sessione non attiva', error);
+        throw error;
       }
 
       String content;
       ExerciseType exerciseType;
-      debugPrint('[ExerciseManager] generateExercise: Livello corrente del giocatore: ${_player.currentLevel}');
+      _logger.logInfo('[ExerciseManager] generateExercise: Livello corrente del giocatore: ${_player.currentLevel}');
 
-      switch (_player.currentLevel) {
-        case 1:
-          exerciseType = ExerciseType.word;
-          content = _contentService.getRandomWordForLevel(1, _currentDifficulty).text;
-          break;
-        case 2:
-          exerciseType = ExerciseType.word;
-          content = _contentService.getRandomWordForLevel(2, _currentDifficulty).text;
-          break;
-        case 3:
-          exerciseType = ExerciseType.word;
-          content = _contentService.getRandomWordForLevel(3, _currentDifficulty).text;
-          break;
-        case 4:
-          exerciseType = ExerciseType.sentence;
-          final sentence = _contentService.contentSet.sentences[_random.nextInt(_contentService.contentSet.sentences.length)];
-          content = sentence.words.map((w) => w.text).join(' ');
-          break;
-        case 5:
-          exerciseType = ExerciseType.paragraph;
-          final paragraph = _contentService.contentSet.paragraphs[_random.nextInt(_contentService.contentSet.paragraphs.length)];
-          content = paragraph.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join('. ');
-          break;
-        case 6:
-          exerciseType = ExerciseType.page;
-          final page = _contentService.contentSet.pages[_random.nextInt(_contentService.contentSet.pages.length)];
-          content = page.paragraphs.map((p) => p.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join('. ')).join('\n\n');
-          break;
-        default:
-          exerciseType = ExerciseType.word;
-          content = _contentService.getRandomWordForLevel(1, _currentDifficulty).text;
-      }
+      // Aggiunta di un timeout per evitare attese infinite
+      content = await Future.value(_generateContentBasedOnLevel(_player.currentLevel, _currentDifficulty))
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        _logger.logWarning('[ExerciseManager] generateExercise: Timeout nella generazione del contenuto. Uso contenuto di fallback.');
+        return "casa";  // Parola di fallback in caso di timeout
+      });
 
-      debugPrint('[ExerciseManager] generateExercise: Contenuto generato: "$content"');
+      exerciseType = _getExerciseTypeBasedOnLevel(_player.currentLevel);
+
+      _logger.logInfo('[ExerciseManager] generateExercise: Contenuto generato: "$content"');
       int syllables = _countSyllables(content);
       int baseValue = syllables * 5;
-      debugPrint('[ExerciseManager] generateExercise: Sillabe: $syllables, Valore base: $baseValue');
+      _logger.logInfo('[ExerciseManager] generateExercise: Sillabe: $syllables, Valore base: $baseValue');
 
       _currentExercise = Exercise(
         content: content,
@@ -230,27 +249,70 @@ class ExerciseManager extends ChangeNotifier {
         },
       );
 
-      // Avvia il riconoscimento per il nuovo esercizio
-      await _speechService.startRecognition(content);
-
-      debugPrint('[ExerciseManager] generateExercise: Esercizio generato: ${_currentExercise!.content}');
+      _logger.logInfo('[ExerciseManager] generateExercise: Esercizio generato: ${_currentExercise!.content}');
       notifyListeners();
       return _currentExercise!;
-    });
+    }, timeoutSeconds: 5);
+  }
+
+  // Metodo helper per generare contenuto in base al livello
+  String _generateContentBasedOnLevel(int level, Difficulty difficulty) {
+    try {
+      switch (level) {
+        case 1:
+          return _contentService.getRandomWordForLevel(1, difficulty).text;
+        case 2:
+          return _contentService.getRandomWordForLevel(2, difficulty).text;
+        case 3:
+          return _contentService.getRandomWordForLevel(3, difficulty).text;
+        case 4:
+          final sentence = _contentService.contentSet.getRandomSentence();
+          return sentence.words.map((w) => w.text).join(' ');
+        case 5:
+          final paragraph = _contentService.contentSet.getRandomParagraph();
+          return paragraph.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join('. ');
+        case 6:
+          final page = _contentService.contentSet.getRandomPage();
+          return page.paragraphs.map((p) => p.sentences.map((s) => s.words.map((w) => w.text).join(' ')).join('. ')).join('\n\n');
+        default:
+          return "esercizio"; // Parola di fallback
+      }
+    } catch (e) {
+      _logger.logError('[ExerciseManager] _generateContentBasedOnLevel: Errore', e);
+      return "errore"; // Parola di fallback in caso di errore
+    }
+  }
+
+  // Metodo helper per determinare il tipo di esercizio in base al livello
+  ExerciseType _getExerciseTypeBasedOnLevel(int level) {
+    switch (level) {
+      case 1:
+      case 2:
+      case 3:
+        return ExerciseType.word;
+      case 4:
+        return ExerciseType.sentence;
+      case 5:
+        return ExerciseType.paragraph;
+      case 6:
+        return ExerciseType.page;
+      default:
+        return ExerciseType.word;
+    }
   }
 
   Future<int> processExerciseResult(RecognitionResult result) async {
     return await _executeExclusive<int>(() async {
-      debugPrint('[ExerciseManager] processExerciseResult: Inizio elaborazione del risultato.');
-      debugPrint('[ExerciseManager] processExerciseResult: Risultato ricevuto: ${result.toJson()}');
+      _logger.logInfo('[ExerciseManager] processExerciseResult: Inizio elaborazione del risultato.');
+      _logger.logInfo('[ExerciseManager] processExerciseResult: Risultato ricevuto: ${result.toJson()}');
 
       if (_currentExercise == null) {
-        debugPrint('[ExerciseManager] processExerciseResult: Nessun esercizio corrente. Ritorno 0.');
+        _logger.logWarning('[ExerciseManager] processExerciseResult: Nessun esercizio corrente. Ritorno 0.');
         return 0;
       }
 
       int crystals = _calculateFinalCrystals(result);
-      debugPrint('[ExerciseManager] processExerciseResult: Cristalli calcolati: $crystals');
+      _logger.logInfo('[ExerciseManager] processExerciseResult: Cristalli calcolati: $crystals');
 
       _sessionResults.add(result);
       _currentSessionIndex++;
@@ -261,28 +323,39 @@ class ExerciseManager extends ChangeNotifier {
       await _analyticsService.addResult(result);
       await _player.saveProgress();
 
-      debugPrint('[ExerciseManager] processExerciseResult: Aggiornati i totali - Sessione: $_sessionCrystals, Globale: $_totalCrystals');
+      _logger.logInfo('[ExerciseManager] processExerciseResult: Aggiornati i totali - Sessione: $_sessionCrystals, Globale: $_totalCrystals');
 
       if (isSessionComplete) {
-        debugPrint('[ExerciseManager] processExerciseResult: Sessione completata.');
+        _logger.logInfo('[ExerciseManager] processExerciseResult: Sessione completata.');
         await _completeSession();
       }
 
       _updateDifficulty();
-      debugPrint('[ExerciseManager] processExerciseResult: Difficoltà aggiornata. Cristalli ottenuti: $crystals');
+      _logger.logInfo('[ExerciseManager] processExerciseResult: Difficoltà aggiornata. Cristalli ottenuti: $crystals');
       notifyListeners();
       return crystals;
-    });
+    }, timeoutSeconds: 5);
   }
 
   Future<void> cleanupSession() async {
-    await _executeExclusive(() async {
-      debugPrint('[ExerciseManager] cleanupSession: Pulizia sessione.');
+    // Questo metodo viene chiamato da startNewSession che già usa _executeExclusive
+    _logger.logInfo('[ExerciseManager] cleanupSession: Pulizia sessione.');
+    try {
       await _speechService.reset();
       _isSessionActive = false;
-      debugPrint('[ExerciseManager] cleanupSession: Cleanup completato.');
+      _logger.logInfo('[ExerciseManager] cleanupSession: Cleanup completato.');
       notifyListeners();
-    });
+    } catch (e) {
+      _logger.logError('[ExerciseManager] cleanupSession: Errore durante la pulizia', e);
+      throw Exception('Errore durante la pulizia: $e');
+    }
+  }
+
+  // Questa versione è sicura da chiamare direttamente (non in _executeExclusive)
+  Future<void> safeCleanupSession() async {
+    return _executeExclusive(() async {
+      await cleanupSession();
+    }, timeoutSeconds: 5);
   }
 
   int _countSyllables(String text) {
@@ -297,10 +370,10 @@ class ExerciseManager extends ChangeNotifier {
     if (_currentExercise == null) return 0;
 
     int syllables = _countSyllables(_currentExercise!.content);
-    debugPrint('[ExerciseManager] _calculateFinalCrystals: Sillabe nel contenuto: $syllables');
+    _logger.logInfo('[ExerciseManager] _calculateFinalCrystals: Sillabe nel contenuto: $syllables');
 
     if (result.similarity < 0.45) {
-      debugPrint('[ExerciseManager] _calculateFinalCrystals: Accuracy (${result.similarity}) sotto il 45%: esercizio fallito, 0 cristalli.');
+      _logger.logInfo('[ExerciseManager] _calculateFinalCrystals: Accuracy (${result.similarity}) sotto il 45%: esercizio fallito, 0 cristalli.');
       return 0;
     }
 
@@ -333,8 +406,7 @@ class ExerciseManager extends ChangeNotifier {
         difficultyBonus *
         accuracyBonus).round();
 
-// Continua da debugPrint precedente
-    debugPrint('''[ExerciseManager] _calculateFinalCrystals: 
+    _logger.logInfo('''[ExerciseManager] _calculateFinalCrystals: 
       Base: $baseCrystals,
       Livello: $levelMultiplier,
       Bonus NG+: $ngPlusBonus,
@@ -347,7 +419,7 @@ class ExerciseManager extends ChangeNotifier {
 
   void _updateDifficulty() {
     if (_sessionResults.length < 3) {
-      debugPrint('[ExerciseManager] _updateDifficulty: Risultati insufficienti (${_sessionResults.length}), nessun aggiornamento.');
+      _logger.logInfo('[ExerciseManager] _updateDifficulty: Risultati insufficienti (${_sessionResults.length}), nessun aggiornamento.');
       return;
     }
 
@@ -355,27 +427,27 @@ class ExerciseManager extends ChangeNotifier {
     final averageAccuracy = recentResults
         .map((r) => r.similarity)
         .reduce((a, b) => a + b) / recentResults.length;
-    debugPrint('[ExerciseManager] _updateDifficulty: Media accuracy degli ultimi 3 esercizi: $averageAccuracy');
+    _logger.logInfo('[ExerciseManager] _updateDifficulty: Media accuracy degli ultimi 3 esercizi: $averageAccuracy');
 
     if (averageAccuracy >= hardDifficultyThreshold && _currentDifficulty != Difficulty.hard) {
       _currentDifficulty = Difficulty.hard;
-      debugPrint('[ExerciseManager] _updateDifficulty: Difficoltà aggiornata a HARD');
+      _logger.logInfo('[ExerciseManager] _updateDifficulty: Difficoltà aggiornata a HARD');
     } else if (averageAccuracy >= mediumDifficultyThreshold && _currentDifficulty == Difficulty.easy) {
       _currentDifficulty = Difficulty.medium;
-      debugPrint('[ExerciseManager] _updateDifficulty: Difficoltà aggiornata a MEDIUM');
+      _logger.logInfo('[ExerciseManager] _updateDifficulty: Difficoltà aggiornata a MEDIUM');
     } else if (averageAccuracy < requiredAccuracy && _currentDifficulty != Difficulty.easy) {
       _currentDifficulty = Difficulty.easy;
-      debugPrint('[ExerciseManager] _updateDifficulty: Difficoltà aggiornata a EASY');
+      _logger.logInfo('[ExerciseManager] _updateDifficulty: Difficoltà aggiornata a EASY');
     }
   }
 
   Future<void> _completeSession() async {
-    debugPrint('[ExerciseManager] _completeSession: Completamento sessione in corso.');
+    _logger.logInfo('[ExerciseManager] _completeSession: Completamento sessione in corso.');
     if (_sessionResults.isNotEmpty) {
       double sessionAccuracy = _sessionResults
           .map((r) => r.similarity)
           .reduce((a, b) => a + b) / _sessionResults.length;
-      debugPrint('[ExerciseManager] _completeSession: Accuratezza della sessione: $sessionAccuracy');
+      _logger.logInfo('[ExerciseManager] _completeSession: Accuratezza della sessione: $sessionAccuracy');
 
       _sessionAccuracies.add(sessionAccuracy);
       if (_sessionAccuracies.length > 30) {
@@ -385,7 +457,7 @@ class ExerciseManager extends ChangeNotifier {
       _overallAccuracy = _sessionAccuracies.isEmpty
           ? 0.0
           : _sessionAccuracies.reduce((a, b) => a + b) / _sessionAccuracies.length;
-      debugPrint('[ExerciseManager] _completeSession: Accuratezza complessiva: $_overallAccuracy');
+      _logger.logInfo('[ExerciseManager] _completeSession: Accuratezza complessiva: $_overallAccuracy');
 
       final updatedGameData = {
         ..._player.gameData,
@@ -393,27 +465,46 @@ class ExerciseManager extends ChangeNotifier {
       };
       _player.updateGameData(updatedGameData);
       await _player.saveProgress();
-      debugPrint('[ExerciseManager] _completeSession: Progresso del giocatore salvato.');
+      _logger.logInfo('[ExerciseManager] _completeSession: Progresso del giocatore salvato.');
     }
 
     _isSessionActive = false;
-    debugPrint('[ExerciseManager] _completeSession: Sessione completata.');
+    _logger.logInfo('[ExerciseManager] _completeSession: Sessione completata.');
     notifyListeners();
   }
 
   /// Esegue un'operazione in modo esclusivo utilizzando una coda di operazioni
-  Future<T> _executeExclusive<T>(Future<T> Function() operation) async {
+  Future<T> _executeExclusive<T>(Future<T> Function() operation, {int timeoutSeconds = 30}) async {
     final completer = Completer<T>();
     _operationQueue.add(completer as Completer<void>);
 
     if (_operationQueue.first == completer) {
       try {
         _operationInProgress = true;
+
+        // Setup del timer di timeout
+        _operationTimeoutTimer?.cancel();
+        _operationTimeoutTimer = Timer(Duration(seconds: timeoutSeconds), () {
+          if (!completer.isCompleted) {
+            _logger.logError('[ExerciseManager] Timeout nell\'operazione esclusiva',
+                Exception('Operazione esclusiva non completata in $timeoutSeconds secondi'));
+            completer.completeError(
+                Exception('Operazione non completata in tempo (timeout: ${timeoutSeconds}s)'));
+          }
+        });
+
         final result = await operation();
-        completer.complete(result);
-      } catch (e) {
-        completer.completeError(e);
+
+        if (!completer.isCompleted) {
+          completer.complete(result);
+        }
+      } catch (e, stackTrace) {
+        _logger.logError('[ExerciseManager] Errore in operazione esclusiva', e, stackTrace);
+        if (!completer.isCompleted) {
+          completer.completeError(e);
+        }
       } finally {
+        _operationTimeoutTimer?.cancel();
         _operationInProgress = false;
         _operationQueue.removeAt(0);
         if (_operationQueue.isNotEmpty) {
@@ -424,23 +515,4 @@ class ExerciseManager extends ChangeNotifier {
 
     return completer.future;
   }
-}
-
-/// Classe che rappresenta un singolo esercizio
-class Exercise {
-  final String content;
-  final ExerciseType type;
-  final Difficulty difficulty;
-  final int crystalValue;
-  final bool isBonus;
-  final Map<String, dynamic>? metadata;
-
-  Exercise({
-    required this.content,
-    required this.type,
-    required this.difficulty,
-    required this.crystalValue,
-    this.isBonus = false,
-    this.metadata,
-  });
 }
