@@ -15,6 +15,7 @@ class CustomLinuxRecorder {
   bool _hasFmedia = false;
   bool _hasArecord = false;
   bool _hasSox = false;
+  String _currentRecordingPath = '';
 
   // Stream controller per il livello di ampiezza audio
   final _amplitudeController = StreamController<double>.broadcast();
@@ -31,16 +32,7 @@ class CustomLinuxRecorder {
       return;
     }
 
-    // Controlla la disponibilità di fmedia (preferito)
-    _fmediaPath = await FmediaPathConfig.findFmediaPath();
-    _hasFmedia = _fmediaPath.isNotEmpty;
-    if (_hasFmedia) {
-      debugPrint('CustomLinuxRecorder: fmedia trovato in: $_fmediaPath');
-    } else {
-      debugPrint('CustomLinuxRecorder: fmedia non trovato');
-    }
-
-    // Controlla arecord (parte di ALSA)
+    // Controlla prima la disponibilità di arecord (preferito)
     try {
       final result = await Process.run('which', ['arecord']);
       _hasArecord = result.exitCode == 0 && (result.stdout as String).trim().isNotEmpty;
@@ -48,6 +40,15 @@ class CustomLinuxRecorder {
     } catch (e) {
       debugPrint('CustomLinuxRecorder: Errore nel controllo di arecord: $e');
       _hasArecord = false;
+    }
+
+    // Controlla la disponibilità di fmedia (backup)
+    _fmediaPath = await FmediaPathConfig.findFmediaPath();
+    _hasFmedia = _fmediaPath.isNotEmpty;
+    if (_hasFmedia) {
+      debugPrint('CustomLinuxRecorder: fmedia trovato in: $_fmediaPath');
+    } else {
+      debugPrint('CustomLinuxRecorder: fmedia non trovato');
     }
 
     // Controlla sox (Sound eXchange)
@@ -60,10 +61,10 @@ class CustomLinuxRecorder {
       _hasSox = false;
     }
 
-    debugPrint('CustomLinuxRecorder: Inizializzazione completata');
+    debugPrint('CustomLinuxRecorder: Inizializzazione completata. Preferenze: arecord > fmedia > sox');
   }
 
-  // Avvia la registrazione usando il primo programma disponibile
+  // Modifica il metodo start per usare arecord per primo quando disponibile
   Future<bool> start(String outputPath) async {
     if (_isRecording) {
       debugPrint('CustomLinuxRecorder: Registrazione già in corso');
@@ -71,23 +72,31 @@ class CustomLinuxRecorder {
     }
 
     try {
+      // Memorizza il percorso di output per uso futuro
+      _currentRecordingPath = outputPath;
+
       final directory = path.dirname(outputPath);
       await Directory(directory).create(recursive: true);
 
-      if (_hasFmedia) {
-        await _startFmediaRecording(outputPath);
-      } else if (_hasArecord) {
-        await _startArecordRecording(outputPath);
+      // Assicuriamoci che il percorso sia assoluto
+      final absolutePath = path.absolute(outputPath);
+      debugPrint('CustomLinuxRecorder: Path assoluto per la registrazione: $absolutePath');
+
+      // Privilegia arecord quando disponibile
+      if (_hasArecord) {
+        await _startArecordRecording(absolutePath);
+      } else if (_hasFmedia) {
+        await _startFmediaRecording(absolutePath);
       } else if (_hasSox) {
-        await _startSoxRecording(outputPath);
+        await _startSoxRecording(absolutePath);
       } else {
         debugPrint('CustomLinuxRecorder: Nessun programma di registrazione disponibile su Linux');
         throw Exception('Nessun programma di registrazione trovato su Linux');
       }
 
       _isRecording = true;
-      _startFakeAmplitudeTimer(); // Avvia lo stream di ampiezze simulate
-      debugPrint('CustomLinuxRecorder: Registrazione avviata');
+      _startFakeAmplitudeTimer();
+      debugPrint('CustomLinuxRecorder: Registrazione avviata in $absolutePath');
       return true;
     } catch (e) {
       debugPrint('CustomLinuxRecorder: Errore nell\'avvio della registrazione: $e');
@@ -122,7 +131,19 @@ class CustomLinuxRecorder {
       _recordProcess = null;
       _isRecording = false;
       debugPrint('CustomLinuxRecorder: Registrazione fermata');
-      return 'success'; // Restituisce una stringa invece di void per compatibilità con l'interfaccia
+
+      // Verifica che il file esista
+      final recordingFile = File(_currentRecordingPath);
+      if (await recordingFile.exists()) {
+        final fileSize = await recordingFile.length();
+        debugPrint('CustomLinuxRecorder: File registrato con successo: $_currentRecordingPath (${fileSize} byte)');
+
+        // IMPORTANTE: Restituisci il percorso del file e non la stringa "success"
+        return _currentRecordingPath;
+      } else {
+        debugPrint('CustomLinuxRecorder: File non trovato dopo la registrazione: $_currentRecordingPath');
+        return null;
+      }
     } catch (e) {
       debugPrint('CustomLinuxRecorder: Errore nell\'arresto della registrazione: $e');
       _recordProcess = null;
@@ -152,26 +173,56 @@ class CustomLinuxRecorder {
 
   // Avvia la registrazione con fmedia
   Future<void> _startFmediaRecording(String outputPath) async {
-    // CORRETTO: Uso del comando semplice senza opzioni di formato
-    // In base ai test, fmedia funziona quando viene usato con il comando minimo
+    // Configurazione ottimizzata per una buona registrazione
     final args = [
       '--record',
-      '--out', outputPath
+      '--out', outputPath,
+      '--format=int16',         // Formato PCM 16-bit (compatibile con VOSK)
+      '--rate=16000',           // Sample rate ottimo per il riconoscimento vocale
+      '--channels=1',           // Mono (VOSK lavora meglio con audio mono)
+      '--volume=125',           // Volume massimo consentito (0-125%)
+      '--notui',                // Disattiva l'interfaccia testuale
+      '--capture-buffer=500'    // Buffer di cattura di 500ms (riduce latenza)
     ];
 
     debugPrint('CustomLinuxRecorder: Eseguo fmedia con args: ${args.join(' ')}');
+
+    // Prima di avviare, assicuriamoci che il percorso esista
+    final directory = Directory(path.dirname(outputPath));
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+
+    // Stampa il percorso di output per debug
+    debugPrint('CustomLinuxRecorder: Path di output: $outputPath');
+
+    // Avvia fmedia in un nuovo processo
     _recordProcess = await Process.start(_fmediaPath, args);
     _setupProcessLogging(_recordProcess!, 'fmedia');
   }
 
   // Avvia la registrazione con arecord
   Future<void> _startArecordRecording(String outputPath) async {
+    // Configurazioni ottimali per arecord
     final args = [
-      '-f', 'S16_LE',
-      '-r', '16000',
-      '-c', '1',
-      outputPath,
+      '-f', 'S16_LE',        // Formato PCM 16-bit little-endian
+      '-r', '16000',         // Sample rate 16kHz
+      '-c', '1',             // 1 canale (mono)
+      '-D', 'default',       // Usa il dispositivo di input predefinito
+      '--buffer-size=4096',  // Buffer size più grande per evitare overflow
+      outputPath
     ];
+
+    debugPrint('CustomLinuxRecorder: Eseguo arecord con args: ${args.join(' ')}');
+
+    // Prima di avviare, assicuriamoci che il percorso esista
+    final directory = Directory(path.dirname(outputPath));
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+
+    // Stampa il percorso di output per debug
+    debugPrint('CustomLinuxRecorder: Path di output per arecord: $outputPath');
 
     _recordProcess = await Process.start('arecord', args);
     _setupProcessLogging(_recordProcess!, 'arecord');

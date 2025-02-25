@@ -211,6 +211,29 @@ class VoskService {
     _logEvent('Inizializzazione completata con successo');
   }
 
+  /// Pulisce e normalizza il formato JSON per garantire la compatibilità
+  String _cleanJsonFormat(String jsonString) {
+    var result = jsonString;
+
+    // Sostituisci virgole decimali con punti (es: 158,799683 -> 158.799683)
+    // Usa replaceAllMapped invece di replaceAll quando serve una funzione callback
+    result = result.replaceAllMapped(RegExp(r'(\d+),(\d+)'), (match) {
+      final parts = match.group(0)!.split(',');
+      return "${parts[0]}.${parts[1]}";
+    });
+
+    // Sostituisci apici singoli con doppi
+    result = result.replaceAll("'", '"');
+
+    // Gestisci valori NaN o Infinity che non sono validi in JSON
+    result = result.replaceAll("NaN", "0");
+    result = result.replaceAll("Infinity", "999999");
+
+    // Rimuovi caratteri di controllo non validi
+    result = result.replaceAll(RegExp(r'[\u0000-\u001F]'), '');
+
+    return result;
+  }
 
   /// Trova il percorso del modello VOSK
   Future<String> _findModelPath() async {
@@ -276,46 +299,100 @@ class VoskService {
       _logEvent('Preprocessamento audio da: $audioPath');
       final file = File(audioPath);
 
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        _logEvent('Audio caricato: ${bytes.length} byte');
-
-        // Rimuovi l'header WAV (44 byte)
-        final rawData = bytes.length > 44 ? bytes.sublist(44) : bytes;
-
-        // Converti i dati raw in Float32List
-        final int sampleCount = rawData.length ~/ 2; // 16-bit per campione
-        final Float32List floatData = Float32List(sampleCount);
-
-        // Processa i campioni come int16 e li converte in float32
-        for (int i = 0; i < sampleCount; i++) {
-          // Leggi due byte consecutivi (little endian)
-          int low = rawData[i * 2] & 0xFF;
-          int high = rawData[i * 2 + 1] & 0xFF;
-
-          // Combina i byte in un int16
-          int sample = (high << 8) | low;
-
-          // Converti da int16 con segno (-32768 a 32767)
-          if (sample >= 32768) {
-            sample -= 65536;
-          }
-
-          // Normalizza in range [-1.0, 1.0]
-          floatData[i] = sample / 32768.0;
-        }
-
-        // Applica riduzione del rumore se necessario
-        if (AppConfig.noiseSuppressionEnable) {
-          _applyNoiseReduction(floatData);
-        }
-
-        _logEvent('Audio convertito in Float32List: ${floatData.length} campioni');
-        return floatData;
-      } else {
-        _logEvent('File audio non trovato: $audioPath');
+      // Verifica dettagliata del file
+      if (!await file.exists()) {
+        _logEvent('ERRORE: File audio non trovato: $audioPath');
         return Float32List(0);
       }
+
+      final fileSize = await file.length();
+      _logEvent('File audio esistente, dimensione: $fileSize byte');
+
+      if (fileSize < 44) {  // 44 è la dimensione minima di un header WAV
+        _logEvent('ERRORE: File audio troppo piccolo (probabilmente vuoto o corrotto)');
+        return Float32List(0);
+      }
+
+      final bytes = await file.readAsBytes();
+      _logEvent('Audio caricato: ${bytes.length} byte');
+
+      // Verifica header WAV
+      if (bytes.length > 44) {
+        final header = String.fromCharCodes(bytes.sublist(0, 4));
+        _logEvent('Header audio: $header');
+        if (header != 'RIFF') {
+          _logEvent('ATTENZIONE: Header WAV non rilevato, potrebbe non essere un file WAV valido');
+        }
+      }
+
+      // Rimuovi l'header WAV (44 byte)
+      final rawData = bytes.length > 44 ? bytes.sublist(44) : bytes;
+      _logEvent('Dati audio dopo rimozione header: ${rawData.length} byte');
+
+      // Verifica se i dati sono significativi
+      bool allZeros = true;
+      for (int i = 0; i < min(100, rawData.length); i++) {
+        if (rawData[i] != 0) {
+          allZeros = false;
+          break;
+        }
+      }
+
+      if (allZeros) {
+        _logEvent('ATTENZIONE: I primi 100 byte sono tutti zero, potrebbe essere una registrazione vuota');
+      }
+
+      // Processa i campioni come int16 e li converte in float32
+      final int sampleCount = rawData.length ~/ 2; // 16-bit per campione
+      final Float32List floatData = Float32List(sampleCount);
+
+      for (int i = 0; i < sampleCount; i++) {
+        // Leggi due byte consecutivi (little endian)
+        int low = rawData[i * 2] & 0xFF;
+        int high = rawData[i * 2 + 1] & 0xFF;
+
+        // Combina i byte in un int16
+        int sample = (high << 8) | low;
+
+        // Converti da int16 con segno (-32768 a 32767)
+        if (sample >= 32768) {
+          sample -= 65536;
+        }
+
+        // Normalizza in range [-1.0, 1.0]
+        floatData[i] = sample / 32768.0;
+      }
+
+      // CORREZIONE: Forza l'attivazione del segnale anche se sembra silenzioso
+      // Verifica l'ampiezza massima per determinare se l'audio è silenzioso
+      double maxAmplitude = 0.0;
+      for (int i = 0; i < floatData.length; i++) {
+        maxAmplitude = max(maxAmplitude, floatData[i].abs());
+      }
+
+      // Se l'audio è silenzioso ma non completamente vuoto, amplifichiamo il segnale
+      if (maxAmplitude < 0.1) {
+        _logEvent('Audio molto silenzioso rilevato (${maxAmplitude}), applicazione normalizzazione');
+
+        // Fattore di amplificazione (porta il volume a circa 0.8)
+        double factor = 0.8 / (maxAmplitude > 0.001 ? maxAmplitude : 0.001);
+        // Limita il fattore per evitare distorsioni eccessive
+        factor = min(factor, 20.0);
+
+        for (int i = 0; i < floatData.length; i++) {
+          floatData[i] *= factor;
+          // Limita i valori per evitare clipping
+          floatData[i] = floatData[i].clamp(-1.0, 1.0);
+        }
+      }
+
+      // Applica riduzione del rumore se necessario
+      if (AppConfig.noiseSuppressionEnable) {
+        _applyNoiseReduction(floatData);
+      }
+
+      _logEvent('Audio convertito in Float32List: ${floatData.length} campioni');
+      return floatData;
     } catch (e) {
       _logEvent('Errore nel preprocessamento audio: $e');
       return Float32List(0);
@@ -336,7 +413,7 @@ class VoskService {
   }
 
   /// Esegue il riconoscimento vocale con timeouts e fallbacks
-  Future<RecognitionResult> startRecognition(String targetText) async {
+  Future<RecognitionResult> startRecognition(String targetText, [String? audioPath]) async {
     _logEvent('Avvio riconoscimento vocale per target: $targetText');
 
     if (!_isInitialized) {
@@ -352,34 +429,40 @@ class VoskService {
     _isProcessing = true;
 
     try {
-      // Aggiunto timeout per evitare blocchi infiniti nella registrazione
-      final audioPath = await _audioService.startRecording()
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        _logEvent('Timeout nel processo di avvio registrazione');
-        return ""; // Path vuoto in caso di timeout
-      });
+      // Se è stato fornito un percorso audio specifico, usalo direttamente
+      String pathToProcess = audioPath ?? "";
 
-      if (audioPath.isEmpty) {
-        _logEvent('Percorso registrazione non valido o timeout');
-        return _createEmptyResult(startTime);
+      if (audioPath == null || audioPath.isEmpty) {
+        // Aggiunto timeout per evitare blocchi infiniti nella registrazione
+        pathToProcess = await _audioService.startRecording()
+            .timeout(const Duration(seconds: 10), onTimeout: () {
+          _logEvent('Timeout nel processo di avvio registrazione');
+          return ""; // Path vuoto in caso di timeout
+        });
+
+        if (pathToProcess.isEmpty) {
+          _logEvent('Percorso registrazione non valido o timeout');
+          return _createEmptyResult(startTime);
+        }
+
+        // Timeout per la durata della registrazione
+        await Future.delayed(const Duration(seconds: 3))
+            .timeout(const Duration(seconds: 10), onTimeout: () {
+          _logEvent('Timeout nella durata della registrazione');
+          return;
+        });
+
+        // Timeout per lo stop della registrazione
+        await _audioService.stopRecording()
+            .timeout(const Duration(seconds: 5), onTimeout: () {
+          _logEvent('Timeout nello stop della registrazione');
+          return "";
+        });
       }
 
-      // Timeout per la durata della registrazione
-      await Future.delayed(const Duration(seconds: 3))
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        _logEvent('Timeout nella durata della registrazione');
-        return;
-      });
-
-      // Timeout per lo stop della registrazione
-      await _audioService.stopRecording()
-          .timeout(const Duration(seconds: 5), onTimeout: () {
-        _logEvent('Timeout nello stop della registrazione');
-        return "";
-      });
-
       // Preprocessa l'audio con timeout
-      final audioData = await _preprocessAudio(audioPath)
+      _logEvent('Preprocessamento audio da: $pathToProcess');
+      final audioData = await _preprocessAudio(pathToProcess)
           .timeout(const Duration(seconds: 5), onTimeout: () {
         _logEvent('Timeout nel preprocessamento dell\'audio');
         return Float32List(0);
@@ -393,11 +476,26 @@ class VoskService {
       // Esegui il riconoscimento con timeout
       String resultJson = "{}";
       try {
-        await _speechRecognizer!.acceptWaveformFloats(audioData)
+        _logEvent('Invio a VOSK di ${audioData.length} campioni audio');
+
+        if (audioData.length < 100) {
+          _logEvent('ATTENZIONE: Campioni audio insufficienti (${audioData.length})');
+          throw Exception('Campioni audio insufficienti per il riconoscimento');
+        }
+
+        // Chiamata al riconoscitore
+        bool accepted = await _speechRecognizer!.acceptWaveformFloats(audioData)
             .timeout(const Duration(seconds: AppConfig.maxRecordingDuration), onTimeout: () {
           _logEvent('Timeout nell\'accettazione waveform');
           return false;
         });
+
+        _logEvent('Waveform accettata: $accepted');
+
+        // Controllo per verificare se il waveform è stato accettato
+        if (!accepted) {
+          _logEvent('ATTENZIONE: Waveform non accettata da VOSK');
+        }
 
         resultJson = await _speechRecognizer!.getFinalResult()
             .timeout(const Duration(seconds: 5), onTimeout: () {
@@ -414,13 +512,8 @@ class VoskService {
 
       RecognitionResult result;
       try {
-        // Correggi il formato del JSON se necessario
-        String cleanJson = resultJson;
-        cleanJson = cleanJson.replaceAll(RegExp(r'(\d+),(\d+)'), r'$1.$2'); // Sostituisci comma con punto decimale
-
-        // Aggiungi handling per altre potenziali correzioni di formato
-        cleanJson = cleanJson.replaceAll("'", '"'); // Sostituisci eventuali apici singoli
-
+        // Utilizza il metodo di pulizia JSON
+        String cleanJson = _cleanJsonFormat(resultJson);
         debugPrint('VoskService: JSON pulito: $cleanJson');
 
         Map<String, dynamic> jsonResult;

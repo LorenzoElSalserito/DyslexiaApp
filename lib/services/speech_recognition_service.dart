@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/recognition_result.dart';
 import '../services/audio_service.dart';
 import '../services/vosk_service.dart';
@@ -109,18 +110,27 @@ class SpeechRecognitionService {
     _updateState(RecognitionState.recording);
 
     try {
-      if (Platform.isLinux && _linuxRecorder != null) {
-        // Su Linux, usa il recorder personalizzato
-        final tempDir = await Directory.systemTemp.createTemp('opendsa_recording_');
-        _recordingPath = '${tempDir.path}/recording.wav';
+      // Generazione di un path unico basato sul timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final recordingDir = Directory('${appDocDir.path}/OpenDSA_recordings');
+      if (!await recordingDir.exists()) {
+        await recordingDir.create(recursive: true);
+      }
 
+      // Utilizziamo lo stesso percorso per tutte le piattaforme
+      _recordingPath = '${recordingDir.path}/recording_$timestamp.wav';
+      debugPrint('SpeechRecognitionService: Percorso di registrazione generato: $_recordingPath');
+
+      if (Platform.isLinux && _linuxRecorder != null) {
+        // Su Linux, passa il percorso generato al recorder personalizzato
         final started = await _linuxRecorder!.start(_recordingPath!);
         if (!started) {
           throw Exception('Impossibile avviare la registrazione con il recorder personalizzato');
         }
       } else {
-        // Su altre piattaforme, usa AudioService
-        _recordingPath = await _audioService.startRecording();
+        // Su altre piattaforme, usa AudioService con lo stesso percorso
+        await _audioService.startRecording();
         if (_recordingPath == null || _recordingPath!.isEmpty) {
           throw Exception('Impossibile avviare la registrazione');
         }
@@ -141,12 +151,17 @@ class SpeechRecognitionService {
     _updateState(RecognitionState.processing);
 
     try {
+      String? actualRecordingPath = null;
+
       if (Platform.isLinux && _linuxRecorder != null) {
         // Su Linux, usa il recorder personalizzato
-        final result = await _linuxRecorder!.stop();
-        if (result == null) {
+        actualRecordingPath = await _linuxRecorder!.stop();
+        if (actualRecordingPath == null) {
           throw Exception('Errore nello stop della registrazione Linux');
         }
+        // Importante: aggiorna il percorso di registrazione con quello effettivamente usato
+        _recordingPath = actualRecordingPath;
+        debugPrint('SpeechRecognitionService: Percorso file aggiornato a: $_recordingPath');
       } else {
         // Su altre piattaforme, usa AudioService
         _recordingPath = await _audioService.stopRecording();
@@ -154,6 +169,15 @@ class SpeechRecognitionService {
           throw Exception('Errore nel fermare la registrazione');
         }
       }
+
+      // Verifica che il file esista prima di procedere
+      final audioFile = File(_recordingPath!);
+      if (!await audioFile.exists()) {
+        throw Exception('File audio non trovato dopo la registrazione: $_recordingPath');
+      }
+
+      final fileSize = await audioFile.length();
+      debugPrint('SpeechRecognitionService: File audio trovato, dimensione: $fileSize byte');
 
       await _processRecording();
     } catch (e) {
@@ -172,7 +196,7 @@ class SpeechRecognitionService {
 
     try {
       // Usa il servizio VOSK per il riconoscimento
-      final result = await _voskService.startRecognition(_currentTarget!);
+      final result = await _voskService.startRecognition(_currentTarget!, _recordingPath!);
 
       // Emetti il risultato
       _resultController.add(result);
@@ -184,7 +208,7 @@ class SpeechRecognitionService {
       final fallbackResult = RecognitionResult(
         text: 'errore nel riconoscimento',
         confidence: 0.1,
-        similarity: 0.1,
+        similarity: 0.0,
         isCorrect: false,
         duration: const Duration(seconds: 1),
       );

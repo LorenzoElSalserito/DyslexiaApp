@@ -78,9 +78,18 @@ class AudioService {
           throw Exception('Permessi audio non concessi');
         }
       } else {
-        // Su Linux, macOS e Windows di solito non servono
-        // richieste di permessi microfono con plugin mobile.
-        debugPrint('AudioService: Nessuna richiesta permessi su ${Platform.operatingSystem}');
+        // Su Linux, macOS e Windows, verifichiamo che il microfono sia attivo
+        debugPrint('AudioService: Piattaforma: ${Platform.operatingSystem}');
+        if (Platform.isLinux) {
+          // Esegui un test veloce per verificare se il microfono è accessibile
+          try {
+            Process.runSync('arecord', ['-l']);
+            debugPrint('AudioService: Test microfono con arecord riuscito');
+          } catch (e) {
+            debugPrint('AudioService: Test microfono fallito: $e');
+            // Non blocchiamo l'inizializzazione, ma logghiamo l'errore
+          }
+        }
       }
 
       // Prepara la directory per le registrazioni
@@ -99,7 +108,11 @@ class AudioService {
         });
       }
 
-      _recordingPath = '${recordingsDir.path}/recording.wav';
+      // Aggiungiamo un timestamp per evitare conflitti di file
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      _recordingPath = '${recordingsDir.path}/recording_$timestamp.wav';
+
+      debugPrint('AudioService: Path di registrazione impostato: $_recordingPath');
 
       _isInitialized = true;
       _updateState(AudioState.stopped);
