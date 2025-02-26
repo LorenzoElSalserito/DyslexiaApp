@@ -1,1 +1,0 @@
-/home/lorenzo/IdeaProjects/DislexiaApp/build/app/intermediates/cxx/RelWithDebInfo/4v244j36/obj/arm64-v8a

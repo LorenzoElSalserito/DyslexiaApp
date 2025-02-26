@@ -25,7 +25,6 @@ dependencies:
 
   # VOSK and Audio related
   vosk_flutter: ^0.3.48
-  flutter_sound: ^9.23.1
   record: ^4.4.4
   record_linux: ^0.4.1
   record_platform_interface: ^0.5.0
@@ -65,16 +64,16 @@ dependency_overrides:
 flutter_icons:
   android: true
   ios: true
-  image_path: "lib/assets/icon/app_icon.png"
+  image_path: "assets/icon/app_icon.png"
   windows:
     generate: true
-    image_path: "lib/assets/icon/app_icon.png"
+    image_path: "assets/icon/app_icon.png"
   macos:
     generate: true
-    image_path: "lib/assets/icon/app_icon.png"
+    image_path: "assets/icon/app_icon.png"
   linux:
     generate: true
-    image_path: "lib/assets/icon/app_icon.png"
+    image_path: "assets/icon/app_icon.png"
 
 # Configurazione Windows
 msix_config:

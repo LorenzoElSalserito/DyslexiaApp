@@ -94,7 +94,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     });
 
     try {
-      // Richiedi i permessi di storage PRIMA di inizializzare i servizi
+      // Richiedi PRIMA i permessi di storage e POI quelli del microfono
       bool storageGranted = await PermissionsHandler.requestStoragePermission()
           .timeout(const Duration(seconds: 5), onTimeout: () {
         debugPrint("Timeout nella richiesta permessi di storage");
@@ -105,6 +105,18 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
         throw Exception("Permesso di scrittura/lettura su disco non concesso.");
       }
       debugPrint("Permesso di storage concesso.");
+
+      // Ora richiedi i permessi del microfono
+      bool microphoneGranted = await PermissionsHandler.requestMicrophonePermission()
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        debugPrint("Timeout nella richiesta permessi del microfono");
+        return false;
+      });
+
+      if (!microphoneGranted) {
+        throw Exception("Permesso del microfono non concesso.");
+      }
+      debugPrint("Permesso del microfono concesso.");
 
       // Inizializza il servizio di riconoscimento vocale
       if (!mounted) return;

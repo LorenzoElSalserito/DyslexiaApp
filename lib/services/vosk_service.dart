@@ -119,28 +119,48 @@ class VoskService {
 
   Future<void> _initializeWithRetry({required BuildContext context}) async {
     _logEvent('Inizio inizializzazione con retry');
+
     // Verifica permessi su mobile o desktop
     if (Platform.isAndroid || Platform.isIOS) {
-      bool hasPermissions = await _permissionService.checkAllPermissions();
-      if (!hasPermissions) {
-        hasPermissions = await _permissionService.requestAllPermissions(context);
-        if (!hasPermissions) {
-          throw Exception('Permessi necessari non concessi su Android/iOS');
-        }
+      // Prima richiedi il permesso di storage, poi quello del microfono
+      bool hasStoragePermission = await PermissionsHandler.requestStoragePermission();
+      if (!hasStoragePermission) {
+        _logEvent('ERRORE: Permesso di storage non concesso');
+        throw Exception('Permesso di storage non concesso');
       }
+
+      bool hasMicrophonePermission = await PermissionsHandler.requestMicrophonePermission();
+      if (!hasMicrophonePermission) {
+        _logEvent('ERRORE: Permesso del microfono non concesso');
+        throw Exception('Permesso del microfono non concesso');
+      }
+
+      _logEvent('Permessi concessi: Storage e Microfono');
     } else {
+      // Su desktop
       final hasAudioAccess = await DesktopPermission.checkMicrophoneAccess();
-      final hasStorageAccess = await DesktopPermission.checkStorageAccess();
-      if (!hasAudioAccess || !hasStorageAccess) {
-        throw Exception('Permessi non disponibili su Desktop: Audio=$hasAudioAccess, Storage=$hasStorageAccess');
+      final hasStorageAccess = await DesktopPermission.requestStorageAccess();
+
+      if (!hasAudioAccess) {
+        _logEvent('ERRORE: Permesso audio non disponibile su Desktop');
+        throw Exception('Permesso audio non disponibile su Desktop');
       }
+
+      if (!hasStorageAccess) {
+        _logEvent('ERRORE: Permesso storage non disponibile su Desktop');
+        throw Exception('Permesso storage non disponibile su Desktop');
+      }
+
+      _logEvent('Permessi desktop verificati: Audio=$hasAudioAccess, Storage=$hasStorageAccess');
     }
+
     // Trova il percorso del modello e verifica la sua integrità.
     _modelPath = await _findModelPath();
     _logEvent('Percorso del modello impostato: $_modelPath');
     if (!await _verifyModelIntegrity(_modelPath)) {
       throw Exception('Integrità del modello non verificata in $_modelPath');
     }
+
     _logEvent('Inizializzazione componenti VOSK');
     _recognizer = VoskFlutterPlugin.instance();
     _model = await _recognizer!.createModel(_modelPath);
@@ -148,23 +168,21 @@ class VoskService {
       model: _model!,
       sampleRate: AppConfig.sampleRate,
     );
+
     if (Platform.isAndroid || Platform.isIOS) {
-      bool microphonePermissionGranted = await PermissionsHandler.checkMicrophonePermission();
-      if (!microphonePermissionGranted) {
-        _logEvent("Permesso microfono NON concesso prima di initSpeechService!");
-        throw Exception("Permesso microfono non concesso, impossibile inizializzare SpeechService.");
-      }
       _logEvent('Initializing SpeechService (mobile)...');
       _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
     } else {
       _logEvent("Saltata initSpeechService su Desktop platforms.");
       _speechService = null;
     }
+
     if (_speechRecognizer != null) {
       await _speechRecognizer!.setMaxAlternatives(3);
       await _speechRecognizer!.setPartialWords(partialWords: true);
       await _speechRecognizer!.setWords(words: true);
     }
+
     _isInitialized = true;
     _logEvent('Inizializzazione completata con successo');
   }

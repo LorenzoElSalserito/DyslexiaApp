@@ -36,6 +36,37 @@ class PermissionService {
   /// Verifica se siamo su Linux
   bool get _isLinux => Platform.isLinux;
 
+  /// Ottiene la versione di Android in modo sicuro
+  int? _getAndroidVersion() {
+    if (!Platform.isAndroid) return null;
+
+    try {
+      // Platform.operatingSystemVersion può contenere altre informazioni oltre alla versione
+      // Es. "EML-L09 10" invece di solo "10"
+      final versionString = Platform.operatingSystemVersion;
+
+      // Prima prova a estrarre gli ultimi numeri dalla stringa
+      final regexMatch = RegExp(r'(\d+)(?:\s*$|\s*\.|$)').firstMatch(versionString);
+      if (regexMatch != null && regexMatch.group(1) != null) {
+        return int.parse(regexMatch.group(1)!);
+      }
+
+      // Se il regex fallisce, estrai tutti i numeri e prendi il più grande
+      // (logica: la versione di Android è probabilmente il numero più grande nella stringa)
+      final allNumbers = RegExp(r'\d+').allMatches(versionString).map((m) => int.parse(m.group(0)!)).toList();
+      if (allNumbers.isNotEmpty) {
+        return allNumbers.reduce((a, b) => a > b ? a : b);
+      }
+
+      // Fallback: Android 10 è abbastanza comune e compatibile con la maggior parte delle funzionalità
+      return 10;
+    } catch (e) {
+      _logPermissionEvent('Errore nel parsing della versione Android: $e');
+      // Fallback: usa una versione predefinita che funziona con la maggior parte delle funzionalità
+      return 10;
+    }
+  }
+
   /// Richiede tutti i permessi necessari per l'applicazione
   Future<bool> requestAllPermissions(BuildContext context) async {
     _logPermissionEvent('Inizio richiesta permessi');
@@ -49,10 +80,30 @@ class PermissionService {
       }
 
       // Lista dei permessi da richiedere
-      final permissions = <Permission>[
+      var permissions = <Permission>[
         Permission.microphone,
-        Permission.storage,
       ];
+
+      // Aggiungi i permessi di storage appropriati in base alla versione di Android
+      if (Platform.isAndroid) {
+        // Ottieni la versione di Android in modo sicuro
+        int? androidVersion = _getAndroidVersion();
+        _logPermissionEvent('Versione Android rilevata: $androidVersion');
+
+        if (androidVersion != null && androidVersion >= 13) {
+          permissions.add(Permission.audio);
+          permissions.add(Permission.photos);
+
+          if (androidVersion >= 14) {
+            permissions.add(Permission.manageExternalStorage);
+          }
+        } else {
+          permissions.add(Permission.storage);
+        }
+      } else if (Platform.isIOS) {
+        permissions.add(Permission.storage);
+        permissions.add(Permission.photos);
+      }
 
       _logPermissionEvent('Verifica permessi su ${Platform.operatingSystem}');
 
@@ -104,6 +155,22 @@ class PermissionService {
           await homeDir.stat().then((stat) =>
           (stat.mode & 0x2) != 0);
 
+      // Crea directory dell'app se non esiste
+      try {
+        final appDir = Directory('${homeDir.path}/Documenti/OpenDSA');
+        if (!await appDir.exists()) {
+          await appDir.create(recursive: true);
+        }
+
+        // Test di scrittura
+        final testFile = File('${appDir.path}/test_permissions');
+        await testFile.writeAsString('test');
+        await testFile.delete();
+      } catch (e) {
+        _logPermissionEvent('Errore nella verifica delle directory app: $e');
+        return false;
+      }
+
       _logPermissionEvent('Linux - Microfono: $micAccess, Storage: $storageAccess');
       return micAccess && storageAccess;
 
@@ -128,12 +195,37 @@ class PermissionService {
 
     try {
       final micStatus = await Permission.microphone.status;
-      final storageStatus = await Permission.storage.status;
+
+      List<PermissionStatus> storageStatuses = [];
+
+      // Verifica permessi storage in base alla versione Android
+      if (Platform.isAndroid) {
+        // Ottieni la versione di Android in modo sicuro
+        int? androidVersion = _getAndroidVersion();
+        _logPermissionEvent('Versione Android rilevata: $androidVersion');
+
+        if (androidVersion != null && androidVersion >= 13) {
+          storageStatuses.add(await Permission.audio.status);
+          storageStatuses.add(await Permission.photos.status);
+
+          if (androidVersion >= 14) {
+            storageStatuses.add(await Permission.manageExternalStorage.status);
+          }
+        } else {
+          storageStatuses.add(await Permission.storage.status);
+        }
+      } else if (Platform.isIOS) {
+        storageStatuses.add(await Permission.storage.status);
+        storageStatuses.add(await Permission.photos.status);
+      }
 
       _logPermissionEvent('Stato microfono: $micStatus');
-      _logPermissionEvent('Stato storage: $storageStatus');
+      _logPermissionEvent('Stato storage: $storageStatuses');
 
-      return micStatus.isGranted && storageStatus.isGranted;
+      // Controlla che almeno il microfono e uno dei permessi di storage siano concessi
+      bool storageGranted = storageStatuses.any((status) => status.isGranted);
+
+      return micStatus.isGranted && storageGranted;
     } catch (e) {
       _logPermissionEvent('Errore nella verifica permessi: $e');
       return false;
@@ -212,7 +304,25 @@ class PermissionService {
         return _PermissionDetails(
             name: 'Storage',
             explanation: 'L\'accesso allo storage è necessario per salvare i '
-                'file di configurazione.'
+                'file di configurazione e le registrazioni audio.'
+        );
+      case Permission.audio:
+        return _PermissionDetails(
+            name: 'File Audio',
+            explanation: 'L\'accesso ai file audio è necessario per salvare e '
+                'gestire le registrazioni degli esercizi.'
+        );
+      case Permission.photos:
+        return _PermissionDetails(
+            name: 'Foto e Media',
+            explanation: 'L\'accesso ai media è necessario per salvare i '
+                'file di configurazione e le registrazioni audio.'
+        );
+      case Permission.manageExternalStorage:
+        return _PermissionDetails(
+            name: 'Gestione Storage',
+            explanation: 'La gestione completa dello storage è necessaria per '
+                'salvare e gestire i file dell\'applicazione.'
         );
       default:
         return _PermissionDetails(
