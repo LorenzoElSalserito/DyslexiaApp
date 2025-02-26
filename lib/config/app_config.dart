@@ -17,7 +17,7 @@ class AppConfig {
   static const int vadAggressiveness = 1;   // 0-3 per la riduzione del rumore
   static const double vadThreshold = 0.15;   // Soglia per il VAD
   static const bool vadEnable = true;       // Voice Activity Detection
-  static const bool noiseSuppressionEnable = true;  // Soppressione rumore
+  static const bool noiseSuppressionEnable = false;  // Soppressione rumore
   static const bool autoGainControlEnable = true;   // Controllo guadagno
 
   // Configurazioni Audio
