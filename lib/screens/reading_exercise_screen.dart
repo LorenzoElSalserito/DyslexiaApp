@@ -1,5 +1,3 @@
-// Modifiche da applicare al file lib/screens/reading_exercise_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -39,7 +37,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
   // Servizi
   late final ExerciseManager _exerciseManager;
-  late final SpeechRecognitionService _speechService;
+  SpeechRecognitionService? _speechService;
 
   // Stream subscriptions
   StreamSubscription<double>? _volumeSubscription;
@@ -69,6 +67,18 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     }
   }
 
+  // Metodo per cancellare tutte le sottoscrizioni senza chiudere gli stream
+  void _cancelAllSubscriptions() {
+    _volumeSubscription?.cancel();
+    _volumeSubscription = null;
+    _speechStateSubscription?.cancel();
+    _speechStateSubscription = null;
+    _resultSubscription?.cancel();
+    _resultSubscription = null;
+    _initTimeoutTimer?.cancel();
+    _initTimeoutTimer = null;
+  }
+
   Future<void> _initializeSession() async {
     if (!mounted) return;
 
@@ -94,6 +104,11 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
     });
 
     try {
+      // Crea una nuova istanza di SpeechRecognitionService se necessario
+      if (_speechService == null || _speechService!.currentState == RecognitionState.error) {
+        _speechService = SpeechRecognitionService();
+      }
+
       // Richiedi PRIMA i permessi di storage e POI quelli del microfono
       bool storageGranted = await PermissionsHandler.requestStoragePermission()
           .timeout(const Duration(seconds: 5), onTimeout: () {
@@ -120,7 +135,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
       // Inizializza il servizio di riconoscimento vocale
       if (!mounted) return;
-      await _speechService.initialize(context)
+      await _speechService!.initialize(context)
           .timeout(const Duration(seconds: 10), onTimeout: () {
         debugPrint("Timeout nell'inizializzazione del speech service");
         throw Exception("Timeout nell'inizializzazione del riconoscimento vocale");
@@ -188,17 +203,22 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   }
 
   void _setupSubscriptions() {
-    _volumeSubscription = _speechService.volumeStream.listen((volume) {
+    // Cancella prima le vecchie sottoscrizioni, se esistono
+    _cancelAllSubscriptions();
+
+    if (_speechService == null) return;
+
+    _volumeSubscription = _speechService!.volumeStream.listen((volume) {
       if (mounted) {
         setState(() => _volumeLevel = volume);
       }
     });
 
-    _speechStateSubscription = _speechService.stateStream.listen((state) {
+    _speechStateSubscription = _speechService!.stateStream.listen((state) {
       if (mounted) setState(() {});
     });
 
-    _resultSubscription = _speechService.resultStream.listen((result) async {
+    _resultSubscription = _speechService!.resultStream.listen((result) async {
       await _handleRecognitionResult(result);
     });
   }
@@ -227,7 +247,9 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       });
 
       // Reset del servizio di riconoscimento prima del nuovo esercizio
-      await _speechService.reset();
+      if (_speechService != null) {
+        await _speechService!.reset();
+      }
 
       // Utilizziamo un timeout per evitare blocchi
       final exercise = await _exerciseManager.generateExercise()
@@ -260,19 +282,21 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
   }
 
   Future<void> _onRecordButtonPressed() async {
-    if (_speechService.currentState == RecognitionState.idle ||
-        _speechService.currentState == RecognitionState.completed) {
+    if (_speechService == null) return;
+
+    if (_speechService!.currentState == RecognitionState.idle ||
+        _speechService!.currentState == RecognitionState.completed) {
       try {
-        await _speechService.startRecognition(_currentWord);
+        await _speechService!.startRecognition(_currentWord);
       } catch (e) {
         setState(() {
           _errorMessage = 'Errore nell\'avvio del riconoscimento: $e';
         });
         debugPrint('[ReadingExerciseScreen] Errore avvio riconoscimento: $e');
       }
-    } else if (_speechService.currentState == RecognitionState.recording) {
+    } else if (_speechService!.currentState == RecognitionState.recording) {
       try {
-        await _speechService.stopRecognition();
+        await _speechService!.stopRecognition();
       } catch (e) {
         setState(() {
           _errorMessage = 'Errore nello stop del riconoscimento: $e';
@@ -366,12 +390,21 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       if (!mounted) return;
 
       if (shouldContinue == true) {
+        // Reset completo dello stato senza distruggere la schermata
+        _cancelAllSubscriptions();
+
         setState(() {
           _currentExercise = 0;
           _totalCrystals = 0;
           _isSessionStarted = false;
           _isInitialized = false;
+          _errorMessage = null;
+          _downloadStatusMessage = "Inizializzazione in corso...";
+          _initAttempts = 0;
+          _currentWord = "";
         });
+
+        // Avvia una nuova sessione
         await _initializeSession();
       } else {
         Navigator.of(context).pop();
@@ -389,14 +422,19 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
 
   @override
   void dispose() {
-    _initTimeoutTimer?.cancel();
-    _volumeSubscription?.cancel();
-    _speechStateSubscription?.cancel();
-    _resultSubscription?.cancel();
-    if (_speechService.currentState == RecognitionState.recording) {
-      _speechService.stopRecognition();
+    _cancelAllSubscriptions();
+
+    // Ferma la registrazione se è in corso
+    if (_speechService != null && _speechService!.currentState == RecognitionState.recording) {
+      _speechService!.stopRecognition();
     }
-    _speechService.dispose();
+
+    // Se l'utente sta chiudendo completamente la schermata, libera le risorse
+    if (Navigator.of(context).canPop()) {
+      _speechService?.dispose();
+      _speechService = null;
+    }
+
     super.dispose();
   }
 
@@ -518,8 +556,8 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
       ),
       body: WillPopScope(
         onWillPop: () async {
-          if (_speechService.currentState == RecognitionState.recording) {
-            await _speechService.stopRecognition();
+          if (_speechService != null && _speechService!.currentState == RecognitionState.recording) {
+            await _speechService!.stopRecognition();
             return false;
           }
           return true;
@@ -551,7 +589,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                 value: _currentExercise / _totalExercises,
                                 backgroundColor: Colors.grey[300],
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  _speechService.currentState == RecognitionState.recording
+                                  _speechService != null && _speechService!.currentState == RecognitionState.recording
                                       ? Colors.red.shade700
                                       : Colors.green.shade500,
                                 ),
@@ -584,7 +622,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                   ),
                                 ),
                               ),
-                              if (_speechService.currentState == RecognitionState.recording)
+                              if (_speechService != null && _speechService!.currentState == RecognitionState.recording)
                                 TweenAnimationBuilder<double>(
                                   tween: Tween<double>(begin: 1.0, end: 1.0 + _volumeLevel * 0.5),
                                   duration: const Duration(milliseconds: 300),
@@ -598,7 +636,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                     targetText: _currentWord,
                                   ),
                                 ),
-                              if (_speechService.currentState == RecognitionState.processing)
+                              if (_speechService != null && _speechService!.currentState == RecognitionState.processing)
                                 Column(
                                   children: const [
                                     SizedBox(height: 20),
@@ -618,7 +656,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                 ElevatedButton(
                                   onPressed: _onRecordButtonPressed,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _speechService.currentState == RecognitionState.recording
+                                    backgroundColor: _speechService != null && _speechService!.currentState == RecognitionState.recording
                                         ? Colors.red.shade700
                                         : Colors.green.shade700,
                                     foregroundColor: Colors.white,
@@ -629,7 +667,7 @@ class _ReadingExerciseScreenState extends State<ReadingExerciseScreen> {
                                     textStyle: const TextStyle(fontSize: AppConfig.title),
                                   ),
                                   child: Text(
-                                    _speechService.currentState == RecognitionState.recording
+                                    _speechService != null && _speechService!.currentState == RecognitionState.recording
                                         ? 'Stop'
                                         : 'Registra',
                                     style: const TextStyle(fontFamily: 'OpenDyslexic'),

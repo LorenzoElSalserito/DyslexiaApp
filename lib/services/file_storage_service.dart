@@ -172,25 +172,39 @@ class FileStorageService {
     }
   }
 
-  /// Elimina un profilo e tutti i suoi file associati
+  /// Elimina un profilo e tutti i suoi file associati in modo completo
   Future<void> deleteProfile(String profileId) async {
     if (profileId.isEmpty) {
       throw ArgumentError('ProfileId non può essere vuoto');
     }
-    debugPrint('Eliminazione profilo $profileId');
+    debugPrint('FileStorageService: Eliminazione profilo $profileId');
     try {
+      // Ottieni il percorso base del profilo
       final profileFile = await _getProfileFile(profileId);
+      final profileDir = profileFile.parent;
+
+      // Cerca tutti i file che contengono l'ID del profilo nella directory
+      final entityList = await profileDir.list().toList();
+      for (final entity in entityList) {
+        if (entity is File && path.basename(entity.path).contains(profileId)) {
+          await entity.delete();
+          debugPrint('FileStorageService: File eliminato: ${entity.path}');
+        }
+      }
+
+      // Elimina anche i file standard con estensioni
       final tempFile = File('${profileFile.path}$_tempExtension');
       final backupFile = File('${profileFile.path}$_backupExtension');
       for (final file in [profileFile, tempFile, backupFile]) {
         if (await file.exists()) {
           await file.delete();
-          debugPrint('File eliminato: ${file.path}');
+          debugPrint('FileStorageService: File eliminato: ${file.path}');
         }
       }
-      debugPrint('Profilo eliminato con successo');
+
+      debugPrint('FileStorageService: Profilo eliminato con successo');
     } catch (e) {
-      debugPrint('Errore nell\'eliminazione del profilo $profileId: $e');
+      debugPrint('FileStorageService: Errore nell\'eliminazione del profilo $profileId: $e');
       rethrow;
     }
   }

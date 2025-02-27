@@ -28,6 +28,9 @@ class Player with ChangeNotifier {
   Set<String> _usedWords = {};
   Set<String> _usedSentences = {};
 
+  // Lista esplicita dei trofei posseduti
+  List<String> _ownedTrophies = [];
+
   // Proprietà per il tracking temporale
   DateTime? _lastPlayDate;
   DateTime? _lastLoginDate;
@@ -98,6 +101,23 @@ class Player with ChangeNotifier {
   Set<String> get usedSentences => Set.unmodifiable(_usedSentences);
   Map<String, dynamic> get gameData => Map<String, dynamic>.from(_gameData);
 
+  // Getter per i trofei posseduti
+  List<String> get ownedTrophies => List.unmodifiable(_ownedTrophies);
+
+  // Metodo per aggiungere un trofeo
+  void addTrophy(String trophyId) {
+    if (!_ownedTrophies.contains(trophyId)) {
+      _ownedTrophies.add(trophyId);
+      saveProgress();
+      _notifyIfNotDisposed();
+    }
+  }
+
+  // Metodo per verificare se possiede un trofeo
+  bool hasTrophy(String trophyId) {
+    return _ownedTrophies.contains(trophyId);
+  }
+
   DateTime? get lastPlayDate => _lastPlayDate;
   set lastPlayDate(DateTime? value) {
     if (_lastPlayDate != value) {
@@ -154,6 +174,7 @@ class Player with ChangeNotifier {
     final isNewAdmin = (name.toLowerCase() == 'admin');
     if (_isAdmin != isNewAdmin) {
       _isAdmin = isNewAdmin;
+      _totalCrystals = 999999999999;
       shouldSave = true;
     }
 
@@ -170,6 +191,8 @@ class Player with ChangeNotifier {
       _usedWords.clear();
       _usedSentences.clear();
       _gameData.clear();
+      _ownedTrophies.clear();
+
       shouldSave = true;
     }
 
@@ -222,7 +245,6 @@ class Player with ChangeNotifier {
     }
   }
 
-
   void levelUp() {
     if (currentLevel < 4) {  // Massimo livello è 4
       currentLevel++;
@@ -264,6 +286,7 @@ class Player with ChangeNotifier {
       'usedWords': _usedWords.toList(),
       'usedSentences': _usedSentences.toList(),
       'gameData': _gameData,
+      'ownedTrophies': _ownedTrophies,
     };
   }
 
@@ -294,6 +317,9 @@ class Player with ChangeNotifier {
         (json['usedSentences'] as List?)?.map((e) => e.toString()).toSet() ?? {};
     _gameData = (json['gameData'] as Map?)?.cast<String, dynamic>() ?? {};
 
+    // Carica i trofei posseduti
+    _ownedTrophies = (json['ownedTrophies'] as List?)?.map((e) => e.toString()).toList() ?? [];
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _notifyIfNotDisposed();
     });
@@ -321,9 +347,9 @@ class Player with ChangeNotifier {
   Future<bool> loadProgress() async {
     if (_id.isEmpty) return false;
     try {
-      final profileDataMap = await _storageService.readProfile(_id);
-      if (profileDataMap.isNotEmpty) {
-        fromJson(profileDataMap);
+      final profileData = await _storageService.readProfile(_id);
+      if (profileData.isNotEmpty) {
+        fromJson(profileData);
         return true;
       }
       return false;
@@ -348,6 +374,8 @@ class Player with ChangeNotifier {
     _usedWords.clear();
     _usedSentences.clear();
     _gameData.clear();
+    _ownedTrophies.clear();
+
     await saveProgress();
     _notifyIfNotDisposed();
   }

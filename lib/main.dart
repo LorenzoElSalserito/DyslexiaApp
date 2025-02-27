@@ -22,6 +22,9 @@ import 'config/theme_config.dart';
 import 'dart:io' show Platform;
 import 'services/ui_error_logger.dart';
 
+/// Chiave globale per il navigator, utilizzata per accedere al contesto globale
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 /// Punto di ingresso principale dell'applicazione.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,14 +124,17 @@ void main() async {
           ChangeNotifierProxyProvider<PlayerManager, StoreService>(
             create: (context) =>
                 StoreService(
-                  prefs,
-                  context
-                      .read<PlayerManager>()
-                      .currentProfile ?? Player(),
+                    context.read<PlayerManager>().currentProfile ?? Player()
                 ),
-            update: (context, playerManager, previous) =>
-            previous ??
-                StoreService(prefs, playerManager.currentProfile ?? Player()),
+            update: (context, playerManager, previous) {
+              final current = playerManager.currentProfile;
+              if (current != null && previous != null) {
+                // Aggiorna il profilo esistente invece di creare una nuova istanza
+                previous.updatePlayerProfile(current);
+                return previous;
+              }
+              return previous ?? StoreService(current ?? Player());
+            },
           ),
         ],
         child: const OpenDSAApp(),
@@ -160,6 +166,7 @@ class OpenDSAApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'OpenDSA: Reading',
       theme: ThemeConfig.lightTheme,
       debugShowCheckedModeBanner: false, // Rimuove il banner di debug.

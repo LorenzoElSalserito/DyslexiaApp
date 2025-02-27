@@ -1,7 +1,9 @@
 // lib/services/player_manager.dart
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart';
 import '../models/player.dart';
 import '../services/file_storage_service.dart';
 
@@ -162,12 +164,24 @@ class PlayerManager extends ChangeNotifier {
     if (!_isInitialized) await initialize();
 
     try {
+      // Elimina il profilo
       await deleteProfiles([profileId]);
       return true;
     } catch (e) {
       debugPrint('Errore nell\'eliminazione del profilo: $e');
       return false;
     }
+  }
+
+  BuildContext _getGlobalContext() {
+    // Nota: questo è un approccio comune ma non ideale.
+    // Nel mondo reale, sarebbe meglio rifattorizzare il codice per iniettare le dipendenze
+    // in modo da non dover fare affidamento su Provider.of in un contesto globale
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      throw Exception('Nessun contesto disponibile per il Provider');
+    }
+    return context;
   }
 
   /// Carica lo stato di un giocatore.

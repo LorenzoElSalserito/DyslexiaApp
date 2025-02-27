@@ -4,14 +4,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
-/// Importa permission_handler solo su piattaforme non Linux
+/// Importa permission_handler e il nostro gestore migliorato
 import 'package:permission_handler/permission_handler.dart'
 if (dart.library.io) 'package:permission_handler/permission_handler.dart'
 if (dart.library.html) 'package:permission_handler/permission_handler.dart';
+import '../utils/permission_handler.dart';
 
 /// Servizio centralizzato per la gestione dei permessi dell'applicazione.
 /// Gestisce i permessi in modo diverso per ogni piattaforma supportata:
-/// - Android/iOS: Usa permission_handler
+/// - Android: Usa una strategia adattiva in base alla versione
+/// - iOS: Usa permission_handler standard
 /// - Linux: Usa controlli nativi del filesystem
 /// - Web: Usa le API del browser
 /// - Windows/macOS: Usa permission_handler
@@ -23,6 +25,13 @@ class PermissionService {
   // Stato interno e logging
   final List<String> _permissionLogs = [];
   bool _isInitialized = false;
+
+  // Stato dei permessi
+  bool _storagePermissionGranted = false;
+  bool _microphonePermissionGranted = false;
+
+  // Timeout per operazioni di permessi (in secondi)
+  static const int _permissionTimeout = 5;
 
   PermissionService._internal() {
     _logPermissionEvent('PermissionService inizializzato');
@@ -36,42 +45,18 @@ class PermissionService {
   /// Verifica se siamo su Linux
   bool get _isLinux => Platform.isLinux;
 
-  /// Ottiene la versione di Android in modo sicuro
-  int? _getAndroidVersion() {
-    if (!Platform.isAndroid) return null;
+  /// Verifica se siamo su Android
+  bool get _isAndroid => Platform.isAndroid;
 
-    try {
-      // Platform.operatingSystemVersion può contenere altre informazioni oltre alla versione
-      // Es. "EML-L09 10" invece di solo "10"
-      final versionString = Platform.operatingSystemVersion;
-
-      // Prima prova a estrarre gli ultimi numeri dalla stringa
-      final regexMatch = RegExp(r'(\d+)(?:\s*$|\s*\.|$)').firstMatch(versionString);
-      if (regexMatch != null && regexMatch.group(1) != null) {
-        return int.parse(regexMatch.group(1)!);
-      }
-
-      // Se il regex fallisce, estrai tutti i numeri e prendi il più grande
-      // (logica: la versione di Android è probabilmente il numero più grande nella stringa)
-      final allNumbers = RegExp(r'\d+').allMatches(versionString).map((m) => int.parse(m.group(0)!)).toList();
-      if (allNumbers.isNotEmpty) {
-        return allNumbers.reduce((a, b) => a > b ? a : b);
-      }
-
-      // Fallback: Android 10 è abbastanza comune e compatibile con la maggior parte delle funzionalità
-      return 10;
-    } catch (e) {
-      _logPermissionEvent('Errore nel parsing della versione Android: $e');
-      // Fallback: usa una versione predefinita che funziona con la maggior parte delle funzionalità
-      return 10;
-    }
-  }
+  /// Verifica se siamo su iOS
+  bool get _isIOS => Platform.isIOS;
 
   /// Richiede tutti i permessi necessari per l'applicazione
   Future<bool> requestAllPermissions(BuildContext context) async {
     _logPermissionEvent('Inizio richiesta permessi');
 
     try {
+      // Implementazione resiliente che non causa crash in caso di problemi
       if (_isLinux) {
         return await _handleLinuxPermissions();
       } else if (!_requiresPermissionHandling) {
@@ -79,64 +64,202 @@ class PermissionService {
         return true;
       }
 
-      // Lista dei permessi da richiedere
-      var permissions = <Permission>[
-        Permission.microphone,
-      ];
+      // Verifica lo stato attuale dei permessi per non richiedere quelli già concessi
+      await checkAllPermissions();
 
-      // Aggiungi i permessi di storage appropriati in base alla versione di Android
-      if (Platform.isAndroid) {
-        // Ottieni la versione di Android in modo sicuro
-        int? androidVersion = _getAndroidVersion();
-        _logPermissionEvent('Versione Android rilevata: $androidVersion');
+      // Se i permessi sono già concessi, ritorna subito senza mostrare dialog
+      if (_storagePermissionGranted && _microphonePermissionGranted) {
+        _logPermissionEvent('Tutti i permessi già concessi');
+        return true;
+      }
 
-        if (androidVersion != null && androidVersion >= 13) {
-          permissions.add(Permission.audio);
-          permissions.add(Permission.photos);
+      // Richiedi in modo resiliente i permessi di storage (più critico)
+      if (!_storagePermissionGranted) {
+        _storagePermissionGranted = await _requestStoragePermissionWithTimeout();
+        _logPermissionEvent('Permesso storage: ${_storagePermissionGranted ? 'CONCESSO' : 'NEGATO'}');
+      }
 
-          if (androidVersion >= 14) {
-            permissions.add(Permission.manageExternalStorage);
-          }
-        } else {
-          permissions.add(Permission.storage);
+      // Poi richiedi il microfono
+      if (!_microphonePermissionGranted) {
+        _microphonePermissionGranted = await _requestMicrophonePermissionWithTimeout();
+        _logPermissionEvent('Permesso microfono: ${_microphonePermissionGranted ? 'CONCESSO' : 'NEGATO'}');
+      }
+
+      // Mostra il dialogo solo se i permessi sono negati e il contesto è ancora valido
+      if (!_storagePermissionGranted || !_microphonePermissionGranted) {
+        if (context.mounted) {
+          await _showPermissionFailureDialog(
+              context,
+              !_storagePermissionGranted,
+              !_microphonePermissionGranted
+          );
         }
-      } else if (Platform.isIOS) {
-        permissions.add(Permission.storage);
-        permissions.add(Permission.photos);
       }
 
-      _logPermissionEvent('Verifica permessi su ${Platform.operatingSystem}');
-
-      // Richiedi ogni permesso necessario
-      for (final permission in permissions) {
-        await _handlePermissionRequest(context, permission);
-      }
-
-      // Verifica finale
+      // Verifica finale dei permessi
       final allGranted = await checkAllPermissions();
       _logPermissionEvent('Verifica finale permessi: ${allGranted ? 'OK' : 'NON OK'}');
       return allGranted;
 
     } catch (e) {
       _logPermissionEvent('Errore nella richiesta permessi: $e');
-      return false;
+      // In caso di errore, torniamo true per non bloccare l'app
+      return true;
     }
   }
 
-  /// Gestisce la richiesta di un singolo permesso
-  Future<void> _handlePermissionRequest(BuildContext context, Permission permission) async {
-    final status = await permission.status;
-    _logPermissionEvent('Stato corrente $permission: $status');
+  /// Richiede il permesso di storage con un timeout di sicurezza
+  Future<bool> _requestStoragePermissionWithTimeout() async {
+    try {
+      return await PermissionsHandler.requestStoragePermission()
+          .timeout(Duration(seconds: _permissionTimeout), onTimeout: () {
+        _logPermissionEvent('Timeout nella richiesta permessi storage');
+        return true; // Assumiamo permessi OK in caso di timeout
+      });
+    } catch (e) {
+      _logPermissionEvent('Errore critico nella richiesta permessi storage: $e');
+      return true; // Assumiamo permessi OK in caso di errore per non bloccare l'app
+    }
+  }
 
-    if (status.isDenied) {
-      _logPermissionEvent('Richiesta permesso $permission');
-      final result = await permission.request();
-      _logPermissionEvent('Risultato richiesta: $result');
+  /// Richiede il permesso del microfono con un timeout di sicurezza
+  Future<bool> _requestMicrophonePermissionWithTimeout() async {
+    try {
+      return await PermissionsHandler.requestMicrophonePermission()
+          .timeout(Duration(seconds: _permissionTimeout), onTimeout: () {
+        _logPermissionEvent('Timeout nella richiesta permessi microfono');
+        return true; // Assumiamo permessi OK in caso di timeout
+      });
+    } catch (e) {
+      _logPermissionEvent('Errore critico nella richiesta permessi microfono: $e');
+      return true; // Assumiamo permessi OK in caso di errore per non bloccare l'app
+    }
+  }
 
-      if (result.isPermanentlyDenied && context.mounted) {
-        _logPermissionEvent('Permesso negato permanentemente per $permission');
-        await _showPermissionDialog(context, permission);
-      }
+  /// Mostra un dialogo quando i permessi sono stati negati
+  Future<void> _showPermissionFailureDialog(
+      BuildContext context,
+      bool storageNeeded,
+      bool microphoneNeeded
+      ) async {
+    if (!context.mounted) return;
+
+    final messages = <String>[];
+    if (storageNeeded) messages.add('• Storage: necessario per salvare i dati dell\'app');
+    if (microphoneNeeded) messages.add('• Microfono: necessario per le registrazioni vocali');
+
+    if (messages.isEmpty) return;
+
+    // Mappa dei permessi necessari in base alla piattaforma
+    final Map<String, String> permissionsHelpText = {
+      'android': _isAndroid ? _createAndroidPermissionsHelpText() : '',
+      'ios': _isIOS ? 'Vai su Impostazioni > Privacy > Microfono / Foto.' : '',
+      'linux': _isLinux ? 'Controlla i permessi di accesso ai dispositivi audio e alle cartelle.' : '',
+    };
+
+    // Filtra i testi di aiuto per mostrare solo quello della piattaforma corrente
+    final platformSpecificHelp = permissionsHelpText.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .map((entry) => entry.value)
+        .join('\n\n');
+
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'Permessi Mancanti',
+            style: TextStyle(fontFamily: 'OpenDyslexic'),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Per il corretto funzionamento dell\'app OpenDSA: Reading, sono necessari i seguenti permessi:',
+                  style: TextStyle(fontFamily: 'OpenDyslexic'),
+                ),
+                const SizedBox(height: 16),
+                ...messages.map((msg) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                      msg,
+                      style: const TextStyle(
+                          fontFamily: 'OpenDyslexic',
+                          fontWeight: FontWeight.bold
+                      )
+                  ),
+                )),
+                const SizedBox(height: 16),
+                Text(
+                  platformSpecificHelp,
+                  style: const TextStyle(
+                    fontFamily: 'OpenDyslexic',
+                    fontStyle: FontStyle.italic,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Per modificare i permessi, vai nelle impostazioni dell\'app.',
+                  style: TextStyle(
+                    fontFamily: 'OpenDyslexic',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Annulla',
+                style: TextStyle(fontFamily: 'OpenDyslexic'),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                _logPermissionEvent('Apertura impostazioni app');
+                try {
+                  await openAppSettings();
+                } catch (e) {
+                  _logPermissionEvent('Errore nell\'apertura delle impostazioni: $e');
+                }
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: const Text(
+                'Apri Impostazioni',
+                style: TextStyle(
+                    fontFamily: 'OpenDyslexic',
+                    fontWeight: FontWeight.bold
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Crea il testo di aiuto specifico per Android in base alla versione
+  String _createAndroidPermissionsHelpText() {
+    if (!_isAndroid) return '';
+
+    final androidVersion = PermissionsHandler.getAndroidVersion();
+
+    if (androidVersion >= 13) {
+      return 'Android 13+: Vai su Impostazioni > App > OpenDSA: Reading > Autorizzazioni e concedi l\'accesso a "Foto e video" e "Microfono".';
+    } else if (androidVersion >= 11) {
+      return 'Android 11-12: Vai su Impostazioni > App > OpenDSA: Reading > Autorizzazioni e concedi l\'accesso allo "Storage" e al "Microfono". Potresti dover concedere anche "Gestione di tutti i file".';
+    } else if (androidVersion == 10) {
+      return 'Android 10: Vai su Impostazioni > App > OpenDSA: Reading > Autorizzazioni e concedi l\'accesso allo "Storage" e al "Microfono".';
+    } else {
+      return 'Android: Vai su Impostazioni > App > OpenDSA: Reading > Autorizzazioni e concedi l\'accesso allo "Storage" e al "Microfono".';
     }
   }
 
@@ -145,38 +268,109 @@ class PermissionService {
     try {
       // Verifica accesso al microfono
       final micDevice = File('/dev/snd/pcmC0D0c');
-      final micAccess = await micDevice.exists() &&
-          await micDevice.stat().then((stat) =>
-          (stat.mode & 0x4) != 0);
+      bool micAccess = false;
+
+      if (await micDevice.exists()) {
+        try {
+          micAccess = await micDevice.stat().then((stat) => (stat.mode & 0x4) != 0);
+        } catch (e) {
+          _logPermissionEvent('Errore nel verificare i permessi del microfono: $e');
+        }
+      }
+
+      // Prova anche con i dispositivi alternativi
+      if (!micAccess) {
+        for (final devicePath in ['/dev/dsp', '/dev/audio']) {
+          final altDevice = File(devicePath);
+          if (await altDevice.exists()) {
+            try {
+              micAccess = await altDevice.stat().then((stat) => (stat.mode & 0x4) != 0);
+              if (micAccess) break;
+            } catch (e) {
+              // Continua a verificare altri dispositivi
+            }
+          }
+        }
+      }
+
+      // Se ancora non abbiamo accesso, prova a controllare i gruppi dell'utente
+      if (!micAccess) {
+        try {
+          final result = await Process.run('groups', []);
+          if (result.exitCode == 0) {
+            final groups = (result.stdout as String).split(' ');
+            micAccess = groups.any((group) =>
+                ['audio', 'pulse', 'pulse-access'].contains(group.trim()));
+          }
+        } catch (e) {
+          _logPermissionEvent('Errore nel verificare i gruppi utente: $e');
+        }
+      }
+
+      _logPermissionEvent('Linux - Accesso microfono: $micAccess');
+      _microphonePermissionGranted = micAccess;
 
       // Verifica accesso allo storage
       final homeDir = Directory(Platform.environment['HOME'] ?? '');
-      final storageAccess = await homeDir.exists() &&
-          await homeDir.stat().then((stat) =>
-          (stat.mode & 0x2) != 0);
+      bool storageAccess = false;
+
+      if (await homeDir.exists()) {
+        try {
+          storageAccess = await homeDir.stat().then((stat) => (stat.mode & 0x2) != 0);
+        } catch (e) {
+          _logPermissionEvent('Errore nel verificare i permessi home: $e');
+        }
+      }
 
       // Crea directory dell'app se non esiste
       try {
-        final appDir = Directory('${homeDir.path}/Documenti/OpenDSA');
-        if (!await appDir.exists()) {
-          await appDir.create(recursive: true);
+        // Prova diverse posizioni possibili per la directory dell'app
+        final possibleDirs = [
+          '${homeDir.path}/Documenti/OpenDSA',
+          '${homeDir.path}/Documents/OpenDSA',
+          '${homeDir.path}/.local/share/OpenDSA',
+          '/tmp/OpenDSA'
+        ];
+
+        bool directoryCreated = false;
+
+        for (final dirPath in possibleDirs) {
+          try {
+            final appDir = Directory(dirPath);
+            if (!await appDir.exists()) {
+              await appDir.create(recursive: true);
+            }
+
+            // Test di scrittura
+            final testFile = File('${appDir.path}/test_permissions');
+            await testFile.writeAsString('test');
+            await testFile.delete();
+
+            storageAccess = true;
+            directoryCreated = true;
+            _logPermissionEvent('Linux - Directory creata con successo: $dirPath');
+            break;
+          } catch (e) {
+            _logPermissionEvent('Errore con directory $dirPath: $e');
+            continue;
+          }
         }
 
-        // Test di scrittura
-        final testFile = File('${appDir.path}/test_permissions');
-        await testFile.writeAsString('test');
-        await testFile.delete();
+        if (!directoryCreated) {
+          _logPermissionEvent('Linux - Impossibile creare/accedere a nessuna directory di app');
+        }
       } catch (e) {
         _logPermissionEvent('Errore nella verifica delle directory app: $e');
-        return false;
       }
 
-      _logPermissionEvent('Linux - Microfono: $micAccess, Storage: $storageAccess');
-      return micAccess && storageAccess;
+      _logPermissionEvent('Linux - Accesso storage: $storageAccess');
+      _storagePermissionGranted = storageAccess;
 
+      return micAccess && storageAccess;
     } catch (e) {
       _logPermissionEvent('Errore nei permessi Linux: $e');
-      return false;
+      // In caso di errore, restituiamo true per non bloccare l'app
+      return true;
     }
   }
 
@@ -185,7 +379,8 @@ class PermissionService {
     _logPermissionEvent('Verifica stato permessi');
 
     if (_isLinux) {
-      return _handleLinuxPermissions();
+      final result = await _handleLinuxPermissions();
+      return result;
     }
 
     if (!_requiresPermissionHandling) {
@@ -194,142 +389,32 @@ class PermissionService {
     }
 
     try {
-      final micStatus = await Permission.microphone.status;
+      // Verifica lo stato dei permessi usando PermissionsHandler con un timeout di sicurezza
+      final hasMicrophone = await PermissionsHandler.checkMicrophonePermission()
+          .timeout(Duration(seconds: _permissionTimeout), onTimeout: () {
+        _logPermissionEvent('Timeout nella verifica permesso microfono, assumiamo OK');
+        return true;
+      });
 
-      List<PermissionStatus> storageStatuses = [];
+      final hasStorage = await PermissionsHandler.checkStoragePermission()
+          .timeout(Duration(seconds: _permissionTimeout), onTimeout: () {
+        _logPermissionEvent('Timeout nella verifica permesso storage, assumiamo OK');
+        return true;
+      });
 
-      // Verifica permessi storage in base alla versione Android
-      if (Platform.isAndroid) {
-        // Ottieni la versione di Android in modo sicuro
-        int? androidVersion = _getAndroidVersion();
-        _logPermissionEvent('Versione Android rilevata: $androidVersion');
+      _logPermissionEvent('Stato microfono: ${hasMicrophone ? 'CONCESSO' : 'NEGATO'}');
+      _logPermissionEvent('Stato storage: ${hasStorage ? 'CONCESSO' : 'NEGATO'}');
 
-        if (androidVersion != null && androidVersion >= 13) {
-          storageStatuses.add(await Permission.audio.status);
-          storageStatuses.add(await Permission.photos.status);
+      // Aggiorna lo stato dei permessi
+      _microphonePermissionGranted = hasMicrophone;
+      _storagePermissionGranted = hasStorage;
 
-          if (androidVersion >= 14) {
-            storageStatuses.add(await Permission.manageExternalStorage.status);
-          }
-        } else {
-          storageStatuses.add(await Permission.storage.status);
-        }
-      } else if (Platform.isIOS) {
-        storageStatuses.add(await Permission.storage.status);
-        storageStatuses.add(await Permission.photos.status);
-      }
-
-      _logPermissionEvent('Stato microfono: $micStatus');
-      _logPermissionEvent('Stato storage: $storageStatuses');
-
-      // Controlla che almeno il microfono e uno dei permessi di storage siano concessi
-      bool storageGranted = storageStatuses.any((status) => status.isGranted);
-
-      return micStatus.isGranted && storageGranted;
+      // Entrambi i permessi sono necessari
+      return hasMicrophone && hasStorage;
     } catch (e) {
       _logPermissionEvent('Errore nella verifica permessi: $e');
-      return false;
-    }
-  }
-
-  /// Mostra un dialogo quando un permesso viene negato permanentemente
-  Future<void> _showPermissionDialog(BuildContext context, Permission permission) async {
-    if (_isLinux) return;  // Non necessario su Linux
-
-    _logPermissionEvent('Mostro dialogo per $permission');
-
-    final permissionDetails = _getPermissionDetails(permission);
-
-    if (context.mounted) {
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: Text(
-              'Permesso ${permissionDetails.name} Necessario',
-              style: const TextStyle(fontFamily: 'OpenDyslexic'),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  permissionDetails.explanation,
-                  style: const TextStyle(fontFamily: 'OpenDyslexic'),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Per abilitare il permesso, vai nelle impostazioni.',
-                  style: TextStyle(
-                    fontFamily: 'OpenDyslexic',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  _logPermissionEvent('Apertura impostazioni');
-                  if (!_isLinux) {
-                    await openAppSettings();
-                  }
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-                },
-                child: const Text(
-                  'Apri Impostazioni',
-                  style: TextStyle(fontFamily: 'OpenDyslexic'),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    }
-  }
-
-  /// Ottiene i dettagli per un tipo di permesso
-  _PermissionDetails _getPermissionDetails(Permission permission) {
-    switch (permission) {
-      case Permission.microphone:
-        return _PermissionDetails(
-            name: 'Microfono',
-            explanation: 'Il microfono è necessario per il riconoscimento vocale '
-                'durante gli esercizi di lettura.'
-        );
-      case Permission.storage:
-        return _PermissionDetails(
-            name: 'Storage',
-            explanation: 'L\'accesso allo storage è necessario per salvare i '
-                'file di configurazione e le registrazioni audio.'
-        );
-      case Permission.audio:
-        return _PermissionDetails(
-            name: 'File Audio',
-            explanation: 'L\'accesso ai file audio è necessario per salvare e '
-                'gestire le registrazioni degli esercizi.'
-        );
-      case Permission.photos:
-        return _PermissionDetails(
-            name: 'Foto e Media',
-            explanation: 'L\'accesso ai media è necessario per salvare i '
-                'file di configurazione e le registrazioni audio.'
-        );
-      case Permission.manageExternalStorage:
-        return _PermissionDetails(
-            name: 'Gestione Storage',
-            explanation: 'La gestione completa dello storage è necessaria per '
-                'salvare e gestire i file dell\'applicazione.'
-        );
-      default:
-        return _PermissionDetails(
-            name: 'Richiesto',
-            explanation: 'Questo permesso è necessario per il corretto '
-                'funzionamento dell\'app.'
-        );
+      // In caso di errore, restituiamo true per non bloccare l'app
+      return true;
     }
   }
 
@@ -354,15 +439,10 @@ class PermissionService {
     _permissionLogs.clear();
     _logPermissionEvent('Log puliti');
   }
-}
 
-/// Classe interna per i dettagli dei permessi
-class _PermissionDetails {
-  final String name;
-  final String explanation;
+  /// Verifica se i permessi di storage sono stati concessi
+  bool get hasStoragePermission => _storagePermissionGranted;
 
-  const _PermissionDetails({
-    required this.name,
-    required this.explanation,
-  });
+  /// Verifica se i permessi del microfono sono stati concessi
+  bool get hasMicrophonePermission => _microphonePermissionGranted;
 }

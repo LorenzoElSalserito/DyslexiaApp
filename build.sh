@@ -7,6 +7,7 @@ set -euo pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configurazione app
@@ -52,8 +53,55 @@ prepare_environment() {
     flutter pub get
 
     # Crea directory di output
-    mkdir build
-    mkdir "$OUTPUT_DIR"
+    mkdir -p build
+    mkdir -p "$OUTPUT_DIR"
+}
+
+# Funzione per verificare e correggere le icone
+verify_and_fix_icons() {
+    echo -e "${YELLOW}Verifica e correzione icone...${NC}"
+
+    # Verifica esistenza della directory assets/icon
+    if [ ! -d "assets/icon" ]; then
+        echo -e "${BLUE}Creazione directory assets/icon...${NC}"
+        mkdir -p assets/icon
+    fi
+
+    # Verifica esistenza del file icon/app_icon.png
+    if [ ! -f "assets/icon/app_icon.png" ]; then
+        echo -e "${YELLOW}Icona non trovata in assets/icon/app_icon.png${NC}"
+
+        # Controlla se esiste in lib/assets/icon
+        if [ -f "lib/assets/icon/app_icon.png" ]; then
+            echo -e "${BLUE}Copiando icona da lib/assets/icon/app_icon.png a assets/icon/app_icon.png${NC}"
+            cp lib/assets/icon/app_icon.png assets/icon/app_icon.png
+        else
+            echo -e "${RED}Attenzione: Icona app_icon.png non trovata! Crea o copia un'icona in assets/icon/app_icon.png${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}Icona trovata in assets/icon/app_icon.png${NC}"
+    fi
+
+    # Verifica che l'icona sia elencata in pubspec.yaml
+    if ! grep -q "- assets/icon/app_icon.png" pubspec.yaml; then
+        echo -e "${YELLOW}Aggiornamento pubspec.yaml per includere l'icona${NC}"
+        # Questa è una soluzione semplificata - in un caso reale potrebbe essere necessario
+        # un approccio più sofisticato per modificare il pubspec.yaml
+        sed -i '/assets:/a \ \ \ \ - assets/icon/app_icon.png' pubspec.yaml ||
+            echo -e "${RED}Impossibile aggiornare pubspec.yaml. Verificare manualmente che l'icona sia inclusa.${NC}"
+    fi
+
+    # Genera le icone utilizzando flutter_launcher_icons
+    echo -e "${BLUE}Generazione icone con flutter_launcher_icons...${NC}"
+    flutter pub run flutter_launcher_icons
+
+    # Verifica che le icone siano state generate per Android
+    if [ -f "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" ]; then
+        echo -e "${GREEN}Icone Android generate con successo${NC}"
+    else
+        echo -e "${RED}Attenzione: Icone Android non generate correttamente${NC}"
+    fi
 }
 
 # Build per Android
@@ -81,6 +129,16 @@ build_android() {
 
 # Build per iOS
 build_ios() {
+
+  # Verifica versione Xcode
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    XCODE_VERSION=$(xcodebuild -version | grep "Xcode" | cut -d' ' -f2)
+    echo "Xcode version: $XCODE_VERSION"
+    if [[ -z "$XCODE_VERSION" ]]; then
+      echo -e "${RED}Xcode non trovato. Necessario per macOS/iOS build.${NC}"
+    fi
+  fi
+
     # Verifica se siamo su macOS
     if [[ "$OSTYPE" != "darwin"* ]]; then
         echo -e "${YELLOW}Skipping iOS build - richiede macOS${NC}"
@@ -119,6 +177,16 @@ build_ios() {
 
 # Build per macOS
 build_macos() {
+
+  # Verifica versione Xcode
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    XCODE_VERSION=$(xcodebuild -version | grep "Xcode" | cut -d' ' -f2)
+    echo "Xcode version: $XCODE_VERSION"
+    if [[ -z "$XCODE_VERSION" ]]; then
+      echo -e "${RED}Xcode non trovato. Necessario per macOS/iOS build.${NC}"
+    fi
+  fi
+
     if [[ "$OSTYPE" != "darwin"* ]]; then
         echo -e "${YELLOW}Skipping macOS build - richiede macOS${NC}"
         return 0
@@ -152,16 +220,6 @@ build_linux() {
 
     echo -e "${YELLOW}Building Linux...${NC}"
 
-    # Installa dipendenze Linux
-#    if [ -f "/etc/debian_version" ]; then
-#        sudo apt-get update
-#        sudo apt-get install -y libgtk-3-dev liblzma-dev libstdc++6 libglu1-mesa ninja-build libblkid-dev
-#    elif [ -f "/etc/fedora-release" ]; then
-#        sudo dnf install -y gtk3-devel xz-devel libstdc++ mesa-libGLU ninja-build
-#    elif [ -f "/etc/arch-release" ]; then
-#        sudo pacman -Sy gtk3 xz gcc-libs mesa-glu ninja
-#    fi
-
     # Build Linux
     if flutter build linux --release; then
         # Prepara AppImage
@@ -175,7 +233,7 @@ build_linux() {
         cp "assets/icon/app_icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP_NAME.png"
 
         # Crea desktop entry
-        cat > "$APPDIR/usr/share/applications/$APP_NAME.desktop" << EOL
+        cat > "$APPDIR/$APP_NAME.desktop" << EOL
 [Desktop Entry]
 Name=OpenDSA: Reading
 Exec=thesis_project
@@ -184,9 +242,21 @@ Type=Application
 Categories=Education;
 EOL
 
-        # Scarica e usa appimagetool
-        wget -c "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-        chmod +x appimagetool-x86_64.AppImage
+        # Copia il .desktop nella directory standard
+        cp "$APPDIR/$APP_NAME.desktop" "$APPDIR/usr/share/applications/"
+
+        # Copia l'icona nella root della AppDir come richiesto da alcuni strumenti
+        cp "assets/icon/app_icon.png" "$APPDIR/$APP_NAME.png"
+
+        # Verifica se appimagetool è già presente
+        if [ ! -f "appimagetool-x86_64.AppImage" ]; then
+            # Scarica e usa appimagetool
+            echo -e "${BLUE}Scaricamento appimagetool...${NC}"
+            wget -c "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+            chmod +x appimagetool-x86_64.AppImage
+        fi
+
+        echo -e "${BLUE}Creazione AppImage...${NC}"
         ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 
         echo -e "${GREEN}Build Linux completata${NC}"
@@ -223,16 +293,28 @@ build_windows() {
     fi
 }
 
+check_installation() {
+  if ! command -v "$1" &> /dev/null; then
+    echo -e "${RED}$1 non trovato. Installare per continuare.${NC}"
+    return 1
+  fi
+  echo "$1 trovato: $(command -v "$1")"
+  return 0
+}
+
 # Funzione principale
 main() {
     check_prerequisites
     prepare_environment
+    verify_and_fix_icons
 
     build_android
     build_ios
     build_macos
     build_linux
     build_windows
+
+    check_installation
 
     echo -e "\n${GREEN}Build completata con successo!${NC}"
     echo "Gli installer si trovano in: $OUTPUT_DIR"

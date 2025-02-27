@@ -264,7 +264,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            '${store.currentTitle ?? 'Novizio'} ${player.name}',
+                            '${store.currentTitle ?? 'Lettore Novizio'} ${player.name}',
                             style: TextStyle(
                               fontFamily: 'OpenDyslexic',
                               color: Colors.white,

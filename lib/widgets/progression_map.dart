@@ -91,7 +91,7 @@ class ProgressionMap extends StatelessWidget {
                 Icon(
                   _getLevelIcon(player.currentLevel),
                   color: Colors.white,
-                  size: 20,
+                  size: AppConfig.title,
                 ),
                 const SizedBox(width: 6),
                 Text(

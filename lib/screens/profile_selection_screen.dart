@@ -375,12 +375,13 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
           ),
         )
-            : const Icon(Icons.delete_forever),
+            : const Icon(Icons.delete_forever, color: Colors.white,),
         label: Text(
           _isDeleting
               ? 'Eliminazione in corso...'
               : 'Elimina ${_selectedProfiles.length} profil${_selectedProfiles.length == 1 ? 'o' : 'i'}',
           style: TextStyle(
+            color: Colors.white,
             fontFamily: 'OpenDyslexic',
             fontSize: isSmallScreen ? 14 : 16,
           ),

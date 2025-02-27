@@ -201,6 +201,9 @@ class SpeechRecognitionService {
       // Emetti il risultato
       _resultController.add(result);
       _updateState(RecognitionState.completed);
+
+      // Elimina il file audio dopo l'elaborazione
+      await _deleteRecordingFile(_recordingPath!);
     } catch (e) {
       _emitError('Errore nel processamento dell\'audio: $e');
 
@@ -215,6 +218,23 @@ class SpeechRecognitionService {
 
       _resultController.add(fallbackResult);
       _updateState(RecognitionState.completed);
+
+      // Tenta comunque di eliminare il file
+      await _deleteRecordingFile(_recordingPath!);
+    }
+  }
+
+  /// Elimina il file di registrazione per risparmiare spazio
+  Future<void> _deleteRecordingFile(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+        debugPrint('SpeechRecognitionService: File di registrazione eliminato: $filePath');
+      }
+    } catch (e) {
+      debugPrint('SpeechRecognitionService: Errore nell\'eliminazione del file di registrazione: $e');
+      // Non solleviamo l'errore per non interrompere il flusso dell'app
     }
   }
 
