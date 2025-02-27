@@ -1,13 +1,164 @@
 \babel@toc {italian}{}\relax 
 \babel@toc {italian}{}\relax 
-\contentsline {chapter}{Introduzione}{v}{chapter*.2}%
-\contentsline {section}{\numberline {0.1}Paragrafo 1}{v}{section.0.1}%
-\contentsline {chapter}{Progettazione}{vii}{chapter*.3}%
-\contentsline {section}{\numberline {0.2}Paragrafo 1}{vii}{section.0.2}%
-\contentsline {chapter}{Tecnologie Utilizzate}{ix}{chapter*.4}%
-\contentsline {section}{\numberline {0.3}Paragrafo 1}{ix}{section.0.3}%
-\contentsline {chapter}{Sviluppo}{xi}{chapter*.5}%
-\contentsline {section}{\numberline {0.4}Paragrafo 1}{xi}{section.0.4}%
-\contentsline {chapter}{Problemi riscontrati}{xiii}{chapter*.6}%
-\contentsline {section}{\numberline {0.5}Paragrafo 1}{xiii}{section.0.5}%
-\contentsline {chapter}{Conclusioni}{xv}{chapter*.7}%
+\contentsline {chapter}{\numberline {1}Introduzione}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}La Dislessia}{1}{section.1.1}%
+\contentsline {subsection}{\numberline {1.1.1}Definizione e criteri diagnostici}{1}{subsection.1.1.1}%
+\contentsline {subsection}{\numberline {1.1.2}Prevalenza ed epidemiologia}{2}{subsection.1.1.2}%
+\contentsline {subsection}{\numberline {1.1.3}Cause e fattori neurobiologici}{3}{subsection.1.1.3}%
+\contentsline {subsection}{\numberline {1.1.4}Caratteristiche cliniche e sintomi principali}{3}{subsection.1.1.4}%
+\contentsline {subsection}{\numberline {1.1.5}Diagnosi e valutazione}{4}{subsection.1.1.5}%
+\contentsline {subsection}{\numberline {1.1.6}Interventi e strategie di supporto}{5}{subsection.1.1.6}%
+\contentsline {subsection}{\numberline {1.1.7}Aspetti emotivi e psicologici}{6}{subsection.1.1.7}%
+\contentsline {subsection}{\numberline {1.1.8}Vita adulta e prospettive future}{7}{subsection.1.1.8}%
+\contentsline {subsection}{\numberline {1.1.9}In Breve}{8}{subsection.1.1.9}%
+\contentsline {section}{\numberline {1.2}L'Avvento delle Nuove Tecnologie}{9}{section.1.2}%
+\contentsline {subsection}{\numberline {1.2.1}Il concetto di accessibilità e l’impatto delle tecnologie}{9}{subsection.1.2.1}%
+\contentsline {subsection}{\numberline {1.2.2}Le WCAG 2.0: linee guida per il web}{10}{subsection.1.2.2}%
+\contentsline {subsection}{\numberline {1.2.3}Origine e struttura delle WCAG:}{11}{subsection.1.2.3}%
+\contentsline {subsection}{\numberline {1.2.4}I quattro principi fondamentali (POUR)}{11}{subsection.1.2.4}%
+\contentsline {subsection}{\numberline {1.2.5}Adozione e benefici}{13}{subsection.1.2.5}%
+\contentsline {subsection}{\numberline {1.2.6}Sviluppo di software e hardware “user friendly”}{13}{subsection.1.2.6}%
+\contentsline {subsection}{\numberline {1.2.7}Sviluppo software inclusivo}{13}{subsection.1.2.7}%
+\contentsline {subsection}{\numberline {1.2.8}Linee guida e toolkit}{14}{subsection.1.2.8}%
+\contentsline {subsection}{\numberline {1.2.9}Rispetto degli standard}{14}{subsection.1.2.9}%
+\contentsline {subsection}{\numberline {1.2.10}Sviluppo hardware inclusivo}{14}{subsection.1.2.10}%
+\contentsline {subsection}{\numberline {1.2.11}Esempi pratici di tecnologie e progetti inclusivi}{15}{subsection.1.2.11}%
+\contentsline {subsection}{\numberline {1.2.12}Benefici secondari dell’accessibilità}{16}{subsection.1.2.12}%
+\contentsline {subsection}{\numberline {1.2.13}Legislazione e normative di riferimento}{17}{subsection.1.2.13}%
+\contentsline {subsection}{\numberline {1.2.14}Prospettive future}{18}{subsection.1.2.14}%
+\contentsline {section}{\numberline {1.3}L'Approccio alla Dislessia con le Nuove Tecnologie}{20}{section.1.3}%
+\contentsline {subsection}{\numberline {1.3.1}L'Informatica ed i Moderni Approcci Tecnologici}{20}{subsection.1.3.1}%
+\contentsline {subsection}{\numberline {1.3.2}Prospettive future}{22}{subsection.1.3.2}%
+\contentsline {section}{\numberline {1.4}Il Ruolo della IA Generativa nel campo DSA}{23}{section.1.4}%
+\contentsline {subsection}{\numberline {1.4.1}Cosa si intende per Intelligenza Artificiale generativa}{23}{subsection.1.4.1}%
+\contentsline {subsection}{\numberline {1.4.2}Le radici storiche dell’IA: dagli albori ai primi modelli generativi}{23}{subsection.1.4.2}%
+\contentsline {subsubsection}{Gli inizi dell’IA (anni ‘50-‘70)}{23}{section*.2}%
+\contentsline {subsection}{\numberline {1.4.3}L’avvento dei sistemi conversazionali (anni ‘60-‘70)}{24}{subsection.1.4.3}%
+\contentsline {subsection}{\numberline {1.4.4}Il salto di qualità: reti neurali e apprendimento profondo}{24}{subsection.1.4.4}%
+\contentsline {subsubsection}{La rinascita delle reti neurali (anni ‘80-‘90)}{24}{section*.3}%
+\contentsline {subsection}{\numberline {1.4.5}L’era del Deep Learning (anni 2000-2010)}{25}{subsection.1.4.5}%
+\contentsline {subsection}{\numberline {1.4.6}La svolta generativa: dalle GAN ai Transformer}{25}{subsection.1.4.6}%
+\contentsline {subsubsection}{Generative Adversarial Networks (GAN)}{25}{section*.4}%
+\contentsline {subsection}{\numberline {1.4.7}La rivoluzione dei Transformer}{26}{subsection.1.4.7}%
+\contentsline {subsection}{\numberline {1.4.8}L’impatto culturale della Generative AI}{26}{subsection.1.4.8}%
+\contentsline {subsubsection}{Epoca di “creatività aumentata”}{26}{section*.5}%
+\contentsline {subsection}{\numberline {1.4.9}Rivoluzione sociale ed economica}{27}{subsection.1.4.9}%
+\contentsline {subsection}{\numberline {1.4.10}Perché è stata (ed è) rivoluzionaria}{28}{subsection.1.4.10}%
+\contentsline {subsection}{\numberline {1.4.11}In Breve}{28}{subsection.1.4.11}%
+\contentsline {chapter}{\numberline {2}Tecnologie Utilizzate}{31}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Il Framework Flutter}{31}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Cenni storici}{32}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Il progetto Sky: i prodromi di Flutter}{32}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}L’annuncio ufficiale di Flutter}{32}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}Versione stabile e adozione in crescita}{33}{subsection.2.2.3}%
+\contentsline {section}{\numberline {2.3}Perché Flutter è stato rivoluzionario?}{33}{section.2.3}%
+\contentsline {subsection}{\numberline {2.3.1}Unico framework per più piattaforme}{33}{subsection.2.3.1}%
+\contentsline {subsection}{\numberline {2.3.2}Hot Reload e sviluppo rapido}{34}{subsection.2.3.2}%
+\contentsline {subsection}{\numberline {2.3.3}Widget personalizzabili e design coerente}{34}{subsection.2.3.3}%
+\contentsline {section}{\numberline {2.4}La Rivoluzione di Flutter}{34}{section.2.4}%
+\contentsline {subsection}{\numberline {2.4.1}Unificazione dello sviluppo cross-platform}{35}{subsection.2.4.1}%
+\contentsline {subsection}{\numberline {2.4.2}Prestazioni elevate}{35}{subsection.2.4.2}%
+\contentsline {subsection}{\numberline {2.4.3}Community e ecosistema in rapida espansione}{35}{subsection.2.4.3}%
+\contentsline {subsection}{\numberline {2.4.4}Hot Reload e Produttività}{36}{subsection.2.4.4}%
+\contentsline {section}{\numberline {2.5}Evoluzione e impatto culturale/industriale}{37}{section.2.5}%
+\contentsline {subsection}{\numberline {2.5.1}Adozione da parte di aziende e sviluppatori}{37}{subsection.2.5.1}%
+\contentsline {subsection}{\numberline {2.5.2}Convergenza tra mobile, desktop e web}{37}{subsection.2.5.2}%
+\contentsline {subsection}{\numberline {2.5.3}Ruolo didattico e formativo}{37}{subsection.2.5.3}%
+\contentsline {section}{\numberline {2.6}In Definitiva}{38}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Dart: un Linguaggio Multipiattaforma}{39}{section.2.7}%
+\contentsline {subsection}{\numberline {2.7.1}La necessità di un nuovo linguaggio per il web}{39}{subsection.2.7.1}%
+\contentsline {subsection}{\numberline {2.7.2}Il lancio di Dart}{39}{subsection.2.7.2}%
+\contentsline {section}{\numberline {2.8}Principi fondamentali e prime versioni}{41}{section.2.8}%
+\contentsline {subsection}{\numberline {2.8.1}Flessibilità e portabilità}{41}{subsection.2.8.1}%
+\contentsline {subsection}{\numberline {2.8.2}Dart 1.0 (2013)}{41}{subsection.2.8.2}%
+\contentsline {section}{\numberline {2.9}Evoluzione e caratteristiche rivoluzionarie}{42}{section.2.9}%
+\contentsline {subsection}{\numberline {2.9.1}Dall’interpretazione alla compilazione AOT}{42}{subsection.2.9.1}%
+\contentsline {subsection}{\numberline {2.9.2}Dart 2.0 (2018) e la tipizzazione forte}{42}{subsection.2.9.2}%
+\contentsline {subsection}{\numberline {2.9.3}Dart DevTools e Hot Reload}{42}{subsection.2.9.3}%
+\contentsline {section}{\numberline {2.10}Dart e Flutter: un legame strategico}{43}{section.2.10}%
+\contentsline {subsection}{\numberline {2.10.1}La Simbiosi}{43}{subsection.2.10.1}%
+\contentsline {subsection}{\numberline {2.10.2}I vantaggi di Dart nel contesto mobile}{43}{subsection.2.10.2}%
+\contentsline {section}{\numberline {2.11}Come Dart è stato rivoluzionario}{44}{section.2.11}%
+\contentsline {section}{\numberline {2.12}Adozione industriale e prospettive}{45}{section.2.12}%
+\contentsline {section}{\numberline {2.13}In Conclusione}{45}{section.2.13}%
+\contentsline {section}{\numberline {2.14}Il Modello VOSK}{46}{section.2.14}%
+\contentsline {subsection}{\numberline {2.14.1}Origini e contesto storico: L'Evoluzione dei sistemi di riconoscimento vocale}{46}{subsection.2.14.1}%
+\contentsline {subsection}{\numberline {2.14.2}Kaldi e la nascita di VOSK}{46}{subsection.2.14.2}%
+\contentsline {section}{\numberline {2.15}Caratteristiche tecniche di VOSK}{47}{section.2.15}%
+\contentsline {subsection}{\numberline {2.15.1}Funzionamento offline}{47}{subsection.2.15.1}%
+\contentsline {subsection}{\numberline {2.15.2}Supporto multilingua e modelli pre-addestrati}{47}{subsection.2.15.2}%
+\contentsline {subsection}{\numberline {2.15.3}Architettura modulare}{48}{subsection.2.15.3}%
+\contentsline {subsection}{\numberline {2.15.4}Licenza Open Source}{48}{subsection.2.15.4}%
+\contentsline {section}{\numberline {2.16}L’approccio open source: vantaggi rispetto alle soluzioni closed}{48}{section.2.16}%
+\contentsline {section}{\numberline {2.17}L’integrazione di VOSK in Flutter}{49}{section.2.17}%
+\contentsline {subsection}{\numberline {2.17.1}Plugin e pacchetti di terze parti}{49}{subsection.2.17.1}%
+\contentsline {subsection}{\numberline {2.17.2}Processo di integrazione nel Progetto}{49}{subsection.2.17.2}%
+\contentsline {subsection}{\numberline {2.17.3}Vantaggi di VOSK su Flutter}{50}{subsection.2.17.3}%
+\contentsline {section}{\numberline {2.18}Perché VOSK è rivoluzionario}{51}{section.2.18}%
+\contentsline {section}{\numberline {2.19}Riflessioni sul futuro e prospettive}{51}{section.2.19}%
+\contentsline {section}{\numberline {2.20}In Conclusione}{52}{section.2.20}%
+\contentsline {chapter}{\numberline {3}Processo di Sviluppo del Software}{53}{chapter.3}%
+\contentsline {section}{\numberline {3.1}La Scelta del Cross-Platform}{53}{section.3.1}%
+\contentsline {section}{\numberline {3.2}Design del Software}{56}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}Alberatura del Progetto}{56}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}Struttura del Progetto}{57}{subsection.3.2.2}%
+\contentsline {subsection}{\numberline {3.2.3}Origini del concetto di architettura a livelli}{57}{subsection.3.2.3}%
+\contentsline {subsection}{\numberline {3.2.4}Principi fondanti}{58}{subsection.3.2.4}%
+\contentsline {section}{\numberline {3.3}Struttura tipica di un progetto Flutter}{58}{section.3.3}%
+\contentsline {subsection}{\numberline {3.3.1}Il contesto Flutter}{58}{subsection.3.3.1}%
+\contentsline {section}{\numberline {3.4}Descrizione dei livelli}{59}{section.3.4}%
+\contentsline {section}{\numberline {3.5}Vantaggi specifici dell’approccio}{61}{section.3.5}%
+\contentsline {subsection}{\numberline {3.5.1}Manutenibilità e testabilità}{61}{subsection.3.5.1}%
+\contentsline {subsection}{\numberline {3.5.2}Scalabilità}{62}{subsection.3.5.2}%
+\contentsline {subsection}{\numberline {3.5.3}Principio di “Single Responsibility”}{62}{subsection.3.5.3}%
+\contentsline {section}{\numberline {3.6}Criticità e limiti}{62}{section.3.6}%
+\contentsline {section}{\numberline {3.7}Pattern collegati in Flutter}{63}{section.3.7}%
+\contentsline {subsection}{\numberline {3.7.1}BLoC (Business Logic Component)}{63}{subsection.3.7.1}%
+\contentsline {subsection}{\numberline {3.7.2}Provider / Riverpod}{63}{subsection.3.7.2}%
+\contentsline {subsection}{\numberline {3.7.3}Clean Architecture}{63}{subsection.3.7.3}%
+\contentsline {subsection}{\numberline {3.7.4}Uso dell'Architettura a Livelli}{63}{subsection.3.7.4}%
+\contentsline {section}{\numberline {3.8}L'Uso della Gamification}{64}{section.3.8}%
+\contentsline {subsection}{\numberline {3.8.1}Origini e Definizione}{64}{subsection.3.8.1}%
+\contentsline {subsection}{\numberline {3.8.2}Meccaniche e Dinamiche di Gioco}{64}{subsection.3.8.2}%
+\contentsline {subsection}{\numberline {3.8.3}Design Pattern Usati}{65}{subsection.3.8.3}%
+\contentsline {chapter}{\numberline {4}Sviluppo}{67}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Le Meccaniche di Gioco nella User Journey}{67}{section.4.1}%
+\contentsline {subsection}{\numberline {4.1.1}I Trofei}{68}{subsection.4.1.1}%
+\contentsline {subsection}{\numberline {4.1.2}La Durata di Gioco}{68}{subsection.4.1.2}%
+\contentsline {subsection}{\numberline {4.1.3}Gli Esercizi}{69}{subsection.4.1.3}%
+\contentsline {subsection}{\numberline {4.1.4}Il Profilo}{69}{subsection.4.1.4}%
+\contentsline {section}{\numberline {4.2}L'Interfaccia Grafica}{71}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}La Schermata di Avvio}{71}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}La Selezione Del Profilo}{72}{subsection.4.2.2}%
+\contentsline {subsection}{\numberline {4.2.3}La Schermata di Gioco Principale}{75}{subsection.4.2.3}%
+\contentsline {subsection}{\numberline {4.2.4}Le Sfide}{77}{subsection.4.2.4}%
+\contentsline {subsection}{\numberline {4.2.5}I Trofei}{78}{subsection.4.2.5}%
+\contentsline {subsection}{\numberline {4.2.6}Gli Esercizi}{79}{subsection.4.2.6}%
+\contentsline {section}{\numberline {4.3}Algoritmo di Levenshtein}{79}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Uso e applicazioni}{80}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Proprietà e varianti}{81}{subsection.4.3.2}%
+\contentsline {subsection}{\numberline {4.3.3}Formalizzazione della distanza}{81}{subsection.4.3.3}%
+\contentsline {subsubsection}{Esempi}{81}{section*.7}%
+\contentsline {subsection}{\numberline {4.3.4}Descrizione dell'algoritmo}{82}{subsection.4.3.4}%
+\contentsline {subsection}{\numberline {4.3.5}Esempio di calcolo dettagliato}{83}{subsection.4.3.5}%
+\contentsline {subsection}{\numberline {4.3.6}Analisi dell'algoritmo}{84}{subsection.4.3.6}%
+\contentsline {subsection}{\numberline {4.3.7}Complessità}{84}{subsection.4.3.7}%
+\contentsline {subsection}{\numberline {4.3.8}Ottimizzazioni}{84}{subsection.4.3.8}%
+\contentsline {subsection}{\numberline {4.3.9}Il Feedback dell'Esercizio}{88}{subsection.4.3.9}%
+\contentsline {section}{\numberline {4.4}Il Profilo Admin}{92}{section.4.4}%
+\contentsline {section}{\numberline {4.5}Possibili Implementazioni Future}{93}{section.4.5}%
+\contentsline {chapter}{\numberline {5}Problemi riscontrati e Soluzioni Proposte}{95}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Creare gli Eseguibili con Flutter}{95}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Apple e le sue Politiche di Distribuzione del Software}{96}{section.5.2}%
+\contentsline {section}{\numberline {5.3}La Scelta di Recorder come Plugin di Registrazione}{97}{section.5.3}%
+\contentsline {section}{\numberline {5.4}I Problemi di un Ambiente non Trattato per l'Audio}{98}{section.5.4}%
+\contentsline {chapter}{\numberline {6}Conclusioni}{99}{chapter.6}%
+\contentsline {chapter}{\numberline {7}Appendice A - Elementi di Gioco}{101}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Sfide}{101}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Trofei}{103}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Livelli}{106}{section.7.3}%
+\contentsline {section}{\numberline {7.4}Configurazioni dell'Applicazione}{108}{section.7.4}%
+\contentsline {chapter}{\numberline {8}Appendice B - Codice}{113}{chapter.8}%
+\contentsline {section}{\numberline {8.1}VoskService}{113}{section.8.1}%
+\contentsline {section}{\numberline {8.2}SpeechRecognitionService}{126}{section.8.2}%
+\contentsline {section}{\numberline {8.3}AudioService}{134}{section.8.3}%
