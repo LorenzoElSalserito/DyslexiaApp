@@ -44,7 +44,7 @@
 ## Installazione
 
 ### Android
-1. Scarica il file APK dalla sezione [Releases](https://github.com/username/OpenDSA-Reading/releases)
+1. Scarica il file APK dalla sezione [Releases](https://github.com/LorenzoElSalserito/DyslexiaApp/releases)
 2. Apri il file APK sul tuo dispositivo per installare l'applicazione
 3. Concedi le autorizzazioni per il microfono quando richiesto
 
@@ -52,16 +52,16 @@
 L'app è disponibile tramite TestFlight. Contatta gli sviluppatori per un link di invito. (Ancora in Testing)
 
 ### Windows
-1. Scarica il file MSIX o la cartella ZIP dalla sezione [Releases](https://github.com/username/OpenDSA-Reading/releases)
+1. Scarica il file MSIX o la cartella ZIP dalla sezione [Releases](https://github.com/LorenzoElSalserito/DyslexiaApp/releases)
 2. Esegui il file MSIX o lancia l'eseguibile dalla cartella estratta
 
 ### macOS
-1. Scarica il file DMG dalla sezione [Releases](https://github.com/username/OpenDSA-Reading/releases)
+1. Scarica il file DMG dalla sezione [Releases](https://github.com/LorenzoElSalserito/DyslexiaApp/releases)
 2. Monta il DMG e trascina l'applicazione nella cartella Applicazioni
 3. Al primo avvio, potrebbe essere necessario approvare l'app in Preferenze di Sistema > Sicurezza e Privacy
 
 ### Linux
-1. Scarica il file AppImage dalla sezione [Releases](https://github.com/username/OpenDSA-Reading/releases)
+1. Scarica il file AppImage dalla sezione [Releases](https://github.com/LorenzoElSalserito/DyslexiaApp/releases)
 2. Rendi il file eseguibile con `chmod +x OpenDSA-Reading-1.0.0-x86_64.AppImage`
 3. Esegui l'AppImage con un doppio clic o da terminale
 
@@ -79,8 +79,8 @@ L'app è disponibile tramite TestFlight. Contatta gli sviluppatori per un link d
 
 1. Clona il repository:
    ```bash
-   git clone https://github.com/username/OpenDSA-Reading.git
-   cd OpenDSA-Reading
+   git clone https://github.com/LorenzoElSalserito/DyslexiaApp/
+   cd DyslexiaApp
    ```
 
 2. Installa le dipendenze:
@@ -114,6 +114,10 @@ L'app è disponibile tramite TestFlight. Contatta gli sviluppatori per un link d
    ```
 
 Lo script `build.sh` eseguirà automaticamente la build per tutte le piattaforme disponibili sul sistema in uso. Gli output di build verranno salvati nella directory `build/releases/`.
+Se usi Windows, puoi lanciare lo script alternativo: 
+```bash
+   build_windows.bat
+   ```
 
 ## Struttura del Progetto
 
@@ -159,7 +163,7 @@ Le contribuzioni sono benvenute! Per partecipare:
 
 ## Problemi Noti
 
-- Su alcune distribuzioni Linux potrebbero essere necessarie librerie aggiuntive per il riconoscimento vocale
+- Su alcune distribuzioni Linux potrebbero essere necessarie librerie aggiuntive per il riconoscimento vocale (ho cercato di segnalarle tutte nello script build.sh)
 - Su iOS, l'accesso al microfono potrebbe richiedere autorizzazioni aggiuntive
 - Il primo avvio dell'app potrebbe richiedere più tempo a causa dell'inizializzazione del motore VOSK
 
