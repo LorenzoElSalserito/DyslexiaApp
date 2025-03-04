@@ -12,6 +12,7 @@ NC='\033[0m'
 
 # Configurazione app
 APP_NAME="OpenDSA-Reading"
+APP_DISPLAY_NAME="OpenDSA: Reading"
 APP_VERSION="1.0.0"
 OUTPUT_DIR="build/releases"
 
@@ -199,7 +200,7 @@ build_macos() {
         mkdir -p "build/macos/dmg"
         cp -r "build/macos/Build/Products/Release/$APP_NAME.app" "build/macos/dmg/"
 
-        hdiutil create -volname "$APP_NAME" \
+        hdiutil create -volname "$APP_DISPLAY_NAME" \
                 -srcfolder "build/macos/dmg" \
                 -ov -format UDZO \
                 "$OUTPUT_DIR/$APP_NAME-$APP_VERSION.dmg"
@@ -222,31 +223,59 @@ build_linux() {
 
     # Build Linux
     if flutter build linux --release; then
-        # Prepara AppImage
-        local APPDIR="build/appdir"
+        echo -e "${BLUE}Build Linux completata, preparazione AppImage...${NC}"
+
+        # Prepara AppDir correttamente
+        local APPDIR="build/AppDir"
         mkdir -p "$APPDIR/usr/bin"
+        mkdir -p "$APPDIR/usr/lib"
         mkdir -p "$APPDIR/usr/share/applications"
         mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+        mkdir -p "$APPDIR/usr/share/metainfo"
 
-        # Copia file necessari
+        # Copia tutti i file dall'output di Flutter
         cp -r "build/linux/x64/release/bundle/"* "$APPDIR/usr/bin/"
+
+        # Copia le librerie
+        cp -r "build/linux/x64/release/bundle/lib/"* "$APPDIR/usr/lib/"
+
+        # Copia l'icona
         cp "assets/icon/app_icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP_NAME.png"
 
-        # Crea desktop entry
-        cat > "$APPDIR/$APP_NAME.desktop" << EOL
+        # Crea file .desktop corretto
+        cat > "$APPDIR/usr/share/applications/$APP_NAME.desktop" << EOL
 [Desktop Entry]
-Name=OpenDSA: Reading
+Name=$APP_DISPLAY_NAME
+Comment=Applicazione per assistere persone con dislessia nella lettura
 Exec=thesis_project
 Icon=$APP_NAME
 Type=Application
-Categories=Education;
+Categories=Education;Accessibility;
+Terminal=false
 EOL
 
-        # Copia il .desktop nella directory standard
-        cp "$APPDIR/$APP_NAME.desktop" "$APPDIR/usr/share/applications/"
+        # Copia desktop file nella directory principale
+        cp "$APPDIR/usr/share/applications/$APP_NAME.desktop" "$APPDIR/"
 
-        # Copia l'icona nella root della AppDir come richiesto da alcuni strumenti
+        # Copia l'icona nella root della AppDir come richiesto da AppImage
         cp "assets/icon/app_icon.png" "$APPDIR/$APP_NAME.png"
+
+        # Crea AppRun eseguibile
+        cat > "$APPDIR/AppRun" << 'EOL'
+#!/bin/bash
+HERE="$(dirname "$(readlink -f "${0}")")"
+export LD_LIBRARY_PATH="$HERE/usr/lib:$HERE/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$HERE/usr/bin:$PATH"
+export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+exec "$HERE/usr/bin/thesis_project" "$@"
+EOL
+
+        # Rendi AppRun eseguibile
+        chmod +x "$APPDIR/AppRun"
+
+        # Verifica struttura finale
+        echo -e "${BLUE}Struttura AppDir:${NC}"
+        find "$APPDIR" -type f | sort
 
         # Verifica se appimagetool è già presente
         if [ ! -f "appimagetool-x86_64.AppImage" ]; then
@@ -257,9 +286,11 @@ EOL
         fi
 
         echo -e "${BLUE}Creazione AppImage...${NC}"
+        # Assicurati che appimagetool possa essere eseguito
+        chmod +x appimagetool-x86_64.AppImage
         ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 
-        echo -e "${GREEN}Build Linux completata${NC}"
+        echo -e "${GREEN}Build Linux e creazione AppImage completate${NC}"
     else
         echo -e "${RED}Errore nella build Linux${NC}"
         return 1
@@ -313,8 +344,6 @@ main() {
     build_macos
     build_linux
     build_windows
-
-    check_installation
 
     echo -e "\n${GREEN}Build completata con successo!${NC}"
     echo "Gli installer si trovano in: $OUTPUT_DIR"
