@@ -7,8 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:record/record.dart';
 import 'package:record_platform_interface/record_platform_interface.dart';
-
-// Importa il tuo enum AudioState da models/enums.dart
 import '../models/enums.dart';
 
 /// Servizio che gestisce la registrazione audio per OpenDSA: Reading.
