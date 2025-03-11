@@ -1,5 +1,0 @@
-[0] Config.pm:306> INFO - This is Biber 2.18
-[0] Config.pm:309> INFO - Logfile is 'tesi.aux.blg'
-[53] biber:340> INFO - === ven feb 14, 2025, 15:15:17
-[72] Utils.pm:399> ERROR - Cannot find 'tesi.aux.bcf'!
-[72] Biber.pm:135> INFO - ERRORS: 1
