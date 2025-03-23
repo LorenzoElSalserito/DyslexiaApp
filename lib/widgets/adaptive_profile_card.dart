@@ -58,82 +58,53 @@ class AdaptiveProfileCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: Stack(
               children: [
-                // Contenuto principale
-                Padding(
-                  padding: EdgeInsets.all(isCompact ? 4 : 8),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Avatar
-                      Hero(
-                        tag: 'profile_avatar_${profile.id}',
-                        child: CircleAvatar(
-                          radius: avatarSize,
-                          backgroundColor: Colors.blue.shade800,
-                          child: Text(
-                            profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '',
-                            style: TextStyle(
-                              fontSize: avatarSize * 0.8,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: 'OpenDyslexic',
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      SizedBox(height: isCompact ? 2 : 4),
-
-                      // Nome
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: cardWidth - (isCompact ? 8 : 16),
-                        ),
-                        child: Text(
-                          isCompact ? profile.name[0].toUpperCase() : profile.name,
-                          style: TextStyle(
-                            fontSize: fontSize,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'OpenDyslexic',
-                          ),
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-
-                      // Informazioni aggiuntive solo se c'è spazio
-                      if (showExtendedInfo &&
-                          (profile.currentLevel > 1 || profile.totalCrystals > 0)) ...[
-                        SizedBox(height: isCompact ? 2 : 4),
-                        // Cristalli
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.diamond,
-                              size: avatarSize * 0.6,
-                              color: Colors.deepOrange,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              profile.totalCrystals.toString(),
+                // Contenuto principale centrato
+                Center(  // Aggiungi un Center qui per forzare il centraggio
+                  child: Padding(
+                    padding: EdgeInsets.all(isCompact ? 4 : 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,  // Importante!
+                      children: [
+                        // Avatar
+                        Hero(
+                          tag: 'profile_avatar_${profile.id}',
+                          child: CircleAvatar(
+                            radius: avatarSize,
+                            backgroundColor: Colors.blue.shade800,
+                            child: Text(
+                              profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '',
                               style: TextStyle(
-                                fontSize: fontSize * 0.8,
-                                color: Colors.grey[900],
+                                fontSize: avatarSize * 0.8,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                                 fontFamily: 'OpenDyslexic',
                               ),
                             ),
-                          ],
+                          ),
                         ),
+                        SizedBox(height: isCompact ? 2 : 4),
+                        // Nome
+                        Center(  // Aggiungi un altro Center qui specificamente per il testo
+                          child: Text(
+                            isCompact ? profile.name[0].toUpperCase() : profile.name,
+                            style: TextStyle(
+                              fontSize: fontSize,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'OpenDyslexic',
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                        // Altre informazioni se necessario...
                       ],
-                    ],
+                    ),
                   ),
                 ),
 
-                // Indicatore selezione
+                // Checkbox per la selezione
                 if (isSelectMode)
                   Positioned(
                     right: isCompact ? 2 : 4,
