@@ -133,6 +133,19 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                         ),
                       ),
                     ),
+                    // Aggiunta del copyright
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: Text(
+                        'Per UfficioZero EDU © Lorenzo DM 2025 - Cercami su YouTube',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 12,
+                          fontFamily: 'OpenDyslexic',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                     if (_isSelectMode && _selectedProfiles.isNotEmpty)
                       _buildDeleteButton(playerManager),
                   ],
