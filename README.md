@@ -44,7 +44,7 @@
 ## Installazione
 
 ### Android
-1. Scarica il file APK dalla sezione [Releases](https://github.com/LorenzoElSalserito/DyslexiaApp/releases)
+1. Scarica il file APK dalla sezione [Releases](https://github.com/LorenzoElSalserito/DyslexiaApp/tree/main/releases)
 2. Apri il file APK sul tuo dispositivo per installare l'applicazione
 3. Concedi le autorizzazioni per il microfono quando richiesto
 
