@@ -1,3 +1,5 @@
+// File: lib/services/vosk_service.dart
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -14,7 +16,8 @@ import '../utils/permission_handler.dart';
 import 'permission_service.dart';
 import 'audio_service.dart';
 import '../utils/desktop_permission.dart';
-
+import 'package:package_info_plus/package_info_plus.dart';
+import '../utils/vosk_model_path_finder.dart';
 
 /// Servizio per il riconoscimento vocale utilizzando VOSK.
 /// Legge il file WAV (con header) e passa direttamente il buffer dei byte
@@ -35,6 +38,7 @@ class VoskService {
   bool _isInitialized = false;
   String _modelPath = '';
   bool _isProcessing = false;
+  int _initAttempt = 0;
 
   static const List<String> _requiredFiles = [
     'am/final.mdl',
@@ -53,7 +57,7 @@ class VoskService {
   ];
 
   final List<String> _serviceLog = [];
-  static const int _maxInitAttempts = 3;
+  static const int _maxInitAttempts = 5; // Aumentato il numero di tentativi
 
   // Mappa per errori comuni (usata nelle funzioni di similarità)
   static const Map<String, List<String>> _commonDyslexicConfusions = {
@@ -92,27 +96,72 @@ class VoskService {
     if (_serviceLog.length > 1000) _serviceLog.removeAt(0);
   }
 
+  /// Cerca il percorso del bundle nell'eseguibile AppImage
+  Future<String?> _findAppImageBundlePath() async {
+    try {
+      final appImagePath = Platform.resolvedExecutable;
+      _logEvent('AppImage path: $appImagePath');
+
+      if (appImagePath.contains('AppRun') || appImagePath.contains('.AppImage')) {
+        // Stiamo eseguendo da un AppImage
+        final appDir = path.dirname(appImagePath);
+        _logEvent('AppImage directory: $appDir');
+
+        // Percorsi potenziali all'interno dell'AppImage
+        final possiblePaths = [
+          path.join(appDir, 'data', 'flutter_assets', 'vosk'),
+          path.join(appDir, 'usr', 'bin', 'data', 'flutter_assets', 'vosk'),
+          path.join(appDir, 'usr', 'lib', 'x86_64-linux-gnu', 'vosk'),
+          path.join(appDir, 'usr', 'share', 'thesis_project', 'vosk'),
+        ];
+
+        for (final possiblePath in possiblePaths) {
+          _logEvent('Checking model path: $possiblePath');
+          if (await Directory(possiblePath).exists()) {
+            _logEvent('Found model directory: $possiblePath');
+
+            // Verifica rapidamente se almeno un file esiste
+            final testFile = path.join(possiblePath, 'am', 'final.mdl');
+            if (await File(testFile).exists()) {
+              return possiblePath;
+            }
+          }
+        }
+      }
+
+      // Fallback al percorso relativo all'eseguibile
+      final execDir = path.dirname(Platform.resolvedExecutable);
+      final assetPath = path.join(execDir, 'data', 'flutter_assets', 'vosk');
+      if (await Directory(assetPath).exists()) {
+        return assetPath;
+      }
+    } catch (e) {
+      _logEvent('Errore nella ricerca del percorso AppImage: $e');
+    }
+    return null;
+  }
+
   /// Inizializza il servizio VOSK e prepara il modello.
   Future<void> initialize({required BuildContext context}) async {
     if (_isInitialized) {
       _logEvent('Servizio già inizializzato');
       return;
     }
-    int attempts = 0;
+    _initAttempt = 0;
     bool success = false;
-    while (!success && attempts < _maxInitAttempts) {
+    while (!success && _initAttempt < _maxInitAttempts) {
       try {
-        attempts++;
-        _logEvent('Tentativo di inizializzazione #$attempts');
+        _initAttempt++;
+        _logEvent('Tentativo di inizializzazione #$_initAttempt');
         await _initializeWithRetry(context: context);
         success = true;
       } catch (e, stackTrace) {
-        _logEvent('Errore nel tentativo #$attempts: $e');
+        _logEvent('Errore nel tentativo #$_initAttempt: $e');
         _logEvent('Stack trace: $stackTrace');
-        if (attempts >= _maxInitAttempts) {
+        if (_initAttempt >= _maxInitAttempts) {
           throw Exception('Impossibile inizializzare VOSK dopo $_maxInitAttempts tentativi');
         }
-        await Future.delayed(const Duration(seconds: 1));
+        await Future.delayed(const Duration(seconds: 2)); // Aumentato il delay tra tentativi
       }
     }
   }
@@ -157,30 +206,83 @@ class VoskService {
     // Trova il percorso del modello e verifica la sua integrità.
     _modelPath = await _findModelPath();
     _logEvent('Percorso del modello impostato: $_modelPath');
-    if (!await _verifyModelIntegrity(_modelPath)) {
+
+    // Più dettagli durante la verifica del modello
+    bool modelValid = await _verifyModelIntegrity(_modelPath);
+    if (!modelValid) {
+      _logEvent('ERRORE: Integrità del modello non verificata in $_modelPath');
+      // Elenca tutti i file nella directory per debug
+      try {
+        final modelDir = Directory(_modelPath);
+        if (await modelDir.exists()) {
+          final files = await modelDir.list(recursive: true).toList();
+          _logEvent('File trovati nella directory del modello (${files.length}):');
+          for (var file in files) {
+            _logEvent('  ${file.path}');
+          }
+        } else {
+          _logEvent('La directory del modello non esiste!');
+        }
+      } catch (e) {
+        _logEvent('Errore nell\'elencare i file: $e');
+      }
       throw Exception('Integrità del modello non verificata in $_modelPath');
     }
 
     _logEvent('Inizializzazione componenti VOSK');
+
+    // Ottenere l'istanza VOSK
     _recognizer = VoskFlutterPlugin.instance();
-    _model = await _recognizer!.createModel(_modelPath);
-    _speechRecognizer = await _recognizer!.createRecognizer(
-      model: _model!,
-      sampleRate: AppConfig.sampleRate,
-    );
+
+    // Tracciamento dettagliato della creazione del modello
+    _logEvent('Creazione modello da: $_modelPath');
+    try {
+      _model = await _recognizer!.createModel(_modelPath);
+      _logEvent('Modello creato con successo');
+    } catch (e, stackTrace) {
+      _logEvent('ERRORE nella creazione del modello: $e');
+      _logEvent('Stack trace: $stackTrace');
+      throw Exception('Errore nella creazione del modello VOSK: $e');
+    }
+
+    // Tracciamento della creazione del recognizer
+    _logEvent('Creazione recognizer con sample rate: ${AppConfig.sampleRate}');
+    try {
+      _speechRecognizer = await _recognizer!.createRecognizer(
+        model: _model!,
+        sampleRate: AppConfig.sampleRate,
+      );
+      _logEvent('Recognizer creato con successo');
+    } catch (e, stackTrace) {
+      _logEvent('ERRORE nella creazione del recognizer: $e');
+      _logEvent('Stack trace: $stackTrace');
+      throw Exception('Errore nella creazione del recognizer VOSK: $e');
+    }
 
     if (Platform.isAndroid || Platform.isIOS) {
       _logEvent('Initializing SpeechService (mobile)...');
-      _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+      try {
+        _speechService = await _recognizer!.initSpeechService(_speechRecognizer!);
+        _logEvent('SpeechService inizializzato con successo');
+      } catch (e) {
+        _logEvent('ERRORE nell\'inizializzazione di SpeechService: $e');
+        // Non blochiamo completamente per questo errore su mobile
+      }
     } else {
       _logEvent("Saltata initSpeechService su Desktop platforms.");
       _speechService = null;
     }
 
     if (_speechRecognizer != null) {
-      await _speechRecognizer!.setMaxAlternatives(3);
-      await _speechRecognizer!.setPartialWords(partialWords: true);
-      await _speechRecognizer!.setWords(words: true);
+      try {
+        await _speechRecognizer!.setMaxAlternatives(3);
+        await _speechRecognizer!.setPartialWords(partialWords: true);
+        await _speechRecognizer!.setWords(words: true);
+        _logEvent('Recognizer configurato con successo');
+      } catch (e) {
+        _logEvent('ERRORE nella configurazione del recognizer: $e');
+        // Proviamo a continuare comunque
+      }
     }
 
     _isInitialized = true;
@@ -190,33 +292,107 @@ class VoskService {
   /// Trova il percorso del modello VOSK.
   Future<String> _findModelPath() async {
     try {
+      _logEvent('Ricerca percorso del modello VOSK...');
+
+      // Verifica se stiamo eseguendo da un AppImage
+      if (Platform.isLinux) {
+        final appImagePath = await _findAppImageBundlePath();
+        if (appImagePath != null) {
+          _logEvent('Trovato percorso modello nell\'AppImage: $appImagePath');
+          return appImagePath;
+        }
+      }
+
+      // Ottieni informazioni sul package per percorsi relativi all'app
+      PackageInfo packageInfo;
+      try {
+        packageInfo = await PackageInfo.fromPlatform();
+        _logEvent('Package info: ${packageInfo.appName} (${packageInfo.packageName})');
+      } catch (e) {
+        _logEvent('Errore nell\'ottenere informazioni sul package: $e');
+        // Continua senza packageInfo
+        packageInfo = PackageInfo(
+          appName: 'OpenDSA: Reading',
+          packageName: 'thesis_project',
+          version: '1.0.0',
+          buildNumber: '1',
+        );
+      }
+
+      // Se siamo in un test, usiamo un percorso relativo
       if (Platform.environment.containsKey('FLUTTER_TEST')) {
         return path.join(Directory.current.path, 'assets', 'vosk');
       }
+
+      // Percorso nei documenti dell'app
       final appDocDir = await getApplicationDocumentsDirectory();
-      final modelDirPath = path.join(appDocDir.path, 'vosk');
+      _logEvent('Directory documenti app: ${appDocDir.path}');
+
+      // Calcola il percorso della directory del modello
+      final modelDirPath = path.join(appDocDir.path, 'OpenDSA', 'vosk');
+      _logEvent('Percorso previsto directory modello: $modelDirPath');
+
       final modelDir = Directory(modelDirPath);
-      if (!await modelDir.exists()) {
+      final modelDirExists = await modelDir.exists();
+      _logEvent('La directory del modello esiste? $modelDirExists');
+
+      if (!modelDirExists) {
         _logEvent('Cartella modello non esistente. Creazione e copia degli asset...');
         await modelDir.create(recursive: true);
-        for (final assetFile in _requiredFiles) {
-          final assetPath = path.join('vosk', assetFile);
+
+        // Tenta di copiare gli asset da diverse posizioni possibili
+        final possibleAssetPaths = [
+          'vosk', // Percorso standard degli asset
+          'assets/vosk', // Percorso alternativo
+          'data/flutter_assets/vosk', // Percorso nell'AppImage/bundle
+        ];
+
+        bool assetsCopied = false;
+
+        // Prova ciascun possibile percorso
+        for (final assetBasePath in possibleAssetPaths) {
+          _logEvent('Tentativo di copiare gli asset da: $assetBasePath');
+
           try {
-            final byteData = await rootBundle.load(assetPath);
-            final targetFile = File(path.join(modelDirPath, assetFile));
-            await targetFile.parent.create(recursive: true);
-            await targetFile.writeAsBytes(byteData.buffer.asUint8List());
-            _logEvent('Asset copiato: $assetFile');
+            for (final assetFile in _requiredFiles) {
+              final assetPath = path.join(assetBasePath, assetFile);
+              _logEvent('Tentativo di caricare l\'asset: $assetPath');
+
+              try {
+                final byteData = await rootBundle.load(assetPath);
+                final targetFile = File(path.join(modelDirPath, assetFile));
+                await targetFile.parent.create(recursive: true);
+                await targetFile.writeAsBytes(byteData.buffer.asUint8List());
+                _logEvent('Asset copiato: $assetFile');
+                assetsCopied = true;
+              } catch (e) {
+                _logEvent('Errore nella copia dell\'asset $assetFile: $e');
+                // Continua con il prossimo file
+              }
+            }
+
+            if (assetsCopied) {
+              _logEvent('Asset copiati con successo da $assetBasePath');
+              break;
+            }
           } catch (e) {
-            _logEvent('Errore nella copia dell\'asset $assetFile: $e');
+            _logEvent('Errore generale nel copiare gli asset da $assetBasePath: $e');
+            // Prova il prossimo percorso
           }
+        }
+
+        if (!assetsCopied) {
+          _logEvent('ERRORE: Impossibile copiare gli asset del modello da nessun percorso');
+          throw Exception('Impossibile copiare gli asset del modello');
         }
       } else {
         _logEvent('Cartella modello già esistente: $modelDirPath');
       }
+
       return modelDirPath;
-    } catch (e) {
+    } catch (e, stackTrace) {
       _logEvent('Errore nella ricerca del modello: $e');
+      _logEvent('Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -227,12 +403,39 @@ class VoskService {
     try {
       for (final file in _requiredFiles) {
         final fullPath = path.join(modelPath, file);
+        final fileExists = await File(fullPath).exists();
+        debugPrint('VoskService: File ${fileExists ? "presente" : "MANCANTE"}: $file');
+
+        if (!fileExists) {
+          // Prova a creare la directory parent se non esiste
+          final parentDir = Directory(path.dirname(fullPath));
+          if (!await parentDir.exists()) {
+            await parentDir.create(recursive: true);
+            debugPrint('VoskService: Directory creata: ${parentDir.path}');
+          }
+
+          // Prova a caricare il file dalle risorse e salvarlo
+          try {
+            final assetPath = path.join('vosk', file);
+            final byteData = await rootBundle.load(assetPath);
+            await File(fullPath).writeAsBytes(byteData.buffer.asUint8List());
+            debugPrint('VoskService: File creato da asset: $fullPath');
+          } catch (e) {
+            debugPrint('VoskService: Errore nel creare il file da asset: $e');
+            return false;
+          }
+        }
+      }
+
+      // Verifica di nuovo dopo eventuali tentativi di recupero
+      for (final file in _requiredFiles) {
+        final fullPath = path.join(modelPath, file);
         if (!await File(fullPath).exists()) {
-          debugPrint('VoskService: File mancante: $file');
+          debugPrint('VoskService: File ancora mancante dopo il recupero: $file');
           return false;
         }
-        debugPrint('VoskService: File presente: $file');
       }
+
       debugPrint('VoskService: Verifica integrità completata con successo');
       return true;
     } catch (e) {
@@ -279,7 +482,14 @@ class VoskService {
       }
 
       _logEvent('Lettura file audio da: $pathToProcess');
-      final bytes = await File(pathToProcess).readAsBytes();
+      final audioFile = File(pathToProcess);
+
+      if (!await audioFile.exists()) {
+        _logEvent('ERRORE: File audio non esiste: $pathToProcess');
+        throw Exception('File audio non trovato: $pathToProcess');
+      }
+
+      final bytes = await audioFile.readAsBytes();
       if (bytes.isEmpty) {
         _logEvent('Nessun dato audio valido');
         throw Exception('Nessun dato audio valido');

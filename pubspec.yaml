@@ -88,12 +88,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icon/app_icon.png
-    - assets/icon/app_icon.png
-    - assets/icon/app_icon.png
-    - assets/icon/app_icon.png
-    - assets/icon/app_icon.png
-    - assets/icon/app_icon.png
     - assets/icon/
     - assets/icon/app_icon.png
     - assets/icon/ios_icon.png

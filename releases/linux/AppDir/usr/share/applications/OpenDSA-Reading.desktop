@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=OpenDSA: Reading
 Comment=Applicazione per assistere persone con dislessia nella lettura
-Exec=thesis_project
+Exec=OpenDSA-Reading
 Icon=OpenDSA-Reading
 Type=Application
 Categories=Education;Accessibility;

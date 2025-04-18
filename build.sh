@@ -12,7 +12,6 @@ NC='\033[0m'
 
 # Configurazione app
 APP_NAME="OpenDSA-Reading"
-APP_DISPLAY_NAME="OpenDSA: Reading"
 APP_VERSION="1.0.0"
 OUTPUT_DIR="build/releases"
 
@@ -130,7 +129,6 @@ build_android() {
 
 # Build per iOS
 build_ios() {
-
   # Verifica versione Xcode
   if [[ "$OSTYPE" == "darwin"* ]]; then
     XCODE_VERSION=$(xcodebuild -version | grep "Xcode" | cut -d' ' -f2)
@@ -178,7 +176,6 @@ build_ios() {
 
 # Build per macOS
 build_macos() {
-
   # Verifica versione Xcode
   if [[ "$OSTYPE" == "darwin"* ]]; then
     XCODE_VERSION=$(xcodebuild -version | grep "Xcode" | cut -d' ' -f2)
@@ -200,7 +197,7 @@ build_macos() {
         mkdir -p "build/macos/dmg"
         cp -r "build/macos/Build/Products/Release/$APP_NAME.app" "build/macos/dmg/"
 
-        hdiutil create -volname "$APP_DISPLAY_NAME" \
+        hdiutil create -volname "$APP_NAME" \
                 -srcfolder "build/macos/dmg" \
                 -ov -format UDZO \
                 "$OUTPUT_DIR/$APP_NAME-$APP_VERSION.dmg"
@@ -223,59 +220,76 @@ build_linux() {
 
     # Build Linux
     if flutter build linux --release; then
-        echo -e "${BLUE}Build Linux completata, preparazione AppImage...${NC}"
-
-        # Prepara AppDir correttamente
-        local APPDIR="build/AppDir"
+        # Prepara AppImage
+        local APPDIR="build/appdir"
         mkdir -p "$APPDIR/usr/bin"
-        mkdir -p "$APPDIR/usr/lib"
         mkdir -p "$APPDIR/usr/share/applications"
         mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
-        mkdir -p "$APPDIR/usr/share/metainfo"
+        mkdir -p "$APPDIR/usr/share/thesis_project/vosk"
 
-        # Copia tutti i file dall'output di Flutter
+        # Copia file necessari
         cp -r "build/linux/x64/release/bundle/"* "$APPDIR/usr/bin/"
-
-        # Copia le librerie
-        cp -r "build/linux/x64/release/bundle/lib/"* "$APPDIR/usr/lib/"
-
-        # Copia l'icona
         cp "assets/icon/app_icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP_NAME.png"
 
-        # Crea file .desktop corretto
+        # Copia i file VOSK in più posizioni per garantire che vengano trovati
+        echo -e "${BLUE}Copiando i file del modello VOSK nell'AppImage...${NC}"
+        mkdir -p "$APPDIR/usr/bin/data/flutter_assets/vosk"
+        cp -r "vosk/" "$APPDIR/usr/bin/data/flutter_assets/"
+        cp -r "vosk/" "$APPDIR/usr/share/thesis_project/"
+
+        # Crea symlinks per ridondanza
+        ln -sf "$APPDIR/usr/share/thesis_project/vosk" "$APPDIR/vosk"
+
+        # Verifica che i file VOSK siano presenti
+        echo -e "${BLUE}Verifica dei file VOSK nell'AppDir...${NC}"
+        find "$APPDIR" -path "*/vosk/*" -type f | sort
+
+        # Crea desktop entry (CORRETTO: senza spazi iniziali)
         cat > "$APPDIR/usr/share/applications/$APP_NAME.desktop" << EOL
 [Desktop Entry]
-Name=$APP_DISPLAY_NAME
+Name=OpenDSA Reading
 Comment=Applicazione per assistere persone con dislessia nella lettura
 Exec=thesis_project
 Icon=$APP_NAME
 Type=Application
 Categories=Education;Accessibility;
-Terminal=false
 EOL
 
-        # Copia desktop file nella directory principale
+        # Copia il .desktop anche nella root della AppDir come richiesto
         cp "$APPDIR/usr/share/applications/$APP_NAME.desktop" "$APPDIR/"
 
-        # Copia l'icona nella root della AppDir come richiesto da AppImage
+        # Copia l'icona nella root della AppDir come richiesto
         cp "assets/icon/app_icon.png" "$APPDIR/$APP_NAME.png"
 
-        # Crea AppRun eseguibile
+        # Crea il AppRun script con funzionalità di debug
         cat > "$APPDIR/AppRun" << 'EOL'
 #!/bin/bash
 HERE="$(dirname "$(readlink -f "${0}")")"
-export LD_LIBRARY_PATH="$HERE/usr/lib:$HERE/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export PATH="$HERE/usr/bin:$PATH"
-export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-exec "$HERE/usr/bin/thesis_project" "$@"
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+
+# Debugging - stampa la struttura delle directory
+echo "AppImage directories:"
+find "$HERE" -type d -name "vosk" -o -path "*/flutter_assets*" | sort
+
+# Assicuriamoci che i modelli VOSK siano accessibili
+if [[ ! -d "$HERE/usr/bin/data/flutter_assets/vosk" ]]; then
+    echo "ATTENZIONE: Directory VOSK non trovata in flutter_assets, creazione..."
+    mkdir -p "$HERE/usr/bin/data/flutter_assets/vosk"
+    if [[ -d "$HERE/usr/share/thesis_project/vosk" ]]; then
+        cp -r "$HERE/usr/share/thesis_project/vosk/"* "$HERE/usr/bin/data/flutter_assets/vosk/"
+        echo "Copiati i file VOSK da usr/share/thesis_project/vosk"
+    elif [[ -d "$HERE/vosk" ]]; then
+        cp -r "$HERE/vosk/"* "$HERE/usr/bin/data/flutter_assets/vosk/"
+        echo "Copiati i file VOSK da $HERE/vosk"
+    fi
+fi
+
+# Esegui l'applicazione
+"${HERE}/usr/bin/thesis_project" "$@"
 EOL
 
-        # Rendi AppRun eseguibile
         chmod +x "$APPDIR/AppRun"
-
-        # Verifica struttura finale
-        echo -e "${BLUE}Struttura AppDir:${NC}"
-        find "$APPDIR" -type f | sort
 
         # Verifica se appimagetool è già presente
         if [ ! -f "appimagetool-x86_64.AppImage" ]; then
@@ -285,12 +299,13 @@ EOL
             chmod +x appimagetool-x86_64.AppImage
         fi
 
-        echo -e "${BLUE}Creazione AppImage...${NC}"
-        # Assicurati che appimagetool possa essere eseguito
-        chmod +x appimagetool-x86_64.AppImage
-        ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
+       echo -e "${BLUE}Creazione AppImage...${NC}"
+       ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run "$APPDIR" "$OUTPUT_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 
-        echo -e "${GREEN}Build Linux e creazione AppImage completate${NC}"
+        echo -e "${GREEN}Build Linux completata${NC}"
+
+        echo -e "${BLUE}Contenuto finale dell'AppImage:${NC}"
+        ./appimagetool-x86_64.AppImage --appimage-extract-and-run --list "$OUTPUT_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage" | grep -E "(vosk|flutter_assets)"
     else
         echo -e "${RED}Errore nella build Linux${NC}"
         return 1
