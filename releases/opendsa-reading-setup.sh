@@ -285,8 +285,8 @@ try:
     import json
     import vosk
 
-    # Stampa la versione di VOSK
-    print(f"VOSK versione: {vosk.__version__}")
+    # Non utilizziamo più __version__ poiché potrebbe non essere disponibile
+    print(f"VOSK importato con successo")
 
     # Imposta il percorso del modello
     model_path = "$VOSK_MODEL_DIR"
