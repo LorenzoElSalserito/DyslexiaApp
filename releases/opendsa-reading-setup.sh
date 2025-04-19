@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# OpenDSA: Reading - Script di configurazione
+# OpenDSA: Reading - Script di configurazione migliorato
 # Questo script verifica e installa le dipendenze necessarie per OpenDSA: Reading
 # senza modificare l'AppImage esistente.
 
@@ -51,13 +51,78 @@ check_dependency() {
 
 # Funzione per verificare se una libreria è installata
 check_library() {
-    if ldconfig -p | grep -q "$1"; then
+    if ldconfig -p 2>/dev/null | grep -q "$1"; then
         success "La libreria $1 è installata"
         return 0
     else
         warning "La libreria $1 non è installata"
         return 1
     fi
+}
+
+# Funzione per aggiungere un repository PPA (per Ubuntu/Debian)
+add_ppa_repository() {
+    info "Aggiunta del repository PPA per VOSK..."
+
+    # Verifica se add-apt-repository è disponibile
+    if ! command -v add-apt-repository &> /dev/null; then
+        sudo apt-get update
+        sudo apt-get install -y software-properties-common
+    fi
+
+    # Aggiungi il PPA per VOSK
+    sudo add-apt-repository -y ppa:vosk/vosk
+    sudo apt-get update
+
+    success "Repository PPA aggiunto correttamente"
+    return 0
+}
+
+# Funzione per compilare VOSK da sorgente
+compile_vosk_from_source() {
+    info "Compilazione di VOSK da sorgente..."
+
+    # Installa le dipendenze per la compilazione
+    sudo apt-get update
+    sudo apt-get install -y build-essential git cmake libfftw3-dev
+
+    # Crea una directory temporanea per la compilazione
+    mkdir -p /tmp/vosk-build
+    cd /tmp/vosk-build
+
+    # Clona il repository di VOSK
+    git clone --depth 1 https://github.com/alphacep/vosk-api
+    cd vosk-api/c
+
+    # Compila VOSK
+    mkdir -p build
+    cd build
+    cmake ..
+    make
+
+    # Installa VOSK
+    sudo make install
+    sudo ldconfig
+
+    success "VOSK compilato e installato da sorgente"
+    return 0
+}
+
+# Funzione per installare le dipendenze VOSK usando pip (come alternativa)
+install_vosk_with_pip() {
+    info "Installazione di VOSK usando pip..."
+
+    # Verifica se pip è installato
+    if ! command -v pip3 &> /dev/null; then
+        sudo apt-get update
+        sudo apt-get install -y python3-pip
+    fi
+
+    # Installa VOSK usando pip
+    pip3 install --user vosk
+
+    success "VOSK installato tramite pip"
+    return 0
 }
 
 # Funzione per installare le dipendenze su diverse distribuzioni
@@ -67,21 +132,131 @@ install_dependencies() {
     # Identifica la distribuzione
     if [ -f /etc/debian_version ]; then
         # Debian/Ubuntu
-        info "Rilevata distribuzione basata su Debian"
+        info "Rilevata distribuzione basata su Debian/Ubuntu"
         sudo apt-get update
-        sudo apt-get install -y libvosk-dev libfftw3-dev libpulse-dev unzip wget curl alsa-utils
+
+        # Prova prima con i repository standard
+        info "Tentativo di installazione di libvosk dai repository standard..."
+        if sudo apt-get install -y libvosk-dev 2>/dev/null; then
+            success "libvosk-dev installato dai repository standard"
+        else
+            warning "libvosk-dev non disponibile nei repository standard"
+
+            # Prova con il PPA ufficiale
+            info "Tentativo con il repository PPA..."
+            if add_ppa_repository && sudo apt-get install -y libvosk-dev; then
+                success "libvosk-dev installato dal PPA"
+            else
+                warning "Impossibile installare libvosk-dev dal PPA"
+
+                # Ultima opzione: compilazione da sorgente
+                info "Tentativo di compilazione da sorgente..."
+                if ! compile_vosk_from_source; then
+                    warning "Compilazione da sorgente fallita"
+
+                    # Opzione finale: installazione tramite pip
+                    info "Tentativo di installazione tramite pip..."
+                    if ! install_vosk_with_pip; then
+                        error "Tutte le opzioni di installazione per VOSK sono fallite"
+                        error "Prova a installare manualmente libvosk o python3-vosk"
+                        exit 1
+                    fi
+                fi
+            fi
+        fi
+
+        # Installa le altre dipendenze
+        sudo apt-get install -y libfftw3-dev libpulse-dev unzip wget curl alsa-utils
+
     elif [ -f /etc/fedora-release ]; then
         # Fedora
         info "Rilevata distribuzione Fedora"
-        sudo dnf install -y vosk-devel fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils
+        if sudo dnf install -y vosk-devel 2>/dev/null; then
+            success "vosk-devel installato dai repository standard"
+        else
+            warning "vosk-devel non disponibile nei repository standard"
+
+            # Prova con la versione Python
+            info "Tentativo di installazione tramite pip..."
+            if ! install_vosk_with_pip; then
+                error "Tutte le opzioni di installazione per VOSK sono fallite"
+                error "Prova a installare manualmente libvosk o python3-vosk"
+                exit 1
+            fi
+        fi
+
+        # Installa le altre dipendenze
+        sudo dnf install -y fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils
+
     elif [ -f /etc/arch-release ]; then
         # Arch Linux
         info "Rilevata distribuzione Arch Linux"
-        sudo pacman -Sy vosk fftw pulseaudio unzip wget curl alsa-utils
+
+        # Verifica se vosk è disponibile
+        if sudo pacman -Sy --noconfirm vosk 2>/dev/null; then
+            success "vosk installato dai repository standard"
+        else
+            warning "vosk non disponibile nei repository standard"
+
+            # Prova con AUR (yay)
+            if command -v yay &> /dev/null; then
+                info "Tentativo di installazione tramite AUR (yay)..."
+                if yay -S --noconfirm vosk; then
+                    success "vosk installato da AUR"
+                else
+                    warning "Installazione tramite AUR fallita"
+
+                    # Prova con pip
+                    if ! install_vosk_with_pip; then
+                        error "Tutte le opzioni di installazione per VOSK sono fallite"
+                        error "Prova a installare manualmente libvosk o python3-vosk"
+                        exit 1
+                    fi
+                fi
+            else
+                # Se yay non è disponibile, usa pip
+                if ! install_vosk_with_pip; then
+                    error "Tutte le opzioni di installazione per VOSK sono fallite"
+                    error "Prova a installare manualmente libvosk o python3-vosk"
+                    exit 1
+                fi
+            fi
+        fi
+
+        # Installa le altre dipendenze
+        sudo pacman -Sy --noconfirm fftw pulseaudio unzip wget curl alsa-utils
+
     else
-        error "Distribuzione non supportata per l'installazione automatica delle dipendenze"
-        error "Per favore installa manualmente: libvosk, libfftw3, libpulse, unzip, wget, curl"
-        return 1
+        # Distribuzione non supportata
+        warning "Distribuzione non supportata per l'installazione automatica delle dipendenze"
+        warning "Tentativo di installazione tramite pip..."
+
+        # Prova con pip come ultima risorsa
+        if ! install_vosk_with_pip; then
+            error "Installazione tramite pip fallita"
+            error "Per favore installa manualmente: libvosk, libfftw3, libpulse, unzip, wget, curl"
+            exit 1
+        fi
+
+        info "Installazione delle dipendenze di base..."
+        # Prova a installare le dipendenze essenziali
+        for cmd in apt-get dnf pacman; do
+            if command -v $cmd &> /dev/null; then
+                case $cmd in
+                    apt-get)
+                        sudo apt-get update
+                        sudo apt-get install -y libfftw3-dev libpulse-dev unzip wget curl alsa-utils
+                        ;;
+                    dnf)
+                        sudo dnf install -y fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils
+                        ;;
+                    pacman)
+                        sudo pacman -Sy --noconfirm fftw pulseaudio unzip wget curl alsa-utils
+                        ;;
+                esac
+                break
+            fi
+        done
     fi
 
     success "Dipendenze installate correttamente"
@@ -106,17 +281,39 @@ download_vosk_model() {
     cd /tmp
     if [ ! -f "$VOSK_MODEL_FILE" ]; then
         info "Scaricamento del modello da $VOSK_MODEL_URL"
-        wget -q --show-progress "$VOSK_MODEL_URL" -O "$VOSK_MODEL_FILE"
+        wget -q --show-progress "$VOSK_MODEL_URL" -O "$VOSK_MODEL_FILE" || {
+            error "Errore nel download del modello"
+            # Prova con curl come alternativa
+            info "Tentativo con curl..."
+            curl -L -o "$VOSK_MODEL_FILE" "$VOSK_MODEL_URL" || {
+                error "Download fallito anche con curl"
+                return 1
+            }
+        }
     fi
 
     # Estrai il modello
     info "Estrazione del modello..."
-    unzip -o -q "$VOSK_MODEL_FILE" -d /tmp/
-    cp -r /tmp/vosk-model-small-it-0.22/* "$VOSK_MODEL_DIR/"
+    unzip -o -q "$VOSK_MODEL_FILE" -d /tmp/ || {
+        error "Errore nell'estrazione del modello"
+        return 1
+    }
+
+    # Se la directory estratta ha un nome diverso, gestiscila
+    MODEL_EXTRACTED_DIR=$(find /tmp -maxdepth 1 -type d -name "vosk-model*" | head -n 1)
+    if [ -z "$MODEL_EXTRACTED_DIR" ]; then
+        error "Directory del modello estratto non trovata"
+        return 1
+    fi
+
+    cp -r "$MODEL_EXTRACTED_DIR"/* "$VOSK_MODEL_DIR/" || {
+        error "Errore nella copia dei file del modello"
+        return 1
+    }
 
     # Pulizia
     rm -f "$VOSK_MODEL_FILE"
-    rm -rf "/tmp/vosk-model-small-it-0.22"
+    rm -rf "$MODEL_EXTRACTED_DIR"
 
     success "Modello VOSK italiano scaricato e configurato correttamente in $VOSK_MODEL_DIR"
     return 0
@@ -127,8 +324,27 @@ check_microphone() {
     info "Verifica dell'accesso al microfono..."
 
     if ! command -v arecord &> /dev/null; then
-        warning "arecord non è installato, impossibile verificare l'accesso al microfono"
-        return 1
+        warning "arecord non è installato, installazione in corso..."
+
+        # Identifica la distribuzione e installa arecord
+        if [ -f /etc/debian_version ]; then
+            sudo apt-get update
+            sudo apt-get install -y alsa-utils
+        elif [ -f /etc/fedora-release ]; then
+            sudo dnf install -y alsa-utils
+        elif [ -f /etc/arch-release ]; then
+            sudo pacman -Sy --noconfirm alsa-utils
+        else
+            warning "Distribuzione non supportata, impossibile installare alsa-utils automaticamente"
+            warning "Prova a installare manualmente arecord o alsa-utils"
+            return 1
+        fi
+
+        # Verifica se l'installazione ha avuto successo
+        if ! command -v arecord &> /dev/null; then
+            warning "Impossibile installare arecord"
+            return 1
+        fi
     fi
 
     # Verifica che l'utente abbia accesso al microfono
@@ -141,9 +357,18 @@ check_microphone() {
             warning "L'utente corrente non fa parte del gruppo 'audio'"
             read -p "Vuoi aggiungere l'utente al gruppo 'audio'? (s/n) " yn
             case $yn in
-                [Ss]* ) sudo usermod -a -G audio $USER; success "Utente aggiunto al gruppo 'audio'. Effettua il logout e il login per applicare le modifiche.";;
+                [Ss]* ) sudo usermod -a -G audio "$USER"; success "Utente aggiunto al gruppo 'audio'. Effettua il logout e il login per applicare le modifiche.";;
                 * ) warning "L'utente non è stato aggiunto al gruppo 'audio'. Potrebbero esserci problemi di accesso al microfono.";;
             esac
+        fi
+
+        # Verifica e configura pulseaudio
+        if command -v pulseaudio &> /dev/null; then
+            info "Verifica dello stato di PulseAudio..."
+            if ! pulseaudio --check; then
+                info "Avvio di PulseAudio..."
+                pulseaudio --start --log-target=syslog
+            fi
         fi
 
         return 1
@@ -167,6 +392,17 @@ create_launch_script() {
 # Imposta la variabile di ambiente per il modello VOSK
 export VOSK_MODEL_PATH="$VOSK_MODEL_DIR"
 
+# Se il modello di VOSK è stato installato tramite pip, imposta PYTHONPATH
+if [ -d "$HOME/.local/lib/python3.*/site-packages/vosk" ]; then
+    PYTHON_VERSION=\$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1-2)
+    export PYTHONPATH="\$HOME/.local/lib/python\$PYTHON_VERSION/site-packages:\$PYTHONPATH"
+fi
+
+# Imposta LD_LIBRARY_PATH per librerie compilate manualmente
+if [ -d "/usr/local/lib" ]; then
+    export LD_LIBRARY_PATH="/usr/local/lib:\$LD_LIBRARY_PATH"
+fi
+
 # Esegui l'AppImage con l'ambiente corretto
 exec "\$@"
 EOL
@@ -179,6 +415,19 @@ EOL
         warning "La directory ~/.local/bin non è nel PATH"
         warning "Aggiungi la seguente riga al tuo file ~/.bashrc o ~/.profile:"
         echo "export PATH=\"\$HOME/.local/bin:\$PATH\""
+
+        # Aggiungi al bashrc automaticamente
+        read -p "Vuoi aggiungere ~/.local/bin al PATH automaticamente? (s/n) " yn
+        case $yn in
+            [Ss]* )
+                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+                source "$HOME/.bashrc"
+                success "~/.local/bin aggiunto al PATH nel file ~/.bashrc"
+                ;;
+            * )
+                warning "Il PATH non è stato modificato. Aggiungilo manualmente per usare il comando 'opendsa-reading'"
+                ;;
+        esac
     fi
 
     return 0
@@ -192,11 +441,54 @@ create_desktop_file() {
     DESKTOP_FILE="$DESKTOP_DIR/opendsa-reading.desktop"
     mkdir -p "$DESKTOP_DIR"
 
-    read -p "Inserisci il percorso completo dell'AppImage di OpenDSA: Reading: " APPIMAGE_PATH
+    # Cerca potenziali AppImage di OpenDSA: Reading
+    FOUND_APPIMAGES=$(find "$HOME" -name "OpenDSA*.AppImage" -o -name "*Reading*.AppImage" 2>/dev/null | head -n 5)
+
+    if [ -n "$FOUND_APPIMAGES" ]; then
+        info "Trovate possibili AppImage:"
+        select APPIMAGE_PATH in $FOUND_APPIMAGES "Specificare manualmente"; do
+            if [ "$REPLY" = "$(echo "$FOUND_APPIMAGES" | wc -l | tr -d ' ')" ]; then
+                read -p "Inserisci il percorso completo dell'AppImage di OpenDSA: Reading: " APPIMAGE_PATH
+            fi
+            break
+        done
+    else
+        read -p "Inserisci il percorso completo dell'AppImage di OpenDSA: Reading: " APPIMAGE_PATH
+    fi
 
     if [ ! -f "$APPIMAGE_PATH" ]; then
         error "File AppImage non trovato in $APPIMAGE_PATH"
         return 1
+    fi
+
+    # Rendi eseguibile l'AppImage se non lo è già
+    if [ ! -x "$APPIMAGE_PATH" ]; then
+        chmod +x "$APPIMAGE_PATH"
+        success "Permessi di esecuzione impostati per l'AppImage"
+    fi
+
+    # Estrai l'icona dall'AppImage se possibile
+    ICON_PATH="$HOME/.local/share/icons/opendsa-reading.png"
+    mkdir -p "$(dirname "$ICON_PATH")"
+
+    if [ -x "$APPIMAGE_PATH" ]; then
+        info "Tentativo di estrazione dell'icona dall'AppImage..."
+        "$APPIMAGE_PATH" --appimage-extract *.png &>/dev/null || true
+        if [ -d "squashfs-root" ]; then
+            EXTRACTED_ICON=$(find "squashfs-root" -name "*.png" | head -n 1)
+            if [ -n "$EXTRACTED_ICON" ]; then
+                cp "$EXTRACTED_ICON" "$ICON_PATH"
+                success "Icona estratta dall'AppImage"
+            fi
+            rm -rf "squashfs-root"
+        fi
+    fi
+
+    # Se non siamo riusciti a estrarre l'icona, usiamo un'icona di sistema
+    if [ ! -f "$ICON_PATH" ]; then
+        ICON="education"
+    else
+        ICON="$ICON_PATH"
     fi
 
     cat > "$DESKTOP_FILE" << EOL
@@ -204,10 +496,10 @@ create_desktop_file() {
 Name=OpenDSA: Reading
 Comment=Applicazione per assistere persone con dislessia nella lettura
 Exec=$HOME/.local/bin/opendsa-reading "$APPIMAGE_PATH"
-Icon=education
+Icon=$ICON
 Terminal=false
 Type=Application
-Categories=Education;
+Categories=Education;Accessibility;
 EOL
 
     success "File desktop creato in $DESKTOP_FILE"
@@ -228,6 +520,12 @@ print_usage() {
     echo
     echo -e "${YELLOW}Nota:${NC} Se hai appena aggiunto l'utente al gruppo 'audio', dovrai effettuare il logout e il login per applicare le modifiche."
     echo
+    # Verifica se Python è stato usato
+    if pip3 list 2>/dev/null | grep -q vosk; then
+        echo -e "${YELLOW}Importante:${NC} VOSK è stato installato tramite Python. Se riscontri problemi, prova a eseguire:"
+        echo "$ python3 -c 'import vosk; print(\"VOSK è correttamente installato\")'"
+        echo
+    fi
 }
 
 # Banner
@@ -241,18 +539,26 @@ info "Verifica delle dipendenze..."
 MISSING_DEPS=0
 
 # Verifica i programmi necessari
-for dep in wget unzip arecord; do
+for dep in wget unzip; do
     if ! check_dependency $dep; then
         MISSING_DEPS=1
     fi
 done
 
-# Verifica le librerie necessarie
-for lib in libvosk libfftw3 libpulse; do
+# Verifica le librerie necessarie (in modo silenzioso per evitare errori su distribuzioni senza ldconfig)
+for lib in libfftw3 libpulse; do
     if ! check_library $lib; then
         MISSING_DEPS=1
     fi
 done
+
+# Per libvosk facciamo una verifica più approfondita
+if ! check_library libvosk && ! pip3 list 2>/dev/null | grep -q vosk; then
+    warning "VOSK non trovato né come libreria C né come modulo Python"
+    MISSING_DEPS=1
+else
+    success "VOSK trovato (libreria o modulo Python)"
+fi
 
 # Installa le dipendenze mancanti se necessario
 if [ $MISSING_DEPS -eq 1 ]; then
