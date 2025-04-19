@@ -77,8 +77,13 @@ install_vosk_with_pip() {
     # Disinstalla versioni precedenti di vosk per evitare conflitti
     pip3 uninstall -y vosk 2>/dev/null || true
 
-    # Installa VOSK usando pip con versione specifica
-    pip3 install --user vosk==$VOSK_PYTHON_VERSION
+    # Elimina anche cache e file di egg-info per una pulizia totale
+    rm -rf ~/.cache/pip/wheels/*vosk* 2>/dev/null || true
+    rm -rf ~/.local/lib/python*/site-packages/vosk*.egg-info 2>/dev/null || true
+    rm -rf ~/.local/lib/python*/site-packages/vosk/ 2>/dev/null || true
+
+    # Installa VOSK usando pip con versione specifica e opzioni aggiuntive
+    pip3 install --user --no-cache-dir --force-reinstall vosk==$VOSK_PYTHON_VERSION
 
     # Verifica l'installazione
     if python3 -c "import vosk; print('VOSK importato con successo')" &> /dev/null; then
@@ -87,9 +92,19 @@ install_vosk_with_pip() {
     else
         error "VOSK installato ma non può essere importato. Tentativo con approccio alternativo..."
 
-        # Prova con un approccio alternativo: installa anche sounddevice
+        # Prova con un approccio alternativo: installa anche sounddevice e pulseaudio
         pip3 install --user sounddevice
 
+        # Installa dipendenze audio aggiuntive
+        if [ -f /etc/debian_version ]; then
+            sudo apt-get install -y python3-pyaudio pulseaudio-utils libpulse-dev
+        elif [ -f /etc/fedora-release ]; then
+            sudo dnf install -y python3-pyaudio pulseaudio-utils pulseaudio-libs-devel
+        elif [ -f /etc/arch-release ]; then
+            sudo pacman -Sy --noconfirm python-pyaudio pulseaudio-utils
+        fi
+
+        # Riprova l'importazione
         if python3 -c "import vosk; print('VOSK importato con successo')" &> /dev/null; then
             success "VOSK installato e testato correttamente al secondo tentativo"
             return 0
@@ -108,13 +123,13 @@ install_core_deps() {
     if [ -f /etc/debian_version ]; then
         # Debian/Ubuntu
         sudo apt-get update
-        sudo apt-get install -y python3-dev python3-pip libfftw3-dev libpulse-dev unzip wget curl alsa-utils
+        sudo apt-get install -y python3-dev python3-pip libfftw3-dev libpulse-dev unzip wget curl alsa-utils python3-pyaudio pulseaudio-utils
     elif [ -f /etc/fedora-release ]; then
         # Fedora
-        sudo dnf install -y python3-devel python3-pip fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils
+        sudo dnf install -y python3-devel python3-pip fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils python3-pyaudio pulseaudio-utils
     elif [ -f /etc/arch-release ]; then
         # Arch Linux
-        sudo pacman -Sy --noconfirm python python-pip fftw pulseaudio unzip wget curl alsa-utils
+        sudo pacman -Sy --noconfirm python python-pip fftw pulseaudio unzip wget curl alsa-utils python-pyaudio pulseaudio-utils
     else
         # Distribuzione generica: prova a usare apt, dnf o pacman
         for cmd in apt-get dnf pacman; do
@@ -122,13 +137,13 @@ install_core_deps() {
                 case $cmd in
                     apt-get)
                         sudo apt-get update
-                        sudo apt-get install -y python3-dev python3-pip libfftw3-dev libpulse-dev unzip wget curl alsa-utils
+                        sudo apt-get install -y python3-dev python3-pip libfftw3-dev libpulse-dev unzip wget curl alsa-utils python3-pyaudio pulseaudio-utils
                         ;;
                     dnf)
-                        sudo dnf install -y python3-devel python3-pip fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils
+                        sudo dnf install -y python3-devel python3-pip fftw-devel pulseaudio-libs-devel unzip wget curl alsa-utils python3-pyaudio pulseaudio-utils
                         ;;
                     pacman)
-                        sudo pacman -Sy --noconfirm python python-pip fftw pulseaudio unzip wget curl alsa-utils
+                        sudo pacman -Sy --noconfirm python python-pip fftw pulseaudio unzip wget curl alsa-utils python-pyaudio pulseaudio-utils
                         ;;
                 esac
                 break
@@ -204,7 +219,7 @@ download_vosk_model() {
     if [ -z "$MODEL_EXTRACTED_DIR" ]; then
         error "Directory del modello estratto non trovata"
         return 1
-    fi
+    }
 
     cp -r "$MODEL_EXTRACTED_DIR"/* "$VOSK_MODEL_DIR/" || {
         error "Errore nella copia dei file del modello"
@@ -219,7 +234,7 @@ download_vosk_model() {
     return 0
 }
 
-# Funzione per verificare l'accesso al microfono
+# Funzione per verificare l'accesso al microfono e impostare i permessi corretti
 check_microphone() {
     info "Verifica dell'accesso al microfono..."
 
@@ -241,6 +256,26 @@ check_microphone() {
         fi
     fi
 
+    # Verifica e crea i device ALSA se necessario
+    if [ ! -d "/dev/snd" ]; then
+        warning "Directory /dev/snd non trovata"
+        if [[ $EUID -eq 0 ]]; then
+            mkdir -p /dev/snd
+            success "Directory /dev/snd creata"
+        else
+            warning "È necessario eseguire come root per creare /dev/snd"
+            sudo mkdir -p /dev/snd
+            success "Directory /dev/snd creata"
+        fi
+    fi
+
+    # Verifica e imposta i permessi per tutti gli utenti su /dev/snd
+    if [ -d "/dev/snd" ]; then
+        info "Impostazione permessi per /dev/snd"
+        sudo chmod -R 777 /dev/snd
+        success "Permessi impostati per /dev/snd"
+    fi
+
     # Verifica che l'utente abbia accesso al microfono
     arecord -l &> /dev/null
     if [ $? -ne 0 ]; then
@@ -251,8 +286,16 @@ check_microphone() {
             warning "L'utente corrente non fa parte del gruppo 'audio'"
             read -p "Vuoi aggiungere l'utente al gruppo 'audio'? (s/n) " yn
             case $yn in
-                [Ss]* ) sudo usermod -a -G audio "$USER"; success "Utente aggiunto al gruppo 'audio'. Effettua il logout e il login per applicare le modifiche.";;
-                * ) warning "L'utente non è stato aggiunto al gruppo 'audio'. Potrebbero esserci problemi di accesso al microfono.";;
+                [Ss]* )
+                    sudo usermod -a -G audio "$USER"
+                    # Aggiunge anche altri gruppi utili
+                    sudo usermod -a -G pulse "$USER"
+                    sudo usermod -a -G pulse-access "$USER"
+                    success "Utente aggiunto ai gruppi 'audio', 'pulse' e 'pulse-access'. Effettua il logout e il login per applicare le modifiche."
+                    ;;
+                * )
+                    warning "L'utente non è stato aggiunto al gruppo 'audio'. Potrebbero esserci problemi di accesso al microfono."
+                    ;;
             esac
         fi
 
@@ -262,11 +305,31 @@ check_microphone() {
             if ! pulseaudio --check; then
                 info "Avvio di PulseAudio..."
                 pulseaudio --start --log-target=syslog
+
+                # Verifica che pulseaudio sia in esecuzione
+                sleep 2
+                if ! pulseaudio --check; then
+                    warning "Impossibile avviare PulseAudio. Tentativo con l'utente attuale..."
+                    pulseaudio --start --log-target=syslog || true
+                fi
+            fi
+
+            # Forza un reset di PulseAudio
+            info "Reset di PulseAudio..."
+            pulseaudio -k || true
+            sleep 1
+            pulseaudio --start || true
+
+            # Verifica accesso ai device e crea symlink se necessario
+            if [ -d "/dev/snd" ]; then
+                for device in /dev/snd/*; do
+                    chmod a+rw "$device" || true
+                done
             fi
         fi
-    else
+    } else {
         success "Accesso al microfono verificato"
-    fi
+    }
 
     return 0
 }
@@ -283,19 +346,33 @@ test_vosk_initialization() {
 try:
     import sys
     import json
+    import os
     import vosk
 
-    # Non utilizziamo più __version__ poiché potrebbe non essere disponibile
+    # Ottieni le proprietà e i metodi del modulo
+    vosk_attrs = dir(vosk)
+    print(f"Attributi disponibili nel modulo vosk: {vosk_attrs}")
+
+    # Non utilizziamo __version__ che potrebbe non essere presente
     print(f"VOSK importato con successo")
 
     # Imposta il percorso del modello
     model_path = "$VOSK_MODEL_DIR"
+    print(f"Percorso modello: {model_path}")
 
-    # Prova a caricare il modello
+    # Elenca file nel percorso del modello
+    print("File nella directory del modello:")
+    for root, dirs, files in os.walk(model_path):
+        for file in files:
+            print(f"  {os.path.join(root, file)}")
+
+    # Prova a caricare il modello con debug
+    print("Tentativo di caricamento del modello...")
     model = vosk.Model(model_path)
     print("Modello VOSK caricato con successo")
 
     # Crea un riconoscitore per testare
+    print("Tentativo di creazione del riconoscitore...")
     rec = vosk.KaldiRecognizer(model, 16000)
     print("Riconoscitore VOSK creato con successo")
 
@@ -303,17 +380,22 @@ try:
     sys.exit(0)
 except Exception as e:
     print(f"Errore nell'inizializzazione di VOSK: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 EOL
 
     chmod +x "$VOSK_TEST_SCRIPT"
 
-    # Esegui il test
+    # Esegui il test con dettagli
+    echo "=================================================="
+    echo "Esecuzione del test VOSK Python:"
+    echo "=================================================="
     if python3 "$VOSK_TEST_SCRIPT"; then
         success "Inizializzazione di VOSK testata con successo"
         return 0
     else
-        error "Problema nell'inizializzazione di VOSK"
+        error "Problema nell'inizializzazione di VOSK (vedi dettagli sopra)"
         return 1
     fi
 }
@@ -332,9 +414,16 @@ create_launch_script() {
 # Imposta la variabile di ambiente per il modello VOSK
 export VOSK_MODEL_PATH="$VOSK_MODEL_DIR"
 
+# Imposta variabili per i permessi audio
+export PULSE_SERVER=unix:/tmp/pulse-socket
+export ALSA_CARD=0
+
 # Impostazioni per Python e VOSK
 PYTHON_VERSION=\$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1-2)
 export PYTHONPATH="\$HOME/.local/lib/python\$PYTHON_VERSION/site-packages:\$PYTHONPATH"
+
+# Assicura che il socket di pulseaudio sia accessibile
+mkdir -p /tmp/pulse-socket
 
 # Logging per debugging
 LOG_FILE="\$HOME/.local/share/opendsa-reading/launch.log"
@@ -344,6 +433,13 @@ mkdir -p "\$(dirname "\$LOG_FILE")"
 echo "Avvio di OpenDSA: Reading da \$1 alle \$(date)" >> "\$LOG_FILE"
 echo "VOSK_MODEL_PATH=\$VOSK_MODEL_PATH" >> "\$LOG_FILE"
 echo "PYTHONPATH=\$PYTHONPATH" >> "\$LOG_FILE"
+
+# Permessi per i device audio prima di avviare
+for device in /dev/snd/* /dev/dsp* /dev/audio* ; do
+    if [ -e "\$device" ]; then
+        sudo chmod a+rw "\$device" 2>/dev/null || true
+    fi
+done
 
 # Esegui l'AppImage
 "\$@"
@@ -435,7 +531,7 @@ create_desktop_file() {
 [Desktop Entry]
 Name=OpenDSA: Reading
 Comment=Applicazione per assistere persone con dislessia nella lettura
-Exec=$HOME/.local/bin/opendsa-reading "$APPIMAGE_PATH"
+Exec=pkexec $HOME/.local/bin/opendsa-reading "$APPIMAGE_PATH"
 Icon=$ICON
 Terminal=false
 Type=Application
@@ -443,6 +539,32 @@ Categories=Education;Accessibility;
 EOL
 
     success "File desktop creato in $DESKTOP_FILE"
+
+    # Crea il file pkexec policy per eseguire lo script con privilegi
+    info "Creazione della policy pkexec..."
+    PKEXEC_POLICY="/usr/share/polkit-1/actions/org.opendsa.reading.policy"
+
+    sudo bash -c "cat > $PKEXEC_POLICY" << EOL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <action id="org.opendsa.reading">
+    <description>Run OpenDSA: Reading with elevated privileges</description>
+    <message>Authentication is required to access audio devices</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">$HOME/.local/bin/opendsa-reading</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>
+EOL
+
+    success "Policy pkexec creata in $PKEXEC_POLICY"
     return 0
 }
 
@@ -460,6 +582,7 @@ print_usage() {
     echo
     echo -e "${YELLOW}Note:${NC}"
     echo "- Se hai appena aggiunto l'utente al gruppo 'audio', dovrai effettuare il logout e il login per applicare le modifiche."
+    echo "- L'applicazione verrà eseguita con privilegi elevati per accedere correttamente ai dispositivi audio."
     echo "- Se riscontri problemi, controlla il file di log in ~/.local/share/opendsa-reading/launch.log"
     echo
 }
@@ -504,17 +627,24 @@ if [ $MISSING_DEPS -eq 1 ]; then
     esac
 fi
 
+# Crea il gruppo audio se non esiste
+if ! getent group audio >/dev/null; then
+    info "Creazione del gruppo audio..."
+    sudo groupadd audio
+    success "Gruppo audio creato"
+fi
+
+# Crea lo script di avvio
+create_launch_script
+
 # Scarica il modello VOSK se necessario
 download_vosk_model
-
-# Testa l'inizializzazione di VOSK
-test_vosk_initialization
 
 # Verifica l'accesso al microfono
 check_microphone
 
-# Crea lo script di avvio
-create_launch_script
+# Testa l'inizializzazione di VOSK
+test_vosk_initialization
 
 # Crea il file desktop
 create_desktop_file
