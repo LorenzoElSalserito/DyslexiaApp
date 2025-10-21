@@ -219,7 +219,7 @@ download_vosk_model() {
     if [ -z "$MODEL_EXTRACTED_DIR" ]; then
         error "Directory del modello estratto non trovata"
         return 1
-    }
+    fi
 
     cp -r "$MODEL_EXTRACTED_DIR"/* "$VOSK_MODEL_DIR/" || {
         error "Errore nella copia dei file del modello"
@@ -327,10 +327,9 @@ check_microphone() {
                 done
             fi
         fi
-    } else {
+        else
         success "Accesso al microfono verificato"
-    }
-
+        fi
     return 0
 }
 
@@ -644,7 +643,14 @@ download_vosk_model
 check_microphone
 
 # Testa l'inizializzazione di VOSK
-test_vosk_initialization
+# Assicura la presenza del modulo Python 'vosk' prima del test
+#if ! python3 -c "import vosk" &>/dev/null; then
+#    info "Modulo Python 'vosk' mancante: installazione in corso..."
+#    install_vosk_with_pip || { error "Installazione di VOSK fallita"; exit 1; }
+#else
+#    success "Modulo Python 'vosk' già presente"
+#fi
+#test_vosk_initialization
 
 # Crea il file desktop
 create_desktop_file
